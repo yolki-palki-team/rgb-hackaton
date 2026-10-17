@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { MarketStore } from '../../market/src/store.ts';
+import { PublicOrderSchema } from '@rgb-exchange/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MockWalletAdapter } from '../src/wallet.ts';
@@ -117,4 +120,106 @@ test('local wallet renders exact BTC and RGB amounts using asset precision', asy
     '9007199254740.993123',
   );
   assert.equal(formatAsset({ ...rgb, precision: 6 }, '12345678'), '12.345678 X');
+});
+
+test('wallet balance failure keeps the matched trade available for explicit recovery', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const wallet = new MockWalletAdapter('A');
+  const market = new MarketStore(':memory:');
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL('../../../packages/contracts/fixtures/direct.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  for (const raw of fixture.orders) {
+    const order = PublicOrderSchema.parse({
+      ...raw,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 1800000,
+    });
+    market.createOrder(order.ownerId, order);
+  }
+  const snapshot = market.snapshot('A');
+  assert.equal(snapshot.trades.length, 1);
+  let unavailable = false;
+  const bridge: DesktopBridge = {
+    connect: async () => ({
+      ownerId: 'A',
+      network: 'regtest',
+      mode: 'mock',
+      wallet: await wallet.capabilities(),
+      qvac: { available: false },
+    }),
+    request: async (_method, path) => {
+      if (path === '/api/state') {
+        if (unavailable) throw new Error('RGB indexing pending');
+        return wallet.state();
+      }
+      if (path === '/api/snapshot') return snapshot;
+      if (path.endsWith('/progress'))
+        return {
+          tradeId: snapshot.trades[0].plan.tradeId,
+          signingAuthorized: false,
+          recoveryRequired: false,
+          receipt: null,
+        };
+      if (path === '/api/policy')
+        return {
+          allowedAssetKeys: ['btc', 'dusd'],
+          protectedBalances: {},
+          maxFeeSats: '1000',
+          allowBtcSale: true,
+        };
+      if (path.endsWith('/sync'))
+        return {
+          tradeId: snapshot.trades[0].plan.tradeId,
+          network: 'regtest',
+          mode: 'mock',
+          state: 'reconciling',
+          chainConfirmed: false,
+          rgbAccepted: false,
+        };
+      throw new Error('Unexpected request');
+    },
+    approveTrade: async () => {
+      throw new Error('Must not sign');
+    },
+    getPendingOffer: async () => null,
+    onOfferSelected: () => () => {},
+    openPublicMarket: async () => {},
+  };
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { palkaWallet: bridge },
+  });
+  try {
+    const client = new LocalClient();
+    await client.connect();
+    assert.ok((await client.snapshot()).balances.length);
+    unavailable = true;
+    const pending = await client.snapshot();
+    assert.equal(pending.walletError, 'RGB indexing pending');
+    assert.deepEqual(pending.balances, []);
+    assert.equal(pending.trade?.id, snapshot.trades[0].plan.tradeId);
+    assert.equal((await client.sync(pending.trade!.id)).state, 'reconciling');
+    await assert.rejects(
+      client.checkDraft(
+        {
+          giveAsset: 'BTC',
+          receiveAsset: 'DUSD',
+          giveAmount: '100',
+          minReceiveAmount: '1',
+          maxFeeSats: '1000',
+          expiresMinutes: '30',
+        },
+        pending.policy,
+      ),
+      /Balances have not loaded/,
+    );
+  } finally {
+    market.close();
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
 });

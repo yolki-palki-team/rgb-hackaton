@@ -1,5 +1,7 @@
 'use client';
 
+import { walletUrl } from '../../wallet-url';
+
 // Halftone Wordmark Footer — supplied 21st component. React + Canvas 2D only.
 import * as React from 'react';
 
@@ -50,7 +52,7 @@ const DEFAULT_COLUMNS: FooterColumn[] = [
       { label: 'Home', href: '/' },
     ],
   },
-  { title: 'Wallet', links: [{ label: 'Local wallet', href: 'http://127.0.0.1:4101/' }] },
+  { title: 'Wallet', links: [{ label: 'Local wallet', href: walletUrl }] },
   {
     title: 'Learn',
     links: [

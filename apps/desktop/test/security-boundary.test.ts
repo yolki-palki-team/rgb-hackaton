@@ -31,6 +31,7 @@ test('generic renderer bridge allows only named local operations, with signing i
     '/api/snapshot',
     '/api/funding',
     `/api/trades/${tradeId}`,
+    `/api/trades/${tradeId}/progress`,
   ]) {
     assert.equal(validateWalletRequest('GET', path), true, path);
   }

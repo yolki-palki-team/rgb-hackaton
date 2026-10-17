@@ -110,6 +110,9 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
         if (path === '/api/policy') return json(response, 200, await service.policy());
         if (path === '/api/snapshot')
           return json(response, 200, await service.exclusive(() => service.snapshot()));
+        const progress = /^\/api\/trades\/([a-zA-Z0-9:._-]+)\/progress$/.exec(path);
+        if (progress)
+          return json(response, 200, await service.exclusive(() => service.progress(progress[1])));
         const trade = /^\/api\/trades\/([a-zA-Z0-9:._-]+)$/.exec(path);
         if (trade) return json(response, 200, await service.trade(trade[1]));
       }

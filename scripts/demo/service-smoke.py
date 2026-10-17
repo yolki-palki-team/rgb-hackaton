@@ -243,6 +243,11 @@ if __name__ == "__main__":
     parser.add_argument("--scenario", choices=["direct", "ring"], required=True)
     parser.add_argument("--base-port", type=int, default=43100)
     parser.add_argument("--repeat", action="store_true")
+    parser.add_argument(
+        "--evidence-prefix",
+        default="service",
+        help="Public evidence basename; keep earlier runs separate",
+    )
     args = parser.parse_args()
     configure(args.source, args.base_port)
     runtime = Runtime()
@@ -251,7 +256,7 @@ if __name__ == "__main__":
         for person in PEOPLE:
             runtime.profile(person)
         runtime.ready()
-        run(runtime, args.scenario)
+        run(runtime, args.scenario, evidence_name=f"{args.evidence_prefix}-{args.scenario}.json")
         if args.repeat:
             identities = {p: runtime.local(p, "/state")["walletId"] for p in PEOPLE}
             for person in PEOPLE:
@@ -263,6 +268,11 @@ if __name__ == "__main__":
             assert identities == {p: runtime.local(p, "/state")["walletId"] for p in PEOPLE}, (
                 "Restart changed wallet identity"
             )
-            run(runtime, args.scenario, True)
+            run(
+                runtime,
+                args.scenario,
+                True,
+                evidence_name=f"{args.evidence_prefix}-{args.scenario}-repeat.json",
+            )
     finally:
         runtime.close()

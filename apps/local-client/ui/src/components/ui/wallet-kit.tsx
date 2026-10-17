@@ -6,7 +6,7 @@ import type {
   TableHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
-import type { AssetCode, Balance, View } from '../../model';
+import type { AssetCode, Balance } from '../../model';
 import { cn } from '../../lib/utils';
 
 export function Button({
@@ -41,46 +41,6 @@ export function AssetCard({ balance }: { balance: Balance }) {
       </div>
       <p>{balance.label}</p>
     </article>
-  );
-}
-
-export function Sidebar({
-  active,
-  items,
-  onNavigate,
-}: {
-  active: View;
-  items: { key: View; label: string; subtitle: string; icon: string }[];
-  onNavigate: (view: View) => void;
-}) {
-  return (
-    <aside className="sidebar">
-      <div className="brand">palka</div>
-      <div className="sidebar-caption">LOCAL WALLET · RGB A2A</div>
-      <nav aria-label="Main navigation" className="sidebar-nav">
-        {items.map((item) => (
-          <Button
-            key={item.key}
-            className={cn('nav-item', active === item.key && 'active')}
-            onClick={() => onNavigate(item.key)}
-            aria-current={active === item.key ? 'page' : undefined}
-          >
-            <span className="nav-icon">
-              <Icon name={item.icon} />
-            </span>
-            <span>
-              <strong>{item.label}</strong>
-              <small>{item.subtitle}</small>
-            </span>
-          </Button>
-        ))}
-      </nav>
-      <div className="sidebar-bottom">
-        <Icon name="shield" size={18} />
-        <strong>Local by design</strong>
-        <p>Your wallet and AI stay on this device.</p>
-      </div>
-    </aside>
   );
 }
 

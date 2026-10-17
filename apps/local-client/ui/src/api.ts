@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   MarketSnapshotSchema,
   OrderDraftSchema,
@@ -57,6 +58,7 @@ declare global {
   }
 }
 type Snapshot = {
+  walletError?: string;
   balances: Balance[];
   orders: Order[];
   myOrder: Order | null;
@@ -135,17 +137,31 @@ export class LocalClient {
     return this.status;
   }
 
+  supportsTrade(trade: Trade) {
+    return (
+      this.status?.mode === 'real' &&
+      this.status.wallet.signing &&
+      (trade.kind === 'ring' ? this.status.wallet.ringSwap : this.status.wallet.directSwap)
+    );
+  }
+
   async snapshot(): Promise<Snapshot> {
     if (!this.status) throw new Error('Pair the wallet first.');
-    const [rawState, rawSnapshot, rawPolicy] = await Promise.all([
-      this.request<unknown>('GET', '/api/state'),
+    const [stateResult, rawSnapshot, rawPolicy] = await Promise.all([
+      this.request<unknown>('GET', '/api/state').then(
+        (value) => ({ value, error: undefined }),
+        (error: unknown) => ({
+          value: undefined,
+          error: error instanceof Error ? error.message : 'Wallet balances unavailable',
+        }),
+      ),
       this.request<unknown>('GET', '/api/snapshot'),
       this.request<unknown>('GET', '/api/policy'),
     ]);
-    const state = WalletStateSchema.parse(rawState);
+    const state = stateResult.error ? null : WalletStateSchema.parse(stateResult.value);
     const market = MarketSnapshotSchema.parse(rawSnapshot);
     const policy = PrivatePolicySchema.parse(rawPolicy);
-    if (state.ownerId !== this.status.ownerId || state.network !== this.status.network)
+    if (state && (state.ownerId !== this.status.ownerId || state.network !== this.status.network))
       throw new Error('Wallet response does not match the paired profile.');
     this.walletState = state;
     this.marketSnapshot = market;
@@ -158,19 +174,49 @@ export class LocalClient {
           this.receipts.get(market.trades[0].plan.tradeId),
         )
       : null;
+    if (trade) {
+      const progress = z
+        .object({
+          tradeId: z.string(),
+          signingAuthorized: z.boolean(),
+          recoveryRequired: z.boolean(),
+          receipt: ReceiptSchema.nullable(),
+        })
+        .parse(await this.request('GET', `/api/trades/${encodeURIComponent(trade.id)}/progress`));
+      if (progress.tradeId !== trade.id)
+        throw new Error('Local progress belongs to another trade.');
+      trade.signingAuthorized = progress.signingAuthorized;
+      trade.recoveryRequired = progress.recoveryRequired;
+      if (progress.recoveryRequired) trade.validatedPreview = undefined;
+      if (progress.receipt) {
+        this.checkReceipt(trade.id, progress.receipt);
+        this.receipts.set(trade.id, progress.receipt);
+        Object.assign(
+          trade,
+          mapTrade(
+            market.trades[0],
+            this.status.ownerId,
+            progress.recoveryRequired ? null : this.approval,
+            progress.receipt,
+          ),
+        );
+      }
+    }
     const activeOrder = market.myOrders.find(
       (order) => order.status === 'OPEN' || order.status === 'RESERVED',
     );
     return {
-      balances: state.balances.map((balance) => mapBalance(balance.asset, balance.amount)),
+      walletError: stateResult.error,
+      balances: state?.balances.map((balance) => mapBalance(balance.asset, balance.amount)) ?? [],
       orders: market.orders.map((order) => mapOrder(order)),
       myOrder: activeOrder ? mapOrder(activeOrder, true) : null,
       trade,
       policy,
-      policyAssets: state.balances.map((balance) => ({
-        key: assetKey(balance.asset),
-        label: balance.asset.symbol,
-      })),
+      policyAssets:
+        state?.balances.map((balance) => ({
+          key: assetKey(balance.asset),
+          label: balance.asset.symbol,
+        })) ?? [],
     };
   }
 
@@ -268,6 +314,18 @@ export class LocalClient {
       {},
     );
     const receipt = ReceiptSchema.parse(raw);
+    this.checkReceipt(tradeId, receipt);
+    this.receipts.set(tradeId, receipt);
+    return {
+      state: receipt.state,
+      chainConfirmed: receipt.chainConfirmed,
+      rgbAccepted: receipt.rgbAccepted,
+      reason: receipt.reason,
+    };
+  }
+
+  private checkReceipt(tradeId: string, receipt: Receipt) {
+    if (!this.status) throw new Error('Pair the wallet first.');
     if (
       receipt.tradeId !== tradeId ||
       receipt.network !== this.status.network ||
@@ -279,13 +337,6 @@ export class LocalClient {
       (receipt.mode !== 'real' || !receipt.txid || !receipt.chainConfirmed || !receipt.rgbAccepted)
     )
       throw new Error('Wallet did not confirm Bitcoin and RGB acceptance.');
-    this.receipts.set(tradeId, receipt);
-    return {
-      state: receipt.state,
-      chainConfirmed: receipt.chainConfirmed,
-      rgbAccepted: receipt.rgbAccepted,
-      reason: receipt.reason,
-    };
   }
 
   async preview(tradeId: string): Promise<Trade['validatedPreview']> {
@@ -380,7 +431,12 @@ export class LocalClient {
   ): Promise<T> {
     if (this.bridge) return (await this.bridge.request(method, path, body)) as T;
     const controller = new AbortController();
-    const timeoutMs = path === '/api/interpret' ? 55_000 : 15_000;
+    const timeoutMs =
+      path === '/api/interpret' ||
+      path.startsWith('/api/funding') ||
+      /\/(prepare|preview|sync|approve)$/.test(path)
+        ? 90_000
+        : 15_000;
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
@@ -474,6 +530,9 @@ function mapTrade(
   const fee = plan.fees.find((item) => item.ownerId === ownerId)?.feeSats ?? '0';
   return {
     id: plan.tradeId,
+    txid: receipt?.txid,
+    chainConfirmed: receipt?.chainConfirmed,
+    rgbAccepted: receipt?.rgbAccepted,
     kind: participants.length === 3 ? 'ring' : 'direct',
     status: needsLocalConfirmation ? 'RECONCILING' : snapshot.status,
     participants,

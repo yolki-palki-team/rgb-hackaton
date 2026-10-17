@@ -67,6 +67,8 @@ complete Docker deployment.
 The standalone service stores the account in
 `<LOCAL_STATE_DIR>/funding/funding.sqlite`; desktop uses
 `<Electron userData>/state/<owner>/funding/funding.sqlite`.
+The shared-profile launcher can override the desktop state root with
+`PALKA_LOCAL_STATE_DIR`; its funding account follows that directory.
 The directory is mode 0700 and the database 0600. A process guard prevents
 two services from opening the same funding account concurrently.
 

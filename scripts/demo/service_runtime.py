@@ -144,7 +144,7 @@ class Runtime:
             },
         )
 
-    def profile(self, person, fault=None):
+    def profile(self, person, fault=None, desktop=False):
         # Startup deliberately cannot initialize keys, fund, issue, or recreate chain state.
         if not (STATE / person / "keys.json").is_file():
             raise ValueError("Run separate regtest setup/catalog first")
@@ -168,7 +168,53 @@ class Runtime:
             ],
             env,
         )
-        self.start_local(person)
+        if desktop:
+            self.start_desktop(person)
+        else:
+            self.start_local(person)
+
+    def start_desktop(self, person):
+        cfg = self.config["profiles"][person]
+        self.spawn(
+            "desktop-" + person,
+            [str(self.source / "node_modules/.bin/electron"), str(self.source)],
+            {
+                "PALKA_DESKTOP_DATA_DIR": str(STATE / "services/desktop" / person),
+                "PALKA_LOCAL_STATE_DIR": str(STATE / "services" / person),
+                "PALKA_OWNER_ID": person,
+                "PALKA_LOCAL_PORT": str(cfg["localPort"]),
+                "PALKA_MARKET_URL": f"http://127.0.0.1:{self.config['basePort']}",
+                "PALKA_MARKET_TOKEN": cfg["marketToken"],
+                "PALKA_WALLET_MODE": "real",
+                "PALKA_WALLET_RPC_URL": f"http://127.0.0.1:{cfg['walletPort']}",
+                "PALKA_WALLET_RPC_TOKEN": cfg["walletToken"],
+                "PALKA_PUBLIC_MARKET_URL": "http://127.0.0.1:5173/market",
+            },
+        )
+
+    def web(self):
+        self.spawn(
+            "web",
+            [
+                str(self.source / "node_modules/node/bin/node"),
+                str(self.source / "node_modules/vite/bin/vite.js"),
+                "--config",
+                "apps/web/vite.config.ts",
+            ],
+            {
+                "MARKET_URL": f"http://127.0.0.1:{self.config['basePort']}",
+                "VITE_LOCAL_WALLET_PORT": str(self.config["profiles"]["alice"]["localPort"]),
+            },
+        )
+
+    def pairing(self, person):
+        cfg = self.config["profiles"][person]
+        path = STATE / "services" / person / "pairing.json"
+        save(
+            path,
+            {"url": f"http://127.0.0.1:{cfg['localPort']}/", "sessionToken": cfg["localToken"]},
+        )
+        return str(path)
 
     def start_local(self, person):
         cfg = self.config["profiles"][person]

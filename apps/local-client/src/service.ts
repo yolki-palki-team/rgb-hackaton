@@ -223,6 +223,19 @@ export class LocalService {
       throw new LocalError('Invalid participant, network, or plan digest', 409);
     return trade;
   }
+  async progress(id: string) {
+    await this.trade(id);
+    // Read durable local intent, including an approval whose response was lost.
+    // Never infer permission to sign from a peer's market status.
+    return {
+      tradeId: id,
+      signingAuthorized: Boolean(
+        this.store.get(`signing:${id}`) || this.store.get(`signature:${id}`),
+      ),
+      recoveryRequired: this.signatureMayExist(id),
+      receipt: this.store.get(`receipt:${id}`) ?? null,
+    };
+  }
   private ownPublication(trade: TradeSnapshot): SavedPublication {
     for (const ref of trade.plan.orderRefs) {
       const saved = this.store.get<SavedPublication>(`order:${ref.orderId}`);

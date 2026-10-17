@@ -11,7 +11,27 @@ Users describe their goals in plain language. An on-device QVAC assistant turns 
 - Fixed order amounts, full execution and explicit approval before signing.
 - Public web interface, matching server, local wallet client and packaged macOS shell.
 
-**Status:** Local QVAC, order review, deterministic matching, SQLite market, authenticated events, the public marketplace and the separate wallet UI are implemented. The native wallet sidecar is in `packages/wallet`; its direct/ring settlement evidence and setup are documented in [B's handoff](docs/handoffs/b.md) and [settlement.md](docs/settlement.md). Separate WDK Bitcoin funding has passed a real regtest transfer and restart check; see [WDK funding](docs/handoffs/wdk-funding.md). These checks do not establish the complete desktop QVAC-to-RGB-swap flow. Mock mode cannot sign, broadcast or report blockchain success.
+**Status:** Public web, deterministic direct/ring matching, local QVAC, private wallet UI, Electron and the real RGB sidecar are integrated. Fresh service checks on the combined tree confirmed direct and atomic three-party swaps, plus re-spending received RGB after restart. Historical recovery evidence is retained separately. The persistent host launcher now starts the real stack together; UI preparation and recovery no longer disappear between cooperative rounds or when balance reconciliation fails. A user-operated Electron Alice and API-operated Bob also completed a direct swap with both Bitcoin confirmation and RGB acceptance, independently checked against wallet balances and Core. Three-desktop, cloud and multi-computer verification remain separate. Mock cannot sign or report blockchain success.
+
+Separate WDK Bitcoin funding has passed a real regtest transfer and restart check; see [WDK funding](docs/handoffs/wdk-funding.md). This is a separate funding transaction, with explicit approval, and does not replace the native RGB settlement adapter.
+
+The desktop/local wallet now follows the public market's visual layout. Publishing checks the draft in one action; preparation, package validation and post-approval reconciliation run automatically while the app is open. Users still review exact amounts and approve signing separately. Repeated transport failures back off and pause with a retry action; reopening restores local approval/receipt state. The workflow and recovery checks pass. The user reviewed the updated desktop and accepted its appearance on 2026-10-17; no Computer Use was used. A new end-to-end swap through the redesigned UI remains unverified.
+
+Start with the practical [usage and deployment guide](docs/usage.md) (Russian): first setup, restart without wallet reinitialization, pairing, direct/ring orders, approval, recovery, and the concrete remaining work for two/three computers. See [current integration evidence](docs/integration.md) and [historical settlement evidence](docs/settlement.md).
+
+For an **already initialized and configured** real profile set:
+
+```sh
+# Use the same private state directory as during setup/configure.
+export RGB_DEMO_STATE="$PWD/packages/wallet/state/my-direct"
+rtk proxy uv run --locked python scripts/demo/service-profile.py up
+# Or, after stopping that runner, use desktop Alice and browser Bob/Carol:
+rtk proxy uv run --locked python scripts/demo/service-profile.py up --desktop alice
+```
+
+The launcher runs on the host alongside `infra/compose.yaml` Bitcoin infrastructure.
+It preserves wallets, pairing credentials and local approval history. The Docker
+quickstart below is a separate web/runtime option and does not start real sidecars.
 
 Hackathon resources and stack guidance are in [materials.md](materials.md).
 
@@ -85,7 +105,7 @@ open .dist/desktop/palka-darwin-arm64/palka.app
 
 The macOS package is written to `.dist/desktop/palka-darwin-arm64/palka.app`. The `dev:desktop` command rebuilds the UI and desktop shell before opening them; rebuild the package after source changes to update the Finder app. The app keeps the market token, wallet RPC token and local API bearer in Electron's main process. Signing requires a fresh wallet preview and a native approval dialog showing amounts and fee. WDK funding uses its own native approval dialog. A `palka://offer/order-<UUID>` argument delivered to an already running second instance selected the offer for review and did not act on the trade. The macOS scheme is declared in the app bundle; delivery through LaunchServices `open` remains unverified. The public marketplace has no access to this bridge.
 
-The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. Configure a market token that the market recognizes and the native sidecar's loopback wallet RPC URL/token there; the file is reused across restarts. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, and `PALKA_PUBLIC_MARKET_URL` can override those values for a run. Start `packages/wallet/server.py` separately using [B's instructions](docs/handoffs/b.md). Until it is reachable and reports the required capabilities, the client shows an unavailable wallet and cannot trade. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
+The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. Configure a market token that the market recognizes and B's loopback wallet RPC URL/token there; the file is reused across restarts. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, `PALKA_PUBLIC_MARKET_URL`, and `PALKA_LOCAL_STATE_DIR` can override those values for a run. The repository provides the sidecar in `packages/wallet/server.py` and persistent host profiles through `scripts/demo/service-profile.py`. Configure an initialized real profile as described in [settlement.md](docs/settlement.md); desktop launch does not initialize or start that sidecar. Missing RPC or unsupported capabilities leave the wallet unavailable. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
 
 ## Layout and integration
 
@@ -100,7 +120,7 @@ The old Expo `front/` directory was removed at the user's request. Root `node_mo
 
 See [A handoff](docs/handoffs/a.md) for the complete adapter boundary and ports, [QVAC evidence](docs/handoffs/qvac-evidence.md) for actual inference checks, and [.env.example](.env.example) for local configuration names. The application does not automatically load the existing root `.env`. Never put private wallet state or pairing tokens in Git.
 
-To connect the native wallet, start its loopback sidecar and configure a local profile with `WALLET_RPC_URL` and `WALLET_RPC_TOKEN`; real mode is already the default. Match `LOCAL_OWNER_ID` to the sidecar owner. Its declared capabilities must support the requested direct/ring swap. Unsupported rings are never replaced with sequential transfers.
+To connect the native wallet, start its loopback sidecar and configure a local profile with `WALLET_RPC_URL` and `WALLET_RPC_TOKEN`; real mode is already the default. Match `LOCAL_OWNER_ID` to the sidecar owner. Its declared capabilities must support the requested direct/ring swap. The real HTTP sidecar implements the `rgb-cooperative-v1` codec; recorded API integration checks include actual on-chain receipts for both direct and ring swaps. The supported scope is regtest, precision-0 NIA assets, SegWit v0 and distinct contributing RGB contracts, with test-only deterministic blinding. This is not production/mainnet readiness. Unsupported rings are never replaced with sequential transfers.
 
 ## Checks
 

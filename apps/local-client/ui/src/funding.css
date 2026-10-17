@@ -1,0 +1,108 @@
+.funding-panel {
+  padding: 24px;
+}
+.funding-intro,
+.funding-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.funding-intro p,
+.funding-step p,
+.funding-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.funding-intro .ui-status {
+  flex: none;
+}
+.funding-step,
+.funding-review {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.funding-accounts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+.funding-accounts > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #080808;
+}
+.funding-accounts strong,
+.funding-review h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.funding-accounts code,
+.funding-address {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.funding-accounts span:last-child,
+.funding-label,
+.funding-review dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.funding-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.funding-actions .ui-input {
+  width: min(240px, 100%);
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #080808;
+  color: #eee;
+}
+.funding-review h3 {
+  margin: 0;
+}
+.funding-review dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.funding-review dl > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+}
+.funding-review dd {
+  margin: 0;
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.funding-message[role='alert'] {
+  color: #eee;
+}
+@media (max-width: 760px) {
+  .funding-panel {
+    padding: 18px;
+  }
+  .funding-accounts,
+  .funding-review dl > div {
+    grid-template-columns: 1fr;
+  }
+  .funding-review dd {
+    text-align: left;
+  }
+}

@@ -23,7 +23,7 @@ export function validateWalletRequest(method: unknown, path: unknown): boolean {
       ['/api/health', '/api/state', '/api/policy', '/api/snapshot', '/api/funding'].includes(path)
     )
       return true;
-    const trade = /^\/api\/trades\/([^/]+)$/.exec(path);
+    const trade = /^\/api\/trades\/([^/]+)(?:\/progress)?$/.exec(path);
     return Boolean(trade && tradeId.test(trade[1]));
   }
   if (['/api/interpret', '/api/draft/validate', '/api/orders'].includes(path)) return true;

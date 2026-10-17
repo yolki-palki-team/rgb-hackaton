@@ -4,6 +4,7 @@ import {
   discardEchoedClarification,
   parseQvacOutput,
   QvacInvalidOutputError,
+  resolveQvacAssetKeys,
 } from '../src/qvac.js';
 
 const valid = {
@@ -16,6 +17,29 @@ const valid = {
   protectedBalances: [{ assetKey: 'X', minAmount: null, minPercent: 50 }],
   clarification: null,
 };
+
+test('model aliases resolve only to this call catalog, including protected balances', () => {
+  const assets = [
+    { key: 'regtest:rgb:contract-one', symbol: 'SAME', precision: 0 },
+    { key: 'regtest:rgb:contract-two', symbol: 'SAME', precision: 0 },
+  ];
+  const intent = {
+    ...valid,
+    giveAssetKey: 'asset1',
+    receiveAssetKey: 'asset0',
+    protectedBalances: [{ assetKey: 'asset0', minAmount: '5', minPercent: null }],
+  };
+  const resolved = resolveQvacAssetKeys(intent, assets);
+  assert.equal(resolved.giveAssetKey, assets[1].key);
+  assert.equal(resolved.receiveAssetKey, assets[0].key);
+  assert.equal(resolved.protectedBalances[0].assetKey, assets[0].key);
+  assert.equal(resolved.giveAmount, intent.giveAmount);
+  assert.throws(
+    () => resolveQvacAssetKeys({ ...intent, giveAssetKey: assets[0].key }, assets),
+    QvacInvalidOutputError,
+  );
+  assert.throws(() => resolveQvacAssetKeys(intent, assets.slice(0, 1)), QvacInvalidOutputError);
+});
 
 test('QVAC output remains human units for deterministic validation', () => {
   assert.deepEqual(parseQvacOutput(JSON.stringify(valid)), valid);
