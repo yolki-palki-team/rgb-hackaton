@@ -6,7 +6,8 @@ import { PublicOrderSchema, assetKey } from '@rgb-exchange/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MockWalletAdapter } from '../src/wallet.ts';
-import App from '../ui/src/App.tsx';
+import App, { validateDraftShape } from '../ui/src/App.tsx';
+import { initialDraft } from '../ui/src/model.ts';
 import { AssetSelect } from '../ui/src/components/ui/asset-select.tsx';
 import {
   ChatInput,
@@ -334,6 +335,7 @@ test(
       await assert.rejects(
         client.checkDraft(
           {
+            ...initialDraft,
             giveAsset: 'BTC',
             receiveAsset: 'DUSD',
             giveAmount: '100',
@@ -358,6 +360,7 @@ test(
       await assert.rejects(
         client.checkDraft(
           {
+            ...initialDraft,
             giveAsset: 'BTC',
             receiveAsset: 'DUSD',
             giveAmount: '100',
@@ -402,6 +405,20 @@ test(
       assert.ok((await readOnly.progressSnapshot()).trade?.validatedPreview);
       snapshot.trades[0].status = 'REJECTED';
       assert.equal((await readOnly.progressSnapshot()).trade?.validatedPreview, undefined);
+      snapshot.trades[0].status = 'AWAITING_APPROVAL';
+      snapshot.trades[0].plan = {
+        ...snapshot.trades[0].plan,
+        tradeId: `${snapshot.trades[0].plan.tradeId}-next-fill`,
+        digest: 'c'.repeat(64),
+      };
+      const nextFill = await readOnly.progressSnapshot();
+      assert.equal(nextFill.trade?.validatedPreview, undefined);
+      await assert.rejects(
+        readOnly.approve(nextFill.trade!.id, 'a'.repeat(64)),
+        /validation is stale/,
+      );
+      await readOnly.preview(nextFill.trade!.id);
+      assert.ok((await readOnly.progressSnapshot()).trade?.validatedPreview);
     } finally {
       market.close();
       if (previous) Object.defineProperty(globalThis, 'window', previous);
@@ -471,6 +488,7 @@ test('late wallet reads cannot restore balances across profile changes', async (
         await assert.rejects(
           client.checkDraft(
             {
+              ...initialDraft,
               giveAsset: 'BTC',
               receiveAsset: 'DUSD',
               giveAmount: '100',
@@ -555,6 +573,122 @@ test('desktop can retry inference after loading health and refresh QVAC without 
     assert.equal(draft?.minReceiveAmount, '10000');
     assert.equal((await client.qvacHealth()).state, 'ready');
     assert.deepEqual(calls, ['/api/interpret', '/api/qvac/health']);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('partial fill draft validates exact minimum units only when explicitly enabled', () => {
+  const draft = { ...initialDraft, giveAmount: '9007199254740993', minReceiveAmount: '100' };
+  assert.equal(initialDraft.allowPartial, false);
+  assert.doesNotThrow(() => validateDraftShape(draft, null));
+  for (const minGiveAmount of ['', '0', '-1', '1.5', '9007199254740994', '18446744073709551616']) {
+    assert.throws(
+      () => validateDraftShape({ ...draft, allowPartial: true, minGiveAmount }, null),
+      /Minimum fill/,
+    );
+  }
+  assert.doesNotThrow(() =>
+    validateDraftShape({ ...draft, allowPartial: true, minGiveAmount: '9007199254740992' }, null),
+  );
+  assert.doesNotThrow(() =>
+    validateDraftShape({ ...draft, allowPartial: false, minGiveAmount: 'invalid' }, null),
+  );
+});
+
+test('partial draft mapping preserves atomic strings, explicit opt-in, and open remaining amounts', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const wallet = new MockWalletAdapter('A');
+  const state = await wallet.state();
+  const policy = {
+    allowedAssetKeys: state.balances.map(({ asset }) => assetKey(asset)),
+    protectedBalances: {},
+    maxFeeSats: '1000',
+    allowBtcSale: false,
+  };
+  const rawDraft = {
+    giveAsset: state.balances[1].asset,
+    giveAmount: '9007199254740993',
+    receiveAsset: state.balances[2].asset,
+    minReceiveAmount: '100',
+    maxFeeSats: '1000',
+    expiresAt: Date.now() + 1800000,
+  };
+  let partial = true;
+  const requests: unknown[] = [];
+  const order = PublicOrderSchema.parse({
+    ...rawDraft,
+    id: 'partial-order',
+    ownerId: 'A',
+    revision: 2,
+    network: 'regtest',
+    status: 'OPEN',
+    createdAt: Date.now(),
+    partialFill: { minGiveAmount: '9007199254740992' },
+    fillProgress: {
+      filledGiveAmount: '1',
+      receivedAmount: '1',
+      feeBudgetUsedSats: '0',
+      fillCount: 1,
+    },
+  });
+  const bridge: DesktopBridge = {
+    connect: async () => ({
+      ownerId: 'A',
+      network: 'regtest',
+      mode: 'mock',
+      wallet: await wallet.capabilities(),
+      qvac: { available: false },
+    }),
+    request: async (_method, path, body) => {
+      if (path === '/api/state') return state;
+      if (path === '/api/interpret')
+        return {
+          draft: { ...rawDraft, ...(partial ? { partialFill: order.partialFill } : {}) },
+          policy,
+          clarification: null,
+        };
+      if (path === '/api/draft/validate') {
+        requests.push(body);
+        return {};
+      }
+      if (path === '/api/snapshot')
+        return { sequence: 1, orders: [order], myOrders: [order], trades: [], events: [] };
+      throw new Error(`Unexpected request: ${path}`);
+    },
+    approveTrade: async () => {
+      throw new Error('Must not sign');
+    },
+    getPendingOffer: async () => null,
+    onOfferSelected: () => () => {},
+    openPublicMarket: async () => {},
+  };
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { palkaWallet: bridge },
+  });
+  try {
+    const client = new LocalClient();
+    await client.connect();
+    await client.refreshWallet();
+    const { draft } = await client.interpret('Partial fill fixture');
+    assert.equal(draft?.allowPartial, true);
+    assert.equal(draft?.minGiveAmount, '9007199254740992');
+    await client.checkDraft(draft!, policy);
+    assert.deepEqual((requests[0] as { draft: unknown }).draft, {
+      ...rawDraft,
+      partialFill: order.partialFill,
+      expiresAt: (requests[0] as { draft: { expiresAt: number } }).draft.expiresAt,
+    });
+    await client.checkDraft({ ...draft!, allowPartial: false }, policy);
+    assert.equal('partialFill' in (requests[1] as { draft: object }).draft, false);
+    partial = false;
+    assert.equal((await client.interpret('Full fill fixture')).draft?.allowPartial, false);
+    const snapshot = await client.progressSnapshot();
+    assert.equal(snapshot.myOrder?.status, 'Partially filled');
+    assert.match(snapshot.myOrder!.fillSummary!, /Remaining 9007199254740992 X/);
+    assert.equal(snapshot.myOrder?.minimumFill, '9007199254740992 X');
   } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { planDigest } from '@rgb-exchange/contracts/digest';
+import { sameAsset } from '@rgb-exchange/contracts';
 import type {
   CoordinationMessage,
   AssetRef,
@@ -124,8 +125,12 @@ class FakeWallet implements WalletAdapter {
     return { status: 'pending' as const };
   }
   async validate(packageValue: SettlementPackage, trade: TradePlan): Promise<WalletPreview> {
-    const btcAmount = BigInt(this.stateValue.balances[0].amount) - 100000n - BigInt(this.feeSats);
-    const dusdAmount = BigInt(this.stateValue.balances[1].amount) + 100n;
+    const give = trade.legs.find((leg) => leg.fromOwnerId === 'a')!;
+    const receive = trade.legs.find((leg) => leg.toOwnerId === 'a')!;
+    const btcDelta =
+      (receive.asset.kind === 'btc' ? BigInt(receive.amount) : 0n) -
+      (give.asset.kind === 'btc' ? BigInt(give.amount) : 0n) -
+      BigInt(this.feeSats);
     return {
       walletId: 'wallet-a',
       ownerId: 'a',
@@ -137,14 +142,19 @@ class FakeWallet implements WalletAdapter {
       commitmentDigest: packageValue.commitmentDigest,
       validated: true,
       reasons: [],
-      give: { asset: btc, amount: '100000' },
-      receive: { asset: this.previewAsset, amount: '100' },
+      give: { asset: give.asset, amount: give.amount },
+      receive: { asset: this.previewAsset, amount: receive.amount },
       feeSats: this.feeSats,
-      btcDelta: (-100000n - BigInt(this.feeSats)).toString(),
-      balancesAfter: [
-        { asset: btc, amount: btcAmount.toString() },
-        { asset: dusd, amount: dusdAmount.toString() },
-      ],
+      btcDelta: String(btcDelta),
+      balancesAfter: this.stateValue.balances.map((balance) => ({
+        asset: balance.asset,
+        amount: String(
+          BigInt(balance.amount) -
+            (sameAsset(balance.asset, give.asset) ? BigInt(give.amount) : 0n) +
+            (sameAsset(balance.asset, receive.asset) ? BigInt(receive.amount) : 0n) -
+            (balance.asset.kind === 'btc' ? BigInt(this.feeSats) : 0n),
+        ),
+      })),
     };
   }
   async sign(_packageValue: SettlementPackage, _approval: Approval) {
@@ -228,7 +238,12 @@ const qvac = {
   },
 };
 
-async function fixture(store: LocalStore, wallet = new FakeWallet(), market = new FakeMarket()) {
+async function fixture(
+  store: LocalStore,
+  wallet = new FakeWallet(),
+  market = new FakeMarket(),
+  partialFill?: { minGiveAmount: string },
+) {
   const service = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
   const policy: PrivatePolicy = {
     allowedAssetKeys: ['regtest:btc:btc', 'regtest:rgb:dusd-test'],
@@ -244,6 +259,7 @@ async function fixture(store: LocalStore, wallet = new FakeWallet(), market = ne
       minReceiveAmount: '100',
       maxFeeSats: '1000',
       expiresAt: now + 60000,
+      ...(partialFill ? { partialFill } : {}),
     },
     policy,
     confirmed: true,
@@ -1158,6 +1174,274 @@ test('an unsigned participant can approve the unchanged package while a peer is 
     await service.approve('trade-1', { approvalToken, confirmed: true });
     assert.equal(wallet.signCount, 1);
     await assert.rejects(service.preview('trade-1'), /has sent or may have sent/);
+  } finally {
+    store.close();
+  }
+});
+
+function partialTrade(
+  market: FakeMarket,
+  orderId: string,
+  tradeId: string,
+  revision: number,
+  giveAmount: string,
+  receiveAmount: string,
+  feeSats: string,
+  peer = 'b',
+) {
+  const value = plan(orderId);
+  value.tradeId = tradeId;
+  value.orderRefs = [
+    { orderId, revision },
+    { orderId: `order-${peer}`, revision: 1 },
+  ];
+  value.participants = ['a', peer];
+  value.legs = [
+    { fromOwnerId: 'a', toOwnerId: peer, asset: btc, amount: giveAmount },
+    { fromOwnerId: peer, toOwnerId: 'a', asset: dusd, amount: receiveAmount },
+  ];
+  value.fees = [
+    { ownerId: 'a', feeSats },
+    { ownerId: peer, feeSats: '1000' },
+  ];
+  value.digest = planDigest(value);
+  market.trade = {
+    plan: value,
+    status: 'AWAITING_APPROVAL',
+    settlementPackage: { ...pkg(value), packageId: `package-${tradeId}` },
+    messages: [],
+  };
+  return market.trade;
+}
+
+test('partial order survives restart and fills with a different peer only after a fresh approval', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'rgb-partial-fill-'));
+  const path = join(directory, 'local.sqlite');
+  let store = new LocalStore(path);
+  try {
+    const wallet = new FakeWallet();
+    wallet.stateValue.balances[0].amount = '101000';
+    const { service, market, published } = await fixture(store, wallet, undefined, {
+      minGiveAmount: '10000',
+    });
+    const first = partialTrade(market, published.id, 'fill-1', 1, '60000', '60', '600');
+    const original = store.get(`order:${published.id}`);
+    const review = await service.preview('fill-1');
+    assert.equal(wallet.signCount, 0);
+    await service.approve('fill-1', { approvalToken: review.approvalToken, confirmed: true });
+    assert.equal(wallet.signCount, 1);
+    wallet.stateValue.balances = review.preview.balancesAfter;
+    wallet.sync = async (tradeId) => ({
+      mode: 'real',
+      tradeId,
+      network: 'regtest',
+      state: 'confirmed',
+      txid: 'a'.repeat(64),
+      chainConfirmed: true,
+      rgbAccepted: true,
+    });
+    first.status = 'CONFIRMED';
+    await service.sync('fill-1');
+    await service.sync('fill-1');
+    store.close();
+    store = new LocalStore(path);
+    const restarted = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
+    partialTrade(market, published.id, 'fill-2', 3, '40000', '40', '500', 'c');
+    await assert.rejects(restarted.preview('fill-2'), /cumulative fee budget/);
+    partialTrade(market, published.id, 'fill-2', 3, '40001', '41', '400', 'c');
+    await assert.rejects(restarted.preview('fill-2'), /remaining quantity/);
+    partialTrade(market, published.id, 'fill-2', 3, '40000', '40', '400', 'c');
+    wallet.feeSats = '300';
+    const next = await restarted.preview('fill-2');
+    assert.equal(next.preview.give.amount, '40000');
+    assert.equal(next.preview.receive.amount, '40');
+    assert.equal(wallet.signCount, 1);
+    await assert.rejects(
+      restarted.approve('fill-2', { approvalToken: review.approvalToken, confirmed: true }),
+      /Approval is missing or stale/,
+    );
+    await restarted.approve('fill-2', { approvalToken: next.approvalToken, confirmed: true });
+    assert.equal(wallet.signCount, 2);
+    await restarted.sync('fill-2');
+    assert.equal(store.entries(`fill:${published.id}:`).length, 2);
+    assert.deepEqual(store.get(`order:${published.id}`), original);
+    partialTrade(market, published.id, 'fill-3', 5, '1', '1', '0', 'd');
+    await assert.rejects(restarted.preview('fill-3'), /remaining quantity/);
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('partial fill rejects changed rates, dust, totals, revision and fee budgets before reservation', async (t) => {
+  const cases = [
+    { give: '50000', receive: '49', fee: '500', revision: 1, error: /confirmed limits/ },
+    { give: '9999', receive: '10', fee: '99', revision: 1, error: /confirmed limits/ },
+    { give: '100001', receive: '101', fee: '1000', revision: 1, error: /remaining quantity/ },
+    { give: '50000', receive: '50', fee: '501', revision: 1, error: /cumulative fee budget/ },
+    { give: '50000', receive: '50', fee: '500', revision: 3, error: /Stale order revision/ },
+  ];
+  for (const value of cases) {
+    await t.test(JSON.stringify(value), async () => {
+      const store = new LocalStore(':memory:');
+      try {
+        const { service, market, wallet, published } = await fixture(store, undefined, undefined, {
+          minGiveAmount: '10000',
+        });
+        const trade = partialTrade(
+          market,
+          published.id,
+          'fill-invalid',
+          value.revision,
+          value.give,
+          value.receive,
+          value.fee,
+        );
+        trade.status = 'RESERVED';
+        let reservations = 0;
+        wallet.reserve = async () => {
+          reservations++;
+          return { reservationId: 'unexpected' };
+        };
+        await assert.rejects(service.prepare('fill-invalid'), value.error);
+        assert.equal(reservations, 0);
+        assert.equal(wallet.signCount, 0);
+        assert.equal(store.entries(`fill:${published.id}:`).length, 0);
+      } finally {
+        store.close();
+      }
+    });
+  }
+});
+
+test('partial fills pin immutable plans and never trust coordinator confirmation to unlock the next fill', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, market, wallet, published } = await fixture(store, undefined, undefined, {
+      minGiveAmount: '10000',
+    });
+    partialTrade(market, published.id, 'fill-1', 1, '50000', '50', '500');
+    const { approvalToken } = await service.preview('fill-1');
+    partialTrade(market, published.id, 'fill-1', 1, '60000', '60', '600');
+    await assert.rejects(service.preview('fill-1'), /immutable fill plan changed/);
+    partialTrade(market, published.id, 'fill-1', 1, '50000', '50', '500');
+    await service.approve('fill-1', { approvalToken, confirmed: true });
+    market.trade!.status = 'CONFIRMED';
+    await service.sync('fill-1');
+    partialTrade(market, published.id, 'fill-2', 3, '50000', '50', '500', 'c');
+    await assert.rejects(service.preview('fill-2'), /Reconcile the previous fill/);
+    assert.equal(wallet.signCount, 1);
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('rejected unsigned partial fill releases only that preparation and cannot silently restart the parent', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, market, wallet, published } = await fixture(store, undefined, undefined, {
+      minGiveAmount: '10000',
+    });
+    partialTrade(market, published.id, 'fill-1', 1, '50000', '50', '500').status = 'RESERVED';
+    await service.prepare('fill-1');
+    await service.reject('fill-1', 'Stop this order');
+    assert.equal(wallet.releaseCount, 1);
+    assert.deepEqual(store.get('operation:fill-1'), { state: 'CANCELLED' });
+    partialTrade(market, published.id, 'fill-2', 3, '50000', '50', '500', 'c');
+    await assert.rejects(service.preview('fill-2'), /Reconcile the previous fill/);
+    assert.equal(wallet.signCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('full orders still reject partial execution and final wallet fees cannot exceed the fill allocation', async () => {
+  for (const partialFill of [undefined, { minGiveAmount: '10000' }]) {
+    const store = new LocalStore(':memory:');
+    try {
+      const { service, market, wallet, published } = await fixture(
+        store,
+        undefined,
+        undefined,
+        partialFill,
+      );
+      partialTrade(market, published.id, 'fill-1', 1, '50000', '50', '500');
+      wallet.feeSats = '501';
+      await assert.rejects(
+        service.preview('fill-1'),
+        partialFill ? /Final fee exceeds/ : /Plan changes the confirmed order/,
+      );
+      assert.equal(wallet.signCount, 0);
+    } finally {
+      store.close();
+    }
+  }
+});
+
+test('partial orders reject ring plans without changing support for full-order rings', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, market, published } = await fixture(store, undefined, undefined, {
+      minGiveAmount: '10000',
+    });
+    const trade = partialTrade(market, published.id, 'fill-ring', 1, '100000', '100', '1000');
+    trade.plan.participants.push('c');
+    trade.plan.orderRefs.push({ orderId: 'order-c', revision: 1 });
+    trade.plan.fees.push({ ownerId: 'c', feeSats: '1000' });
+    trade.plan.legs[1].toOwnerId = 'c';
+    trade.plan.legs.push({ fromOwnerId: 'c', toOwnerId: 'a', asset: dusd, amount: '100' });
+    trade.plan.digest = planDigest(trade.plan);
+    trade.settlementPackage = pkg(trade.plan);
+    await assert.rejects(service.preview('fill-ring'), /independent direct swaps/);
+    assert.equal(store.entries(`fill:${published.id}:`).length, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('incoming assets from a partial fill cannot finance its fee or replace protected reserves', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const wallet = new FakeWallet();
+    wallet.stateValue.balances[0].amount = '2000';
+    wallet.previewAsset = btc;
+    const market = new FakeMarket();
+    const service = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
+    const order = await service.publish({
+      draft: {
+        giveAsset: dusd,
+        giveAmount: '800',
+        receiveAsset: btc,
+        minReceiveAmount: '800000',
+        maxFeeSats: '1000',
+        expiresAt: Date.now() + 60000,
+        partialFill: { minGiveAmount: '400' },
+      },
+      policy: {
+        allowedAssetKeys: ['regtest:btc:btc', 'regtest:rgb:dusd-test'],
+        protectedBalances: { 'regtest:btc:btc': '900', 'regtest:rgb:dusd-test': '200' },
+        maxFeeSats: '1000',
+        allowBtcSale: false,
+      },
+      confirmed: true,
+      requestId: randomUUID(),
+    });
+    const trade = partialTrade(market, order.id, 'fill-1', 1, '400', '400000', '500');
+    trade.plan.legs[0].asset = dusd;
+    trade.plan.legs[1].asset = btc;
+    trade.plan.digest = planDigest(trade.plan);
+    trade.settlementPackage = pkg(trade.plan);
+    wallet.stateValue.balances[0].amount = '1000';
+    await assert.rejects(service.preview('fill-1'), /protected balance/);
+    wallet.stateValue.balances[0].amount = '2000';
+    wallet.stateValue.balances[1].amount = '590';
+    await assert.rejects(service.preview('fill-1'), /protected balance/);
+    wallet.stateValue.balances[1].amount = '600';
+    const result = await service.preview('fill-1');
+    assert.equal(result.preview.balancesAfter[1].amount, '200');
+    assert.equal(wallet.signCount, 0);
   } finally {
     store.close();
   }

@@ -61,6 +61,13 @@
 .wallet-history-outcome {
   overflow-wrap: anywhere;
 }
+.wallet-history-progress {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .wallet-history-outcome > span {
   color: #eee;
 }

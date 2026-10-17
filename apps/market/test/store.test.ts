@@ -101,6 +101,226 @@ function confirmedReceipt(tradeId: string, txid = 'a'.repeat(64)) {
   };
 }
 
+function confirmTrade(store: MarketStore, trade: TradeSnapshot, confirmedAt = now): void {
+  signingTrade(store, trade);
+  for (const owner of trade.plan.participants)
+    store.relayTradeMessage(
+      owner,
+      trade.plan.tradeId,
+      {
+        messageId: `receipt-${owner}`,
+        revision: 0,
+        type: 'receipt',
+        payload: confirmedReceipt(trade.plan.tradeId),
+      },
+      confirmedAt,
+    );
+}
+
+test('partial parent fills across separate trades, persists progress and idempotently resumes with waiting sellers', () =>
+  withStore((store, path) => {
+    const input = {
+      ...order('parent', 'buyer', dusd, '1000', btc, '1000000'),
+      partialFill: { minGiveAmount: '200' },
+    };
+    assert.equal(store.createOrder('buyer', input, now).order.fillProgress?.fillCount, 0);
+    const first = store.createOrder(
+      'seller-1',
+      order('seller-1', 'seller-1', btc, '300000', dusd, '300'),
+      now,
+    ).trade!;
+    const waiting = store.createOrder(
+      'seller-2',
+      order('seller-2', 'seller-2', btc, '300000', dusd, '300'),
+      now,
+    );
+    assert.equal(waiting.trade, null);
+    assert.equal(store.getOrder('parent')?.fillProgress?.filledGiveAmount, '0');
+    assert.equal(first.plan.fees.find((fee) => fee.ownerId === 'buyer')?.feeSats, '300');
+    confirmTrade(store, first);
+    assert.deepEqual(store.getOrder('parent')?.fillProgress, {
+      filledGiveAmount: '300',
+      receivedAmount: '300000',
+      feeBudgetUsedSats: '300',
+      fillCount: 1,
+    });
+    assert.equal(store.getOrder('parent')?.status, 'RESERVED');
+    const second = store.snapshot('buyer', 0, now).trades[0];
+    assert.notEqual(second.plan.tradeId, first.plan.tradeId);
+    assert.equal(second.plan.orderRefs.find((ref) => ref.orderId === 'parent')?.revision, 3);
+    assert.equal(store.createOrder('buyer', input, now).trade?.plan.tradeId, second.plan.tradeId);
+    const reopened = new MarketStore(path);
+    try {
+      assert.equal(reopened.getOrder('parent')?.fillProgress?.fillCount, 1);
+      reopened.relayTradeMessage(
+        'seller-1',
+        first.plan.tradeId,
+        {
+          messageId: 'receipt-seller-1',
+          revision: 0,
+          type: 'receipt',
+          payload: confirmedReceipt(first.plan.tradeId),
+        },
+        now,
+      );
+      assert.equal(reopened.getOrder('parent')?.fillProgress?.fillCount, 1);
+      assert.throws(
+        () =>
+          reopened.relayTradeMessage(
+            'seller-1',
+            first.plan.tradeId,
+            {
+              messageId: 'duplicate-different-id',
+              revision: 0,
+              type: 'receipt',
+              payload: confirmedReceipt(first.plan.tradeId),
+            },
+            now,
+          ),
+        /TRADE_TERMINAL/,
+      );
+      confirmTrade(reopened, second);
+      assert.equal(reopened.getOrder('parent')?.status, 'OPEN');
+      assert.equal(reopened.getOrder('parent')?.giveAmount, '1000');
+      assert.equal(reopened.getOrder('parent')?.fillProgress?.filledGiveAmount, '600');
+      const publicRow = reopened
+        .publicActivity(now)
+        .orders.filter((row) => row.order.id === 'parent');
+      assert.equal(publicRow.length, 1);
+      assert.equal(publicRow[0].execution, null);
+      const last = reopened.createOrder(
+        'seller-3',
+        order('seller-3', 'seller-3', btc, '400000', dusd, '400'),
+        now,
+      ).trade!;
+      confirmTrade(reopened, last);
+      assert.equal(reopened.getOrder('parent')?.status, 'FILLED');
+      assert.deepEqual(reopened.getOrder('parent')?.fillProgress, {
+        filledGiveAmount: '1000',
+        receivedAmount: '1000000',
+        feeBudgetUsedSats: '1000',
+        fillCount: 3,
+      });
+      assert.equal(reopened.history('buyer').myOrders.length, 1);
+      assert.equal(reopened.history('buyer').trades.length, 3);
+      assert.equal(
+        reopened.publicHistory().orders.filter((row) => row.order.id === 'parent').length,
+        1,
+      );
+      assert.equal(reopened.getTrade(first.plan.tradeId, 'buyer')?.plan.digest, first.plan.digest);
+    } finally {
+      reopened.close();
+    }
+  }));
+
+test('partial rejection stops only unexecuted remainder and uncertain signatures keep it reserved', () =>
+  withStore((store) => {
+    const input = {
+      ...order('parent', 'buyer', dusd, '1000', btc, '1000000'),
+      partialFill: { minGiveAmount: '200' },
+    };
+    store.createOrder('buyer', input, now);
+    const first = store.createOrder(
+      'one',
+      order('one', 'one', btc, '300000', dusd, '300'),
+      now,
+    ).trade!;
+    confirmTrade(store, first);
+    const second = store.createOrder(
+      'two',
+      order('two', 'two', btc, '300000', dusd, '300'),
+      now,
+    ).trade!;
+    store.relayTradeMessage(
+      'two',
+      second.plan.tradeId,
+      { messageId: 'reject', revision: 0, type: 'reject', payload: { reason: 'declined' } },
+      now,
+    );
+    assert.equal(store.getOrder('parent')?.status, 'CANCELLED');
+    assert.equal(store.getOrder('parent')?.fillProgress?.filledGiveAmount, '300');
+    assert.equal(store.history('buyer').trades.length, 2);
+    assert.equal(
+      store.createOrder('three', order('three', 'three', btc, '700000', dusd, '700'), now).trade,
+      null,
+    );
+    assert.throws(
+      () =>
+        store.createOrder(
+          'buyer',
+          { ...input, id: 'forged', fillProgress: store.getOrder('parent')?.fillProgress },
+          now,
+        ),
+      /INVALID_INITIAL_ORDER/,
+    );
+    const retry = store.createOrder(
+      'buyer',
+      { ...input, id: 'new-parent', giveAmount: '700', minReceiveAmount: '700000' },
+      now,
+    ).trade!;
+    signingTrade(store, retry);
+    store.relayTradeMessage(
+      'three',
+      retry.plan.tradeId,
+      { messageId: 'reject', revision: 0, type: 'reject', payload: {} },
+      now,
+    );
+    assert.equal(store.getOrder('new-parent')?.status, 'RESERVED');
+    assert.equal(store.getOrder('new-parent')?.fillProgress?.fillCount, 0);
+    assert.equal(store.getTrade(retry.plan.tradeId, 'buyer')?.status, 'RECONCILING');
+  }));
+
+test('partial cancellation and expiry retain settled amounts and never reopen expired remainder', () =>
+  withStore((store) => {
+    for (const mode of ['cancel', 'expire']) {
+      const parentId = `parent-${mode}`;
+      const input = {
+        ...order(parentId, parentId, dusd, '1000', btc, '1000000'),
+        partialFill: { minGiveAmount: '200' },
+      };
+      store.createOrder(parentId, input, now);
+      const trade = store.createOrder(
+        mode,
+        order(mode, mode, btc, '300000', dusd, '300'),
+        now,
+      ).trade!;
+      confirmTrade(store, trade, mode === 'expire' ? input.expiresAt : now);
+      if (mode === 'cancel') store.cancelOrder(parentId, parentId, 2, now);
+      const parent = store.getOrder(parentId)!;
+      assert.equal(parent.status, mode === 'cancel' ? 'CANCELLED' : 'EXPIRED');
+      assert.equal(parent.fillProgress?.filledGiveAmount, '300');
+      assert.equal(parent.fillProgress?.feeBudgetUsedSats, '300');
+    }
+  }));
+
+test('parent history keeps more than fifty immutable fills without duplicating its pagination row', () =>
+  withStore((store) => {
+    const parent = {
+      ...order('parent', 'buyer', dusd, '52', btc, '52000'),
+      maxFeeSats: '52000',
+      partialFill: { minGiveAmount: '1' },
+    };
+    store.createOrder('buyer', parent, now);
+    for (let i = 0; i < 52; i++) {
+      const id = `seller-${String(i).padStart(2, '0')}`;
+      const trade = store.createOrder(id, order(id, id, btc, '1000', dusd, '1'), now).trade!;
+      confirmTrade(store, trade);
+    }
+    const history = store.history('buyer');
+    assert.equal(history.myOrders.length, 1);
+    assert.equal(history.trades.length, 52);
+    assert.equal(history.nextCursor, null);
+    assert.equal(new Set(history.trades.map((trade) => trade.plan.tradeId)).size, 52);
+    assert.equal(store.getOrder('parent')?.fillProgress?.fillCount, 52);
+    const firstPage = store.publicHistory();
+    const secondPage = store.publicHistory(firstPage.nextCursor!);
+    assert.equal(firstPage.orders.length + secondPage.orders.length, 53);
+    assert.equal(
+      [...firstPage.orders, ...secondPage.orders].filter((row) => row.order.id === 'parent').length,
+      1,
+    );
+  }));
+
 test('reserves a ring atomically, persists it, and restricts trade visibility', () =>
   withStore((store, path) => {
     const a = store.createOrder('a', order('a', 'a', x, '100', dusd, '100'), now).order;

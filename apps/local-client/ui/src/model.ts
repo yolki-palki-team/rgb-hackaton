@@ -7,6 +7,8 @@ export type Draft = {
   minReceiveAmount: string;
   maxFeeSats: string;
   expiresMinutes: string;
+  allowPartial: boolean;
+  minGiveAmount: string;
 };
 
 export type Balance = { code: AssetCode; amount: string; label: string; unit: string };
@@ -18,6 +20,8 @@ export type Order = {
   receiveAsset: AssetCode;
   minReceiveAmount: string;
   status: string;
+  fillSummary?: string;
+  minimumFill?: string;
   mine?: boolean;
 };
 export type Trade = {
@@ -49,6 +53,8 @@ export const initialDraft: Draft = {
   minReceiveAmount: '',
   maxFeeSats: '1000',
   expiresMinutes: '30',
+  allowPartial: false,
+  minGiveAmount: '',
 };
 
 export const sampleBalances: Balance[] = [

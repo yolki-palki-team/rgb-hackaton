@@ -13,6 +13,8 @@ import {
   executionLabels,
   executionStep,
   marketLoadFailed,
+  orderFillSummary,
+  orderStatusLabel,
   type MarketState,
 } from './model';
 
@@ -33,13 +35,28 @@ function OrderCard({ entry }: { entry: PublicMarketOrder }) {
   const finished =
     execution &&
     ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'UNSUPPORTED'].includes(execution.status);
-  const tone = !execution ? 'waiting' : finished ? 'finished' : 'executing';
+  const tone = order.partialFill
+    ? order.status === 'OPEN'
+      ? 'waiting'
+      : order.status === 'RESERVED'
+        ? 'executing'
+        : 'finished'
+    : !execution
+      ? 'waiting'
+      : finished
+        ? 'finished'
+        : 'executing';
   return (
     <article className={`order-card order-card--${tone}`}>
       <div className="order-card-top">
         <span className="order-network">{order.network.toUpperCase()}</span>
         <span className="order-open">
-          <span aria-hidden="true" /> {execution ? executionLabels[execution.status] : 'Open order'}
+          <span aria-hidden="true" />{' '}
+          {order.partialFill
+            ? orderStatusLabel(entry)
+            : execution
+              ? executionLabels[execution.status]
+              : 'Open order'}
         </span>
       </div>
       <div className="order-pair">
@@ -51,20 +68,30 @@ function OrderCard({ entry }: { entry: PublicMarketOrder }) {
       </div>
       <div className="order-amounts">
         <div>
-          <span>Giving</span>
+          <span>{order.partialFill ? 'Total offer' : 'Giving'}</span>
           <strong>{formatAsset(order.giveAsset, order.giveAmount)}</strong>
           <small>{assetIdentity(order.giveAsset)}</small>
         </div>
         <div>
-          <span>Receive at least</span>
+          <span>{order.partialFill ? 'Total receive at least' : 'Receive at least'}</span>
           <strong>{formatAsset(order.receiveAsset, order.minReceiveAmount)}</strong>
           <small>{assetIdentity(order.receiveAsset)}</small>
         </div>
       </div>
+      {order.partialFill && (
+        <p className="order-fill-progress">
+          {orderFillSummary(order)}
+          <br />
+          Minimum fill {formatAsset(order.giveAsset, order.partialFill.minGiveAmount)}
+        </p>
+      )}
       {execution && (
         <div className="order-execution">
           <div className="execution-heading">
-            <strong>{executionLabels[execution.status]}</strong>
+            <strong>
+              {order.partialFill ? 'Fill · ' : ''}
+              {executionLabels[execution.status]}
+            </strong>
             <span>{execution.participants === 3 ? '3-party ring' : 'Direct swap'}</span>
           </div>
           {step !== null && (
@@ -80,7 +107,13 @@ function OrderCard({ entry }: { entry: PublicMarketOrder }) {
               ))}
             </ol>
           )}
-          {execution.status === 'CONFIRMED' && <small>Confirmed by all participant wallets.</small>}
+          {execution.status === 'CONFIRMED' && (
+            <small>
+              {order.partialFill
+                ? 'This fill was confirmed by both wallets.'
+                : 'Confirmed by all participant wallets.'}
+            </small>
+          )}
         </div>
       )}
       <div className="order-card-bottom">
@@ -165,12 +198,7 @@ function Market() {
           <div className="book-heading">
             <div>
               <span className="section-index">PUBLIC MARKET</span>
-              <h1 id="orderbook-heading">
-                Order book{' '}
-                <span>
-                  {state.kind === 'loading' ? '—' : String(state.orders.length).padStart(2, '0')}
-                </span>
-              </h1>
+              <h1 id="orderbook-heading">Order book</h1>
             </div>
             <button
               className="refresh-button"

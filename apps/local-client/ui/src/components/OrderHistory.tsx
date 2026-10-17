@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { MarketHistory, PublicOrder, TradeStatus } from '@rgb-exchange/contracts';
-import { formatAsset } from '../api';
+import { formatAsset, orderFillSummary } from '../api';
 import { Button, Panel, SectionTitle, StatusBadge } from './ui/wallet-kit';
 import { MorphingSquare } from './ui/morphing-square';
 
@@ -63,7 +63,14 @@ export function OrderHistoryRows({ history }: { history: MarketHistory }) {
               <span aria-label="for at least">→ ≥</span>
               <strong>{formatAsset(order.receiveAsset, order.minReceiveAmount)}</strong>
             </div>
-            <StatusBadge className="status-pill">{orderLabels[order.status]}</StatusBadge>
+            <StatusBadge className="status-pill">
+              {order.status === 'OPEN' && BigInt(order.fillProgress?.filledGiveAmount ?? '0') > 0n
+                ? 'Partially filled'
+                : orderLabels[order.status]}
+            </StatusBadge>
+            {order.partialFill && (
+              <p className="wallet-history-progress">{orderFillSummary(order)}</p>
+            )}
             <div className="wallet-history-meta">
               <time dateTime={new Date(order.createdAt).toISOString()}>
                 {new Date(order.createdAt).toLocaleString()}
@@ -74,15 +81,26 @@ export function OrderHistoryRows({ history }: { history: MarketHistory }) {
                 {order.id.length > 20 ? `${order.id.slice(0, 10)}…${order.id.slice(-6)}` : order.id}
               </span>
             </div>
-            {trades.map((trade) => (
-              <div className="wallet-history-outcome" key={trade.plan.tradeId}>
-                <span>
-                  {trade.plan.participants.length === 3 ? '3-party ring' : 'Direct swap'} ·{' '}
-                  {tradeLabels[trade.status]}
-                </span>
-                {trade.reason && <p>{trade.reason}</p>}
-              </div>
-            ))}
+            {trades.map((trade) => {
+              const give = trade.plan.legs.find((leg) => leg.fromOwnerId === order.ownerId);
+              const receive = trade.plan.legs.find((leg) => leg.toOwnerId === order.ownerId);
+              return (
+                <div className="wallet-history-outcome" key={trade.plan.tradeId}>
+                  <span>
+                    {trade.plan.participants.length === 3 ? '3-party ring' : 'Direct swap'} ·{' '}
+                    {tradeLabels[trade.status]}
+                  </span>
+                  {order.partialFill && give && receive && (
+                    <p title={trade.plan.tradeId}>
+                      Fill {trade.plan.tradeId.slice(0, 14)} ·{' '}
+                      {formatAsset(give.asset, give.amount)} →{' '}
+                      {formatAsset(receive.asset, receive.amount)}
+                    </p>
+                  )}
+                  {trade.reason && <p>{trade.reason}</p>}
+                </div>
+              );
+            })}
           </li>
         );
       })}
