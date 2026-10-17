@@ -6,7 +6,8 @@ import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
 import { getPublicHealth, getPublicOrders } from './api';
 import { assetIdentity, desktopOfferUrl, formatAsset, shortId, type MarketState } from './model';
 
-const walletUrl = 'http://127.0.0.1:4101/';
+import { walletUrl } from './wallet-url';
+
 const marketPath = '/market';
 
 function WalletLink({

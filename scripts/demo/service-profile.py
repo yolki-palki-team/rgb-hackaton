@@ -9,11 +9,18 @@ import time
 from service_runtime import CONFIG, PEOPLE, Runtime, configure
 
 parser = argparse.ArgumentParser()
-parser.add_argument("command", choices=["configure", "market", "run", "health"])
+parser.add_argument("command", choices=["configure", "market", "run", "up", "health"])
 parser.add_argument("--source")
 parser.add_argument("--base-port", type=int, default=43100)
 parser.add_argument("--profile", choices=PEOPLE, default="alice")
+parser.add_argument(
+    "--desktop",
+    choices=PEOPLE,
+    help="Use Electron for this profile instead of its browser client (up only)",
+)
 args = parser.parse_args()
+if args.desktop and args.command != "up":
+    parser.error("--desktop requires up")
 if args.command == "configure":
     if not args.source:
         parser.error("--source is required")
@@ -30,9 +37,21 @@ else:
         try:
             if args.command == "market":
                 runtime.market()
+            elif args.command == "up":
+                runtime.market()
+                for person in PEOPLE:
+                    runtime.profile(person, desktop=args.desktop == person)
+                    if args.desktop != person:
+                        print(
+                            json.dumps({"profile": person, "pairingFile": runtime.pairing(person)}),
+                            flush=True,
+                        )
+                runtime.ready([p for p in PEOPLE if p != args.desktop], wallet_state=False)
+                runtime.web()
             else:
                 runtime.profile(args.profile)
                 runtime.ready([args.profile], wallet_state=False)
+                print(json.dumps({"pairingFile": runtime.pairing(args.profile)}), flush=True)
             print(
                 json.dumps(
                     {"running": args.command, "profile": args.profile, "privateConfig": str(CONFIG)}

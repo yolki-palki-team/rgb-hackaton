@@ -1,3 +1,4 @@
+import { walletUrl } from '../../wallet-url';
 export default function SiteHeader({ active }: { active: 'home' | 'market' }) {
   return (
     <nav className="video-hero-nav" aria-label="Primary">
@@ -11,7 +12,7 @@ export default function SiteHeader({ active }: { active: 'home' | 'market' }) {
         <a href="/market" aria-current={active === 'market' ? 'page' : undefined}>
           Market
         </a>
-        <a href="http://127.0.0.1:4101/" target="_blank" rel="noopener noreferrer">
+        <a href={walletUrl} target="_blank" rel="noopener noreferrer">
           Local wallet
         </a>
       </div>

@@ -278,7 +278,9 @@ function startBackend(): void {
   const backendEntry = join(appRoot, 'apps', 'local-client', 'src', 'main.ts');
   if (!existsSync(nodeBin) || !existsSync(backendEntry))
     throw new Error('Bundled local wallet runtime is missing');
-  const stateDir = join(app.getPath('userData'), 'state', config.ownerId);
+  const stateDir = process.env.PALKA_LOCAL_STATE_DIR
+    ? resolve(process.env.PALKA_LOCAL_STATE_DIR)
+    : join(app.getPath('userData'), 'state', config.ownerId);
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const environment: NodeJS.ProcessEnv = {};
   for (const key of [
