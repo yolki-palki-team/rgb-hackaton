@@ -67,6 +67,7 @@ type ProgressSnapshot = {
   trade: Trade | null;
 };
 type WalletSnapshot = {
+  cached: boolean;
   walletError?: string;
   updatedAt: number | null;
   balances: Balance[];
@@ -168,6 +169,52 @@ export class LocalClient {
     return this.request('GET', '/api/qvac/health');
   }
 
+  private balanceCacheKey() {
+    if (!this.status) throw new Error('Pair the wallet first.');
+    return `palka:balances:v1:${this.baseUrl || 'desktop'}:${this.status.mode}:${this.status.network}:${this.status.ownerId}`;
+  }
+
+  cachedWallet(): WalletSnapshot | null {
+    if (!this.status) return null;
+    try {
+      const raw = window.localStorage.getItem(this.balanceCacheKey());
+      if (!raw) return null;
+      const cached = z
+        .object({ state: WalletStateSchema, updatedAt: z.number().finite().positive() })
+        .parse(JSON.parse(raw));
+      if (
+        cached.state.ownerId !== this.status.ownerId ||
+        cached.state.network !== this.status.network ||
+        cached.state.mode !== this.status.mode ||
+        cached.updatedAt > Date.now()
+      )
+        return null;
+      // Display-only: restored balances never become authority for draft assets or signing.
+      this.lastWalletState = cached.state;
+      this.walletUpdatedAt = cached.updatedAt;
+      return this.walletSnapshot();
+    } catch {
+      return null;
+    }
+  }
+
+  private walletSnapshot(walletError?: string): WalletSnapshot {
+    return {
+      cached: this.walletState === null,
+      walletError,
+      updatedAt: this.walletUpdatedAt,
+      balances:
+        this.lastWalletState?.balances.map((balance) =>
+          mapBalance(balance.asset, balance.amount),
+        ) ?? [],
+      policyAssets:
+        this.lastWalletState?.balances.map((balance) => ({
+          key: assetKey(balance.asset),
+          label: balance.asset.symbol,
+        })) ?? [],
+    };
+  }
+
   supportsTrade(trade: Trade) {
     return (
       this.status?.mode === 'real' &&
@@ -208,22 +255,18 @@ export class LocalClient {
         this.walletState = state;
         this.lastWalletState = state;
         this.walletUpdatedAt = Date.now();
+        try {
+          window.localStorage.setItem(
+            this.balanceCacheKey(),
+            JSON.stringify({ state, updatedAt: this.walletUpdatedAt }),
+          );
+        } catch {
+          // Storage may be disabled or full; a fresh wallet response is still usable.
+        }
       } catch (error) {
         walletError = error instanceof Error ? error.message : 'Wallet balances unavailable';
       }
-      return {
-        walletError,
-        updatedAt: this.walletUpdatedAt,
-        balances:
-          this.lastWalletState?.balances.map((balance) =>
-            mapBalance(balance.asset, balance.amount),
-          ) ?? [],
-        policyAssets:
-          this.lastWalletState?.balances.map((balance) => ({
-            key: assetKey(balance.asset),
-            label: balance.asset.symbol,
-          })) ?? [],
-      };
+      return this.walletSnapshot(walletError);
     })().finally(() => {
       this.walletRefresh = null;
     });

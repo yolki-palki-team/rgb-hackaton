@@ -49,6 +49,7 @@ function App() {
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletUpdatedAt, setWalletUpdatedAt] = useState<number | null>(null);
   const [walletRefreshing, setWalletRefreshing] = useState(false);
+  const [walletCached, setWalletCached] = useState(false);
   const [marketLoading, setMarketLoading] = useState(false);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const desktopConnectStarted = useRef(false);
@@ -78,6 +79,7 @@ function App() {
     !syncError &&
     !walletError &&
     !walletRefreshing &&
+    !walletCached &&
     balances.length > 0;
   const connectionError = syncError ?? status?.walletError ?? walletError;
   const visibleBalances = connected ? balances : samplePreview ? sampleBalances : [];
@@ -137,19 +139,21 @@ function App() {
     try {
       const next = new LocalClient(desktop ? undefined : pairToken);
       const health = await next.connect();
+      const savedWallet = next.cachedWallet() ?? (await next.refreshWallet());
       setClient(next);
       setStatus(health);
       setConnectionOpen(false);
       setSamplePreview(false);
       setSyncError(null);
-      setWalletError(null);
-      setWalletUpdatedAt(null);
+      setWalletError(savedWallet.walletError ?? null);
+      setWalletUpdatedAt(savedWallet.updatedAt);
+      setWalletCached(savedWallet.cached);
       setWalletRefreshing(false);
-      setBalances([]);
+      setBalances(savedWallet.balances);
       setOrders([]);
       setMyOrder(null);
       setTrade(null);
-      setPolicyAssets([]);
+      setPolicyAssets(savedWallet.policyAssets);
       workflow.current = new TradeWorkflow();
       setWorkflowRunning(false);
       setWorkflowError(null);
@@ -256,6 +260,7 @@ function App() {
         setPolicyAssets(data.policyAssets);
         setWalletError(data.walletError ?? null);
         setWalletUpdatedAt(data.updatedAt);
+        setWalletCached(data.cached);
         const codes = data.balances.map((balance) => balance.code);
         if (codes.length >= 2)
           setDraft((current) =>
@@ -830,7 +835,7 @@ function App() {
                               messagePlacement="right"
                               className="h-3 w-3 bg-current"
                             />
-                          ) : walletError ? (
+                          ) : walletError || walletCached ? (
                             'Cached'
                           ) : (
                             'Last checked'
