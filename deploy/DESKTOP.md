@@ -3,18 +3,24 @@
 ## Automatic shared-network startup (recommended)
 
 The operator runs `bash deploy/server.sh network` after updating the server.
-On each computer with Git, Node 22.17+, uv, Rust 1.94 installed:
+On each computer with Git, Node 22.21+ (or newer LTS), uv and rustup installed:
 
 ```bash
 git pull --ff-only
 bash deploy/desktop.sh
 ```
 
-The launcher finds Cargo on `PATH` or in `${CARGO_HOME:-$HOME/.cargo}/bin`.
+The launcher selects Rust using the repository's `rust-toolchain.toml` (currently
+1.94.0), installing that toolchain through rustup when needed. It prefers
+`${CARGO_HOME:-$HOME/.cargo}/bin` over standalone Homebrew Rust, then puts the
+selected toolchain first on `PATH` for the build and wallet runtime.
 If Rust is installed in a custom location, export `CARGO_HOME` and
 `RUSTUP_HOME` pointing to that installation before launching. These variables
 are inherited by the desktop and its wallet helpers. If Rust is not installed,
-install it with rustup first; the launcher does not install system prerequisites.
+install [rustup](https://rustup.rs) first; the launcher does not install system
+prerequisites. It checks prerequisite commands and the Rust toolchain before installing project
+dependencies. `rustc 1.86.0 is not supported` means an older standalone Rust was
+used: update this checkout and rerun the launcher with rustup installed.
 
 For a new checkout, clone the repository first. The script installs locked
 dependencies and builds the local wallet; subsequent launches can use
@@ -64,7 +70,7 @@ each other merely by connecting to the same market.
 
 ## First setup on macOS
 
-Required: Git, Node 22.17+, uv/Python 3.12+, Rust 1.94. Docker is needed only for the optional local-chain workflow.
+Required: Git, Node 22.21+ (or newer LTS), uv/Python 3.12+, rustup with Rust 1.94. Docker is needed only for the optional local-chain workflow.
 The launcher and wallet helpers run standard commands directly; RTK is not required.
 Keep all wallet state on its owner's computer.
 
