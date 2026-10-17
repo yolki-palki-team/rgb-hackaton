@@ -149,7 +149,13 @@ function App() {
               ? current
               : { ...current, giveAsset: codes[0], receiveAsset: codes[1] },
           );
-        if (Date.now() - healthChecked > 30_000) {
+        if (
+          (!data.trade ||
+            ['CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
+              data.trade.status,
+            )) &&
+          Date.now() - healthChecked > 30_000
+        ) {
           const health = await client.connect();
           if (!active) return;
           setStatus(health);
@@ -687,7 +693,7 @@ function App() {
 
           {/* Keep funding state mounted so switching tabs cannot reset an approval attempt. */}
           <div hidden={view !== 'topup'}>
-            <FundingPanel client={client} wallet={status} />
+            <FundingPanel client={client} wallet={status} visible={view === 'topup'} />
           </div>
 
           {view === 'trade' && (

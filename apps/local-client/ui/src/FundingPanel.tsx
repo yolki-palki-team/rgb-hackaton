@@ -8,9 +8,11 @@ const sats = (value: string) => `${BigInt(value).toLocaleString()} sats`;
 export function FundingPanel({
   client,
   wallet,
+  visible = true,
 }: {
   client: LocalClient | null;
   wallet: ClientStatus | null;
+  visible?: boolean;
 }) {
   const [funding, setFunding] = useState<FundingStatus | null>(null);
   const [amount, setAmount] = useState('');
@@ -40,11 +42,17 @@ export function FundingPanel({
     setFunding(null);
     setError(null);
     setApprovalAttempted(false);
-    if (!client || !eligible) {
+  }, [client, eligible]);
+
+  useEffect(() => {
+    if (!client || !eligible || !visible) {
       return;
     }
     let active = true;
+    let pending = false;
     const refresh = async () => {
+      if (pending) return;
+      pending = true;
       try {
         const next = await client.fundingStatus();
         if (!active) return;
@@ -53,6 +61,8 @@ export function FundingPanel({
       } catch (caught) {
         if (active)
           setError(caught instanceof Error ? caught.message : 'Funding status is unavailable.');
+      } finally {
+        pending = false;
       }
     };
     void refresh();
@@ -61,7 +71,7 @@ export function FundingPanel({
       active = false;
       window.clearInterval(timer);
     };
-  }, [client, eligible]);
+  }, [client, eligible, visible]);
 
   const create = async () => {
     if (!client || !eligible || !funding?.available || funding.address || busy || error) return;
