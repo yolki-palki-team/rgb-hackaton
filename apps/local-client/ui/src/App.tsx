@@ -394,42 +394,6 @@ function App() {
               </button>
             ))}
           </nav>
-          <div className="top-actions">
-            {desktop ? (
-              <Button
-                className="text-button"
-                type="button"
-                onClick={() => void window.palkaWallet?.openPublicMarket()}
-              >
-                Public market
-              </Button>
-            ) : (
-              <a
-                className="text-button"
-                href="http://127.0.0.1:5173/market"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Public market
-              </a>
-            )}
-            <StatusBadge className="network-pill">
-              {connected && <span className="live-dot" />}
-              {connected ? `BITCOIN ${status?.network.toUpperCase()}` : 'NETWORK UNAVAILABLE'}
-            </StatusBadge>
-            <Button
-              className={`wallet-button ${connected ? 'connected' : ''}`}
-              type="button"
-              onClick={() => setConnectionOpen(true)}
-            >
-              <Icon name="wallet" size={17} />
-              {connected
-                ? `Wallet ${status?.walletLabel ?? 'connected'}`
-                : desktop
-                  ? 'Backend unavailable'
-                  : 'Pair local wallet'}
-            </Button>
-          </div>
         </header>
         <main className="content">
           <div className={`mode-banner ${connected && !isMock ? 'real' : 'mock'}`} role="status">
@@ -464,6 +428,11 @@ function App() {
                 </details>
               )}
             </div>
+            {!connected && (
+              <Button className="text-button" type="button" onClick={() => setConnectionOpen(true)}>
+                {desktop ? 'Reconnect' : 'Connect wallet'}
+              </Button>
+            )}
             {!connected && (
               <Button
                 className="text-button sample-action"
