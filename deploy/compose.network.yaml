@@ -1,0 +1,73 @@
+services:
+  bitcoind:
+    image: bitcoin/bitcoin:30.2@sha256:2b1d8a8d23c67b426afa8cd5b3ffd66b8c4ebbbceef3e214df8627aaead1f517
+    restart: unless-stopped
+    entrypoint: ['/bin/sh', '/opt/start-bitcoin.sh']
+    user: '0:0'
+    env_file: ./.state/chain.env
+    volumes:
+      - bitcoin-data:/data
+      - ./start-bitcoin.sh:/opt/start-bitcoin.sh:ro,Z
+    healthcheck:
+      test: ['CMD', 'bitcoin-cli', '-datadir=/data', '-regtest', 'getblockchaininfo']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    logging: &chain-logging
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+  electrs:
+    image: mempool/electrs@sha256:35963870c36a8da5fff8310e94df15869d0e97788bdaa11e63901cdb26fd781a
+    entrypoint: ['/bin/sh', '/opt/start-electrs.sh']
+    restart: unless-stopped
+    env_file: ./.state/chain.env
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+    volumes:
+      - electrs-data:/data
+      - ./start-electrs.sh:/opt/start-electrs.sh:ro,Z
+    logging: *chain-logging
+  rgb-proxy:
+    build:
+      context: .
+      dockerfile: Proxy.Dockerfile
+    restart: unless-stopped
+    volumes:
+      - rgb-proxy-data:/data
+    environment:
+      APP_DATA: /data
+    logging: *chain-logging
+  chain:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    command: ['python', '/app/network_gateway.py']
+    env_file: ./.state/chain.env
+    environment:
+      CHAIN_STATE: /state
+    volumes:
+      - ./network_gateway.py:/app/network_gateway.py:ro,Z
+      - chain-state:/state
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 30
+    logging: *chain-logging
+
+volumes:
+  bitcoin-data:
+  electrs-data:
+  rgb-proxy-data:
+  chain-state:

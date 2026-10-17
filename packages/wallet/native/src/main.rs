@@ -89,7 +89,7 @@ fn open_wallet(root: &std::path::Path, init: bool) -> Result<Wallet> {
 
 fn online(wallet: &mut Wallet) -> Result<rgb_lib::wallet::Online> {
     Ok(wallet.go_online(OnlineOptions {
-        indexer_url: "127.0.0.1:50001".into(),
+        indexer_url: std::env::var("RGB_INDEXER_URL").unwrap_or_else(|_| "127.0.0.1:50001".into()),
         skip_consistency_check: false,
         vanilla_sync_lookback: 20,
     })?)
@@ -111,8 +111,11 @@ fn run() -> Result<()> {
     let req: Value = serde_json::from_str(&raw)?;
     let op = req["op"].as_str().ok_or("missing op")?;
     if op == "health" {
-        rgb_lib::wallet::rust_only::check_indexer_url("127.0.0.1:50001", BitcoinNetwork::Regtest)?;
-        rgb_lib::wallet::rust_only::check_proxy_url("http://127.0.0.1:3000/json-rpc")?;
+        let indexer = std::env::var("RGB_INDEXER_URL").unwrap_or_else(|_| "127.0.0.1:50001".into());
+        let proxy = std::env::var("RGB_PROXY_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:3000/json-rpc".into());
+        rgb_lib::wallet::rust_only::check_indexer_url(&indexer, BitcoinNetwork::Regtest)?;
+        rgb_lib::wallet::rust_only::check_proxy_url(&proxy)?;
         println!(
             "{}",
             json!({"network":"regtest","indexer":true,"rgbProxyProtocolCompatible":true})
@@ -213,10 +216,14 @@ fn run() -> Result<()> {
         }
         "export" => cooperative::export(&wallet, &root, &req)?,
         "validate" => cooperative::validate(&mut wallet, &root, &req)?,
-        "state" => {
-            let on = online(&mut wallet)?;
-            let unspents = wallet.list_unspents(Some(on), false, false)?;
-            json!({"profile":profile,"network":"regtest","btc":wallet.get_btc_balance(Some(on),false)?,
+        "state" | "offline-state" => {
+            let on = if op == "state" {
+                Some(online(&mut wallet)?)
+            } else {
+                None
+            };
+            let unspents = wallet.list_unspents(on, false, op == "offline-state")?;
+            json!({"profile":profile,"network":"regtest","btc":wallet.get_btc_balance(on,op == "offline-state")?,
                 "stockBalances":wallet.cooperative_stock_balances()?.iter().map(|(k,v)|(k.clone(),v.to_string())).collect::<std::collections::BTreeMap<_,_>>(),
                 "assets":wallet.list_assets(vec![])?,"unspents":unspents})
         }

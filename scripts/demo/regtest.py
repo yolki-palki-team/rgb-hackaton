@@ -24,6 +24,10 @@ def call(args, **kwargs):
 
 
 def rpc(*args):
+    if os.environ.get("PALKA_CHAIN_CONFIG"):
+        from chain_transport import Client
+
+        return Client.from_env().request("/rpc", {"method": args[0], "params": list(args[1:])})
     encoded = [json.dumps(a) if isinstance(a, (bool, list, dict)) else str(a) for a in args]
     raw = call(
         COMPOSE + ["exec", "-T", "-u", "blits", "bitcoind", "bitcoin-cli", "-regtest", *encoded]

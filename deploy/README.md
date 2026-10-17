@@ -218,3 +218,8 @@ Two registration tests passed inside the ARM64 market image: repeated registrati
 hash storage, restart persistence, legacy authentication, and limits. Desktop
 integration checks saved credentials, a lost response, and HTTP/WebSocket access.
 These checks do not include a manual Electron launch or real RGB settlement.
+
+## Shared Bitcoin/RGB test network
+
+After HTTPS is enabled, follow [NETWORK.md](NETWORK.md) to add a persistent shared
+regtest chain, desktop connections, test BTC/RGB setup and WDK top-ups.

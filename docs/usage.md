@@ -370,30 +370,11 @@ A shared cloud market **does not connect separate regtest chains**. Every
 participant must see the same chain history and RGB contract IDs. Running `setup`
 independently on three unrelated chains does not make them interoperable.
 
-The current backend intentionally targets regtest. Rust uses local electrs
-`127.0.0.1:50001` and proxy `127.0.0.1:3000`; Python calls Bitcoin RPC through
-`docker compose exec … bitcoin-cli`. Independent desktop wallet initialization
-and sidecar startup are available through [DESKTOP.md](../deploy/DESKTOP.md), but
-multi-host RPC transport and standalone funding remain separate work. `catalog.py` also
-expects three local profiles. The scenario below is therefore an acceptance target
-for the next stage, not a verified command to deploy everything on three computers.
-
-Required infrastructure work:
-
-- Make Bitcoin RPC transport configurable (a secured private network or loopback
-  through an SSH tunnel), preserving Docker transport for the local demo.
-  Electrs/proxy can remain on loopback through tunnels or become configurable.
-  Wallet RPC must always remain local.
-- Separate single-profile initialization, public funding address output, operator
-  funding, and public RGB catalog import. Create wallets only on their owners'
-  computers; the server must not generate or distribute seeds. Names such as
-  alice/bob/carol identify distinct market participants and local wallets.
-- Choose shared regtest Core + electrs and verify a common checkpoint block hash;
-  only the test operator mines. Do not switch to public mainnet/signet: this needs
-  wallet capability and validation changes, not just environment variables.
-- Issue X to Alice and DUSD to Bob; distribute only public exported contracts and
-  import them through native catalog-import. Incoming ownership appears after an
-  accepted consignment, not after importing genesis.
+The optional [shared network deployment](../deploy/NETWORK.md) now provides
+persistent Oracle infrastructure, authenticated HTTPS transport, pinned chain
+checkpoints, independent participant wallets, test funding, shared RGB contracts
+and WDK funding on the same regtest chain. The local Docker path remains available.
+Actual multi-computer direct/ring settlement remains an acceptance check after deployment.
 
 Reproducible acceptance scenario after that stage:
 

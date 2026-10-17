@@ -7,5 +7,13 @@ api.owlpeer.com {
 		Cache-Control no-store
 		X-Content-Type-Options nosniff
 	}
-	reverse_proxy runtime:4100
+	handle_path /chain/* {
+		request_body {
+			max_size 8MB
+		}
+		reverse_proxy chain:8090
+	}
+	handle {
+		reverse_proxy runtime:4100
+	}
 }
