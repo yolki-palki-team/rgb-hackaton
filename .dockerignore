@@ -19,6 +19,10 @@
 !packages/contracts/**
 !docker/
 !docker/**
+!deploy/
+!deploy/Dockerfile
+!deploy/package.json
+!deploy/package-lock.json
 **/node_modules
 **/dist
 **/.env

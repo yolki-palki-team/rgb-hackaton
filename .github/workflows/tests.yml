@@ -52,3 +52,24 @@ jobs:
         run: uv sync --locked
       - name: Wallet journal, protocol and recovery tests
         run: uv run --locked python -m unittest discover -s packages/wallet -p 'test_*.py' -v
+      - name: Deployment credential persistence tests
+        run: uv run --locked python -m unittest discover -s deploy -p 'test_*.py' -v
+
+  deployment:
+    name: Server deployment smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create ephemeral test credentials
+        run: bash deploy/server.sh init ci-participant
+      - name: Build and start server profile
+        run: bash deploy/server.sh up
+      - name: Check public web and coordinator
+        run: bash deploy/server.sh check
+      - name: Show startup logs on failure
+        if: failure()
+        run: bash deploy/server.sh logs
+      - name: Stop test project
+        if: always()
+        run: bash deploy/server.sh down

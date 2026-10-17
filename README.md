@@ -35,6 +35,15 @@ quickstart below is a separate web/runtime option and does not start real sideca
 
 Hackathon resources and stack guidance are in [materials.md](materials.md).
 
+## Server deployment
+
+For a separate VM running **only public web and market**, use
+[deploy/README.md](deploy/README.md). The tracked Compose configuration and launcher
+preserve SQLite and private credentials, accept operator-selected participant IDs,
+and leave desktop/QVAC/wallets on users' computers. This first profile serves HTTP;
+desktop access uses an SSH tunnel until HTTPS/WSS is configured. It does not yet
+provision shared regtest infrastructure or independent wallets on multiple machines.
+
 ## Run with Docker
 
 From the repository root, with Docker Desktop / Docker Engine 25+ and Compose 2.20.2+ running:
