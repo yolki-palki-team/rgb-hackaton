@@ -51,7 +51,8 @@ test('unpaired wallet starts with no synthetic balances, orders, or network', ()
     assert.match(html, /Local wallet unavailable/);
     assert.match(html, /NETWORK UNAVAILABLE/);
     assert.match(html, /Preview sample data/);
-    assert.match(html, /Connect a real regtest wallet to use WDK funding/);
+    assert.match(html, /Top up/);
+    assert.match(html, /<div hidden="">[\s\S]*Connect a real regtest wallet to top up/);
     assert.doesNotMatch(html, /Create WDK account/);
     assert.doesNotMatch(html, /0\.00250000|DEMO-A1|BITCOIN REGTEST/);
   } finally {

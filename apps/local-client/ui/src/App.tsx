@@ -22,6 +22,7 @@ const navItems: { key: View; label: string; subtitle: string; icon: string }[] =
   { key: 'home', label: 'Overview', subtitle: 'Balances and goal', icon: 'grid' },
   { key: 'market', label: 'Market', subtitle: 'Orders', icon: 'arrows' },
   { key: 'trade', label: 'Trade', subtitle: 'Review and sign', icon: 'route' },
+  { key: 'topup', label: 'Top up', subtitle: 'Add BTC', icon: 'wallet' },
 ];
 
 function App() {
@@ -508,7 +509,6 @@ function App() {
                   approval.
                 </p>
               </section>
-              <FundingPanel client={client} wallet={status} />
               <section aria-labelledby="balance-heading">
                 <SectionTitle
                   id="balance-heading"
@@ -547,6 +547,11 @@ function App() {
               </section>
             </>
           )}
+
+          {/* Keep funding state mounted so switching tabs cannot reset an approval attempt. */}
+          <div hidden={view !== 'topup'}>
+            <FundingPanel client={client} wallet={status} />
+          </div>
 
           {view === 'market' && (
             <>
