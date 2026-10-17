@@ -21,6 +21,17 @@ const checked = {
   digest: 'digest',
 };
 
+test('approval progress never falls back to preparation when the preview is cleared', () => {
+  const pending = tradeProgress(trade('AWAITING_APPROVAL'), true);
+  assert.equal(pending.step, 1);
+  assert.equal(pending.title, 'Processing your approval');
+  for (const status of ['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING']) {
+    assert.equal(tradeProgress(trade(status)).step, 1);
+    assert.equal(tradeProgress(trade(status, { signingAuthorized: true })).step, 2);
+  }
+  assert.equal(nextTradeAction(trade('SIGNING')), 'preview');
+});
+
 test('direct and ring workflows prepare, validate once, and stop for explicit approval', async () => {
   for (const kind of ['direct', 'ring'] as const) {
     const calls: string[] = [];

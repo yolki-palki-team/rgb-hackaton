@@ -63,7 +63,10 @@ export class TradeWorkflow {
   }
 }
 
-export function tradeProgress(trade: Trade): {
+export function tradeProgress(
+  trade: Trade,
+  approvalPending = false,
+): {
   step: number;
   title: string;
   detail: string;
@@ -108,6 +111,14 @@ export function tradeProgress(trade: Trade): {
         'We’re checking the saved transaction state with your wallet. No new approval is being requested.',
       waiting: true,
     };
+  if (approvalPending)
+    return {
+      step: 1,
+      title: 'Processing your approval',
+      detail:
+        'Your wallet is checking the approved transaction and signing. Wait for the result; do not approve again.',
+      waiting: true,
+    };
   if (trade.validatedPreview)
     return {
       step: 1,
@@ -115,6 +126,13 @@ export function tradeProgress(trade: Trade): {
       detail:
         'Check what you give, what you receive and the fee. Only you can approve the signature.',
       waiting: false,
+    };
+  if (['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING'].includes(trade.status))
+    return {
+      step: 1,
+      title: 'Checking your approval status',
+      detail: 'The transaction is prepared. We are checking your local review and signing state.',
+      waiting: true,
     };
   return {
     step: 0,
