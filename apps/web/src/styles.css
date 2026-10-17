@@ -358,15 +358,12 @@ a {
   border-radius: 15px;
   padding: 24px;
   color: #eeeeee;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
 .order-card--waiting {
   --order-accent: #91e8ae;
   --order-tint: #20382a;
 
   border-color: #39654a;
-  background: linear-gradient(115deg, #19271e, #171717 65%);
-  box-shadow: inset 3px 0 var(--order-accent);
 }
 .order-card--executing {
   --order-accent: #e9cd8b;
@@ -377,7 +374,6 @@ a {
 .order-card--finished {
   background: #1b1b1b;
   color: #aaa;
-  box-shadow: none;
 }
 .order-card-top,
 .order-card-bottom {
