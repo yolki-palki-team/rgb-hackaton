@@ -795,12 +795,12 @@ textarea {
   align-items: center;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--line);
+  border: 1px solid #ffffff1c;
   border-radius: 9px;
   background: #101010;
 }
 .participant-card.mine {
-  border-color: #777;
+  border-color: #ffffff33;
 }
 .participant-avatar {
   display: grid;

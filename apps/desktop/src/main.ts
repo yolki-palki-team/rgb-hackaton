@@ -81,6 +81,7 @@ async function startSharedWallet(): Promise<void> {
   });
   let failed = false;
   let runtimeLocked = false;
+  let networkUnavailable = false;
   let listening = false;
   let output = '';
   walletSidecar.stdout?.on('data', (chunk: Buffer) => {
@@ -105,6 +106,10 @@ async function startSharedWallet(): Promise<void> {
   walletSidecar.stderr?.on('data', (chunk: Buffer) => {
     diagnosticTail = (diagnosticTail + chunk.toString()).slice(-4096);
     if (diagnosticTail.includes('RGB_RUNTIME_LOCK')) runtimeLocked = true;
+    if (
+      /socket\.gaierror|ConnectionRefusedError|TimeoutError|RemoteDisconnected/.test(diagnosticTail)
+    )
+      networkUnavailable = true;
   });
   const deadline = Date.now() + 180_000;
   console.log('palka. Connecting to the shared wallet and checking the indexer…');
@@ -117,7 +122,9 @@ async function startSharedWallet(): Promise<void> {
     }
     if (failed || walletSidecar.exitCode !== null)
       throw new Error(
-        'Automatic wallet setup failed. Stop any manually started sidecar; check server network readiness. Existing wallets were preserved.',
+        networkUnavailable
+          ? 'Shared regtest network is unavailable. Check your connection and retry.'
+          : 'Automatic wallet setup failed. Stop any manually started sidecar; check server network readiness. Existing wallets were preserved.',
       );
     if (listening) {
       config = loadDesktopConfig(app.getPath('userData'));
@@ -375,11 +382,18 @@ else {
       startBackend();
       markBackendReady();
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       console.error(`palka. startup failed while ${startupStage}`);
+      const reason =
+        error instanceof Error &&
+        (error.message ===
+          'Shared regtest network is unavailable. Check your connection and retry.' ||
+          error.message === 'RGB runtime is locked')
+          ? ` ${error.message}`
+          : '';
       dialog.showErrorBox(
         'palka. startup failed',
-        `Could not complete ${startupStage}. Check the installed app and private desktop configuration.`,
+        `Could not complete ${startupStage}.${reason || ' Check the installed app and private desktop configuration.'}`,
       );
       app.quit();
     });

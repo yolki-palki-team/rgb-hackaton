@@ -193,7 +193,14 @@ def start(config_path):
     from chain_transport import environment as chain_environment
 
     client = Client(read_private(shared))
-    client.health()
+    for attempt in range(3):
+        try:
+            client.health()
+            break
+        except (ConnectionError, OSError, TimeoutError):
+            if attempt == 2:
+                raise
+            time.sleep(2)
     adapters = Adapters(client)
     child = None
     try:
