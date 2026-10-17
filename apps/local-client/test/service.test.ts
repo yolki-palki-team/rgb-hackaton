@@ -1401,7 +1401,7 @@ test('partial orders reject ring plans without changing support for full-order r
   }
 });
 
-test('incoming assets from a partial fill cannot finance its fee or replace protected reserves', async () => {
+test('incoming assets from a partial fill cannot finance its fee or outgoing amount', async () => {
   const store = new LocalStore(':memory:');
   try {
     const wallet = new FakeWallet();
@@ -1433,11 +1433,13 @@ test('incoming assets from a partial fill cannot finance its fee or replace prot
     trade.plan.legs[1].asset = btc;
     trade.plan.digest = planDigest(trade.plan);
     trade.settlementPackage = pkg(trade.plan);
-    wallet.stateValue.balances[0].amount = '1000';
-    await assert.rejects(service.preview('fill-1'), /protected balance/);
+    wallet.stateValue.balances[0].amount = '499';
+    await assert.rejects(service.preview('fill-1'), /Insufficient funds/);
     wallet.stateValue.balances[0].amount = '2000';
+    wallet.stateValue.balances[1].amount = '399';
+    await assert.rejects(service.preview('fill-1'), /balancesAfter/);
     wallet.stateValue.balances[1].amount = '590';
-    await assert.rejects(service.preview('fill-1'), /protected balance/);
+    await assert.doesNotReject(service.preview('fill-1'));
     wallet.stateValue.balances[1].amount = '600';
     const result = await service.preview('fill-1');
     assert.equal(result.preview.balancesAfter[1].amount, '200');

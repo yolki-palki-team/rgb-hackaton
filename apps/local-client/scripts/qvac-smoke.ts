@@ -37,7 +37,7 @@ try {
     throw new Error('QVAC did not preserve the requested amounts');
   if (
     result.output.maxFeeSats !== '1000' ||
-    result.output.allowBtcSale !== false ||
+    result.output.allowBtcSale !== null ||
     result.output.protectedBalances.length !== 0 ||
     result.output.clarification !== null
   )
@@ -129,20 +129,16 @@ try {
     );
   }
   const reserved = await qvac.interpret(
-    'Sell 10 X for at least 10000 sats. Keep at least 50% of my X and 0.0001 BTC. Maximum fee 500 sats.',
+    'Sell 10 X for at least 10000 sats. Maximum fee 500 sats.',
     assets,
   );
-  const reserves = draftFromIntent(reserved.output, state, defaultPolicy(state));
+  const reserves = draftFromIntent(reserved.output, state);
   assert.ok(reserves.draft);
   assert.equal(reserves.policy.maxFeeSats, '500');
-  assert.equal(
-    reserves.policy.protectedBalances[xKey],
-    (BigInt(state.balances[1].amount) / 2n).toString(),
-  );
-  assert.equal(reserves.policy.protectedBalances[btcKey], '10000');
+  assert.deepEqual(reserves.policy.protectedBalances, {});
   console.log(
     JSON.stringify({
-      stage: 'amount and percentage reserves validated',
+      stage: 'explicit order fee validated',
       durationMs: reserved.diagnostics.durationMs,
       settlement: 'not attempted',
     }),

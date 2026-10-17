@@ -23,7 +23,7 @@ test('a newly funded BTC-only wallet loads its policy without allowing unverifie
   try {
     const policy = await service.policy();
     assert.deepEqual(policy.allowedAssetKeys, [assetKey(state.balances[0].asset)]);
-    assert.equal(policy.allowBtcSale, false);
+    assert.equal(policy.allowBtcSale, true);
     assert.throws(
       () =>
         assertPolicy(
@@ -46,7 +46,7 @@ test('a newly funded BTC-only wallet loads its policy without allowing unverifie
   }
 });
 
-test('intent conversion computes percentage reserves with exact BigInt rounding', async () => {
+test('intent conversion ignores legacy reserve restrictions', async () => {
   const state = await new MockWalletAdapter('A').state();
   const x = state.balances[1];
   x.amount = '9007199254740993';
@@ -61,56 +61,90 @@ test('intent conversion computes percentage reserves with exact BigInt rounding'
     clarification: null,
   };
   const result = draftFromIntent(intent, state, defaultPolicy(state));
-  assert.equal(result.policy.protectedBalances[assetKey(x.asset)], '4503599627370497');
+  assert.deepEqual(result.policy.protectedBalances, {});
   assert.equal(result.draft?.giveAmount, '100');
   assert.equal(result.draft?.minReceiveAmount, '100');
 });
 
-test('AI extraction cannot loosen the saved fee, BTC sale, or protected balance policy', async () => {
-  const state = await new MockWalletAdapter('A').state();
-  const xKey = assetKey(state.balances[1].asset);
-  const saved = {
-    ...defaultPolicy(state),
-    maxFeeSats: '500',
-    protectedBalances: { [xKey]: '200' },
+test('new goals do not inherit old asset, BTC, reserve or fee restrictions', async () => {
+  const wallet = new MockWalletAdapter('A');
+  const state = await wallet.state();
+  const btc = assetKey(state.balances[0].asset);
+  const rgb = assetKey(state.balances[1].asset);
+  const savedPolicy = {
+    allowedAssetKeys: [btc],
+    allowBtcSale: false,
+    protectedBalances: { [btc]: state.balances[0].amount },
+    maxFeeSats: '1',
   };
+  const store = new LocalStore(':memory:');
+  store.set('policy', savedPolicy);
+  store.set('order:existing', { policy: savedPolicy });
+  const market = new MarketClient('http://127.0.0.1:4100', 'test-token');
   const intent: AiIntent = {
-    giveAssetKey: xKey,
-    giveAmount: '10',
-    receiveAssetKey: assetKey(state.balances[2].asset),
-    minReceiveAmount: '100',
+    giveAssetKey: btc,
+    giveAmount: '0.0001',
+    receiveAssetKey: rgb,
+    minReceiveAmount: '10',
     maxFeeSats: '2000',
-    allowBtcSale: true,
-    protectedBalances: [{ assetKey: xKey, minAmount: '100', minPercent: null }],
+    allowBtcSale: null,
+    protectedBalances: [],
     clarification: null,
   };
-  const result = draftFromIntent(intent, state, saved);
-  assert.equal(result.policy.maxFeeSats, '500');
-  assert.equal(result.policy.allowBtcSale, false);
-  assert.equal(result.policy.protectedBalances[xKey], '200');
-  assert.equal(result.draft?.maxFeeSats, '500');
-  assert.deepEqual(saved.protectedBalances, { [xKey]: '200' });
+  const service = new LocalService('A', wallet, market, store, {
+    health: async () => ({ available: true, model: 'test' }),
+    interpret: async () => ({ output: intent, diagnostics: {} }),
+  });
+  try {
+    const result = await service.interpret({
+      goal: 'Sell 10000 sats for 10 X, fee up to 2000 sats',
+    });
+    assert.equal(result.draft?.giveAmount, '10000');
+    assert.equal(result.draft?.maxFeeSats, '2000');
+    assert.equal(result.policy.allowBtcSale, true);
+    assert.ok(result.policy.allowedAssetKeys.includes(rgb));
+    assert.deepEqual(result.policy.protectedBalances, {});
+    assert.equal((await service.policy()).allowBtcSale, true);
+    assert.deepEqual(store.get('order:existing'), { policy: savedPolicy });
+    assert.deepEqual(store.get('policy'), savedPolicy);
+    intent.giveAmount = '999999999';
+    await assert.rejects(service.interpret({ goal: 'Overspend' }), /Insufficient funds/);
+    intent.giveAmount = '0.0001';
+    intent.receiveAssetKey = 'regtest:rgb:unknown';
+    await assert.rejects(service.interpret({ goal: 'Unknown asset' }), /unknown asset/);
+  } finally {
+    store.close();
+    market.close();
+  }
+});
 
-  const tighter = draftFromIntent(
+test('legacy policy and extracted restrictions do not block a BTC draft', async () => {
+  const state = await new MockWalletAdapter('A').state();
+  const saved = {
+    ...defaultPolicy(state),
+    allowBtcSale: false,
+    maxFeeSats: '1',
+    protectedBalances: { obsolete: '999999' },
+  };
+  const result = draftFromIntent(
     {
-      ...intent,
-      maxFeeSats: '200',
-      protectedBalances: [{ assetKey: xKey, minAmount: '230', minPercent: null }],
+      giveAssetKey: assetKey(state.balances[0].asset),
+      giveAmount: '0.0001',
+      receiveAssetKey: assetKey(state.balances[1].asset),
+      minReceiveAmount: '10',
+      maxFeeSats: '2000',
+      allowBtcSale: false,
+      protectedBalances: [{ assetKey: 'obsolete', minAmount: '999999', minPercent: null }],
+      clarification: null,
     },
     state,
     saved,
   );
-  assert.equal(tighter.policy.maxFeeSats, '200');
-  assert.equal(tighter.policy.protectedBalances[xKey], '230');
-  assert.throws(
-    () =>
-      draftFromIntent(
-        { ...intent, giveAssetKey: assetKey(state.balances[0].asset), giveAmount: '100000' },
-        state,
-        saved,
-      ),
-    /BTC sale is blocked/,
-  );
+  assert.equal(result.draft?.giveAmount, '10000');
+  assert.equal(result.policy.allowBtcSale, true);
+  assert.equal(result.draft?.maxFeeSats, '2000');
+  assert.deepEqual(result.policy.protectedBalances, {});
+  assert.equal(saved.allowBtcSale, false);
 });
 
 test('missing terms require clarification and metadata cannot override verified asset identity', async () => {
@@ -150,20 +184,6 @@ test('missing terms require clarification and metadata cannot override verified 
       defaultPolicy(state),
     ).draft,
     null,
-  );
-  assert.throws(
-    () =>
-      draftFromIntent(
-        {
-          ...intent,
-          protectedBalances: [
-            { assetKey: assetKey(state.balances[1].asset), minAmount: 'null', minPercent: null },
-          ],
-        },
-        state,
-        defaultPolicy(state),
-      ),
-    /non-negative decimal/,
   );
 });
 

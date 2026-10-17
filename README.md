@@ -161,13 +161,15 @@ Open **http://127.0.0.1:5173/** for the landing page or **http://127.0.0.1:5173/
 
 `mock` applies to the wallet: its labeled balances are synthetic. The market, SQLite persistence, HTTP/WebSocket authorization and QVAC inference are real. Preparing a mock trade returns `UNSUPPORTED`, without a fake transaction ID. Three profiles on this machine are a demonstration, not three independent devices.
 
-Natural-language interpretation uses the hackathon's **@kaleidorg/mind 0.11.1** (KaleidoMind) agent engine with **@qvac/sdk 0.21.1**, **QWEN3_5_4B_MULTIMODAL_Q4_K_M**, and the workspace's local Node 22.17 runtime. First use downloads about 2.7 GB of public model weights; subsequent inference stays local, with no model API key or cloud fallback. KaleidoMind selects review/clarification tools and validates or repairs their arguments. The LLM maps wording, direction, asset identities, quantities and units; there is no handwritten trade-verb grammar or language whitelist. Deterministic code converts amounts using asset precision and checks the verified catalog, balances and private policy before showing a draft.
+Natural-language interpretation uses the hackathon's **@kaleidorg/mind 0.11.1** (KaleidoMind) agent engine with **@qvac/sdk 0.21.1**, **QWEN3_5_4B_MULTIMODAL_Q4_K_M**, and the workspace's local Node 22.17 runtime. First use downloads about 2.7 GB of public model weights; subsequent inference stays local, with no model API key or cloud fallback. KaleidoMind selects review/clarification tools and validates or repairs their arguments. The LLM maps wording, direction, asset identities, quantities and units; there is no handwritten trade-verb grammar or language whitelist. Deterministic code converts amounts using asset precision and checks the verified catalog and available balances before showing a draft.
 
 The available action is a fixed BTC/RGB swap order for direct or three-party matching. The assistant does not invent rates or quantities: `get some dusd for 100 sat` needs a minimum DUSD quantity, so it asks for clarification. Update the goal with that quantity and retry. Missing/ambiguous terms keep the review closed; manual entry remains a separate action with empty amount fields. The LLM has no publishing, signing, payment or invoice tools. Natural-language accuracy is bounded by the local model: review all amounts and constraints before confirming.
 
-Example goal: `Sell 100 X for at least 100 DUSD. Fee up to 1000 sats. Do not sell BTC.` The local order form displays **atomic units** (BTC in sats); X and test DUSD have precision 0 in the mock. DUSD is not USDT or a backed dollar.
+Private-policy restrictions are disabled for this prototype, including legacy asset allowlists, BTC-sale bans, protected reserves and separate policy fee caps. They are not extracted by the local model or enforced for existing orders. An explicit fee in a new goal becomes its proposed order limit (otherwise 1,000 sats). Verified assets, positive exact amounts, funded outgoing amounts and fees, immutable published order terms and final signing approval are still checked. Saved orders and history are not deleted. Legacy policy fields remain readable for stored-record/API compatibility, but do not restrict execution.
 
-For the ring, confirm these three independent orders, allowing BTC sale only for C:
+Example goal: `Sell 100 X for at least 100 DUSD. Fee up to 1000 sats.` The local order form displays **atomic units** (BTC in sats); X and test DUSD have precision 0 in the mock. DUSD is not USDT or a backed dollar.
+
+For the ring, confirm these three independent orders:
 
 | Profile | Gives       | Receives at least |
 | ------- | ----------- | ----------------- |

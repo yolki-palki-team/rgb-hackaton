@@ -93,7 +93,7 @@ export class LocalService {
     return state;
   }
   async policy(): Promise<PrivatePolicy> {
-    return PrivatePolicySchema.parse(this.store.get('policy') ?? defaultPolicy(await this.state()));
+    return defaultPolicy(await this.state());
   }
   async health() {
     let wallet: WalletCapabilities;
@@ -172,7 +172,7 @@ export class LocalService {
         })),
       );
       return {
-        ...draftFromIntent(result.output, state, await this.policy()),
+        ...draftFromIntent(result.output, state),
         diagnostics: result.diagnostics,
       };
     } catch (error) {
@@ -233,7 +233,6 @@ export class LocalService {
       saved = { requestDigest: hash, order, policy: input.policy };
       this.store.set(key, saved);
       this.store.set(`order:${order.id}`, saved);
-      this.store.set('policy', input.policy);
     }
     // Persist before sending: retry uses the same public id and exact order even after an uncertain HTTP result.
     const response = (await this.market.request('/orders', 'POST', saved.order)) as {

@@ -545,40 +545,28 @@ export function formatAmount(value: string, precision: number): string {
     ? n
     : `${n.slice(0, -precision)}.${n.slice(-precision)}`.replace(/\.?0+$/, '');
 }
+// Keep the legacy signature for stored clients; only actual swap validity is enforced.
 export function assertPolicy(
   draft: OrderDraft,
-  policy: PrivatePolicy,
+  _policy: PrivatePolicy,
   state: WalletState,
   now = Date.now(),
 ): void {
   OrderDraftSchema.parse(draft);
-  PrivatePolicySchema.parse(policy);
   WalletStateSchema.parse(state);
   if (draft.expiresAt <= now) throw new Error('Order expired');
-  if (
-    Object.keys(policy.protectedBalances).some(
-      (key) => !state.balances.some((b) => assetKey(b.asset) === key),
-    )
-  )
-    throw new Error('Unknown asset in protected balances');
   if (sameAsset(draft.giveAsset, draft.receiveAsset))
     throw new Error('Choose two different assets');
   for (const asset of [draft.giveAsset, draft.receiveAsset]) {
     if (asset.network !== state.network || !state.balances.some((b) => sameAsset(b.asset, asset)))
       throw new Error('Unverified asset, contractId or network');
-    if (!policy.allowedAssetKeys.includes(assetKey(asset)))
-      throw new Error('Asset is blocked by local policy');
   }
-  if (draft.giveAsset.kind === 'btc' && !policy.allowBtcSale)
-    throw new Error('BTC sale is blocked by local policy');
   const fee = BigInt(draft.maxFeeSats);
-  if (fee > BigInt(policy.maxFeeSats)) throw new Error('Fee limit exceeded');
   for (const b of state.balances) {
     const outgoing = sameAsset(b.asset, draft.giveAsset) ? BigInt(draft.giveAmount) : 0n;
-    // Incoming assets cannot finance a fee or satisfy a protected pre-trade reserve.
+    // Incoming assets cannot finance the outgoing amount or fee.
     const after = BigInt(b.amount) - outgoing - (b.asset.kind === 'btc' ? fee : 0n);
-    if (after < BigInt(policy.protectedBalances[assetKey(b.asset)] ?? '0'))
-      throw new Error('Insufficient funds or protected balance violation');
+    if (after < 0n) throw new Error('Insufficient funds');
   }
   if (fee > 0n && !state.balances.some((b) => b.asset.kind === 'btc'))
     throw new Error('No BTC available for fees');

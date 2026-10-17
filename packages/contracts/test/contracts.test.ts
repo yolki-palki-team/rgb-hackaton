@@ -71,19 +71,30 @@ test('atomic-unit conversion is exact at u64 boundaries', () => {
     assert.equal(AtomicAmountSchema.safeParse(invalid).success, false);
 });
 
-test('policy protects RGB balance and BTC fee reserve with BigInt', () => {
-  assert.doesNotThrow(() => assertPolicy(draft, policy, state, now));
-  assert.throws(
-    () => assertPolicy({ ...draft, giveAmount: '51' }, policy, state, now),
-    /protected balance/,
+test('legacy private restrictions are ignored but spending and fees must be funded', () => {
+  const obsolete = {
+    ...policy,
+    allowedAssetKeys: ['obsolete'],
+    allowBtcSale: false,
+    maxFeeSats: '1',
+    protectedBalances: { obsolete: '999999' },
+  };
+  assert.doesNotThrow(() => assertPolicy({ ...draft, giveAmount: '100' }, obsolete, state, now));
+  assert.doesNotThrow(() => assertPolicy({ ...draft, maxFeeSats: '1001' }, obsolete, state, now));
+  assert.doesNotThrow(() =>
+    assertPolicy({ ...draft, giveAsset: btc, giveAmount: '999500' }, obsolete, state, now),
   );
   assert.throws(
-    () => assertPolicy({ ...draft, maxFeeSats: '1001' }, policy, state, now),
-    /Fee limit/,
+    () => assertPolicy({ ...draft, giveAmount: '101' }, obsolete, state, now),
+    /Insufficient funds/,
   );
   assert.throws(
-    () => assertPolicy({ ...draft, giveAsset: btc, giveAmount: '990000' }, policy, state, now),
-    /protected balance/,
+    () => assertPolicy({ ...draft, giveAsset: btc, giveAmount: '999501' }, obsolete, state, now),
+    /Insufficient funds/,
+  );
+  assert.throws(
+    () => assertPolicy({ ...draft, maxFeeSats: '1000001' }, obsolete, state, now),
+    /Insufficient funds/,
   );
 });
 

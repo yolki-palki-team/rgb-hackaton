@@ -21,7 +21,6 @@ const proposal = {
   minReceiveAmount: '10000',
   receiveUnit: 'sats',
   maxFeeSats: '1000',
-  forbidBtcSale: false,
 };
 
 test('model-mapped units become exact atomic amounts without parsing the goal wording', () => {
@@ -77,19 +76,10 @@ test('model arguments cannot bypass precision, verified identities or positive a
       ),
     );
   assert.throws(() => intentFromProposal({ ...proposal, execute: true }, assets));
-  assert.throws(() =>
-    intentFromProposal({ ...proposal, protectedBalancesJson: 'not json' }, assets),
-  );
-  assert.throws(() =>
-    intentFromProposal(
-      {
-        ...proposal,
-        protectedBalancesJson: JSON.stringify([
-          { assetKey: 'unverified', minAmount: '10', minPercent: null },
-        ]),
-      },
-      assets,
-    ),
+  assert.deepEqual(
+    intentFromProposal({ ...proposal, protectedBalancesJson: 'legacy ignored' }, assets)
+      .protectedBalances,
+    [],
   );
   assert.throws(() => intentFromProposal({ ...proposal, receiveAssetKey: 'asset1' }, assets));
 });
@@ -143,7 +133,7 @@ test('KaleidoMind repairs invalid tool arguments before preparing a review', asy
   assert.equal(result.output.giveAmount, '10');
 });
 
-test('LLM-mapped private constraints only tighten the saved policy', () => {
+test('legacy LLM policy fields are ignored while exact order fees and amounts are retained', () => {
   const output = intentFromProposal(
     {
       ...proposal,
@@ -160,13 +150,9 @@ test('LLM-mapped private constraints only tighten the saved policy', () => {
     ...defaultPolicy(state),
     allowBtcSale: true,
   });
-  assert.equal(policy.allowBtcSale, false);
+  assert.equal(policy.allowBtcSale, true);
   assert.equal(policy.maxFeeSats, '500');
-  assert.equal(
-    policy.protectedBalances[assets[1].key],
-    (BigInt(state.balances[1].amount) / 2n).toString(),
-  );
-  assert.equal(policy.protectedBalances[assets[0].key], '10000');
+  assert.deepEqual(policy.protectedBalances, {});
   const exact = intentFromProposal({ ...proposal, giveAmount: '9007199254740993.000' }, assets);
   assert.equal(exact.giveAmount, '9007199254740993');
 });
@@ -183,7 +169,7 @@ test('prose or unknown tool calls cannot masquerade as a prepared order', async 
   }
 });
 
-test('model fee arguments must be whole-satoshi strings; only an absent cap uses saved policy', () => {
+test('model fee arguments must be whole-satoshi strings; an absent cap uses the default order fee', () => {
   for (const maxFeeSats of [
     '0.5',
     '500.0',
