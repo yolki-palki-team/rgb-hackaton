@@ -3,7 +3,7 @@
 ## Automatic shared-network startup (recommended)
 
 The operator runs `bash deploy/server.sh network` after updating the server.
-On each computer with Git, Node 22.17+, uv, Rust 1.94 and RTK installed:
+On each computer with Git, Node 22.17+, uv, Rust 1.94 installed:
 
 ```bash
 git pull --ff-only
@@ -64,9 +64,9 @@ each other merely by connecting to the same market.
 
 ## First setup on macOS
 
-Required: Git, Node 22.17+, uv/Python 3.12+, Rust 1.94, RTK. Docker is needed only for the optional local-chain workflow.
-The native wallet helpers use RTK internally even when the commands below do not
-have an RTK prefix. Keep all wallet state on its owner's computer.
+Required: Git, Node 22.17+, uv/Python 3.12+, Rust 1.94. Docker is needed only for the optional local-chain workflow.
+The launcher and wallet helpers run standard commands directly; RTK is not required.
+Keep all wallet state on its owner's computer.
 
 ```bash
 git clone https://github.com/yolki-palki-team/rgb-hackaton.git

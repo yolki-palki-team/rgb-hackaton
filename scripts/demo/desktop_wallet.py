@@ -79,7 +79,7 @@ def settings(config_path, root=ROOT):
 
 def native(state, operation, **kwargs):
     result = subprocess.run(
-        ["rtk", "proxy", str(BIN)],
+        [str(BIN)],
         input=json.dumps({"op": operation, "stateDir": str(state), "profile": SLOT, **kwargs}),
         text=True,
         capture_output=True,

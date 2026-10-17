@@ -30,7 +30,7 @@ def sha(data):
 def digest(value):
     # Exact protocol-v1 JS localeCompare ordering, not Python's different key ordering.
     return subprocess.check_output(
-        ["rtk", "proxy", "node", str(ROOT / "packages/wallet/digest.mjs"), "--stdin"],
+        ["node", str(ROOT / "packages/wallet/digest.mjs"), "--stdin"],
         input=json.dumps(value),
         text=True,
     ).strip()

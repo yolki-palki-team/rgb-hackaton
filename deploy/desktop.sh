@@ -12,7 +12,7 @@ if ! command -v cargo >/dev/null 2>&1; then
     exit 1
   fi
 fi
-for command in node npm uv cargo rtk; do
+for command in git node npm uv cargo; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Missing prerequisite: $command. See deploy/DESKTOP.md." >&2
     exit 1

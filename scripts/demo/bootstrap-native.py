@@ -13,7 +13,7 @@ REV = "1eaf0024c591e41843eb80cc8834082292668871"
 
 
 def run(*args):
-    return subprocess.check_output(["rtk", "proxy", *args], text=True).strip()
+    return subprocess.check_output([*args], text=True).strip()
 
 
 def main():

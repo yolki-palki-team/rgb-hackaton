@@ -13,7 +13,7 @@ STATE = Path(os.environ.get("RGB_DEMO_STATE", str(ROOT / "packages/wallet/state"
 if not STATE.is_relative_to(ROOT / "packages/wallet/state"):
     raise RuntimeError("demo state must remain in ignored packages/wallet/state")
 BIN = ROOT / "packages/wallet/native/target/debug/rgb-settlement-spike"
-COMPOSE = ["rtk", "proxy", "docker", "compose", "-f", str(ROOT / "infra/compose.yaml")]
+COMPOSE = ["docker", "compose", "-f", str(ROOT / "infra/compose.yaml")]
 
 
 def call(args, **kwargs):
@@ -41,7 +41,7 @@ def rpc(*args):
 def native(op, profile=None, **kwargs):
     return json.loads(
         call(
-            ["rtk", "proxy", str(BIN)],
+            [str(BIN)],
             input=json.dumps({"op": op, "stateDir": str(STATE), "profile": profile, **kwargs}),
         )
     )

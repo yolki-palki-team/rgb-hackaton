@@ -150,8 +150,8 @@ To connect the native wallet, start its loopback sidecar and configure a local p
 ## Checks
 
 Use Node 22.17 (`.nvmrc`), Python 3.12+ through uv, and Rust 1.94 through
-rustup (`rust-toolchain.toml` installs rustfmt and Clippy). The existing wallet
-scripts also require RTK on `PATH`. Install the development dependencies and
+rustup (`rust-toolchain.toml` installs rustfmt and Clippy). The desktop launcher and wallet helpers run standard commands directly; RTK is not
+required for desktop setup or wallet operations. Install the development dependencies and
 materialize the pinned SDK once before running the complete check:
 
 ```sh
