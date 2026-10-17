@@ -223,7 +223,7 @@ a {
     padding: 0 20px 200px;
   }
   .public-site .video-hero h1 {
-    font-size: clamp(48px, 12vw, 76px);
+    font-size: clamp(28px, 8.5vw, 58px);
     margin-bottom: 28px;
   }
   .video-hero-primary {

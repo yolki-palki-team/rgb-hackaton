@@ -59,15 +59,8 @@ export default function VideoHero() {
       <SiteHeader active="home" />
       <div className="video-hero-copy">
         <p className="video-hero-eyebrow">A2A · RGB</p>
-        <h1 id="hero-title">
-          An exchange
-          <br />
-          that comes together.
-        </h1>
-        <p className="video-hero-description">
-          Publish an intent and find a direct match or a three-party ring. Your keys and final
-          decision stay in your local wallet.
-        </p>
+        <h1 id="hero-title">Swap beyond pairs.</h1>
+        <p className="video-hero-description">BTC + RGB. Local AI. Your keys.</p>
         <a className="video-hero-glass video-hero-primary" href="/market">
           Explore orders <ArrowUpRight size={19} aria-hidden="true" />
         </a>
