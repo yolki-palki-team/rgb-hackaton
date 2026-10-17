@@ -1,6 +1,6 @@
 import { ChatInput, ChatInputTextArea, ChatInputSubmit } from './components/ui/chat-input';
 import {
-  AssetCard,
+  AssetRow,
   Button,
   Icon,
   Input,
@@ -525,11 +525,11 @@ function App() {
                   }
                 />
                 {visibleBalances.length ? (
-                  <div className="balance-grid">
+                  <ul className="asset-list" aria-label="Wallet balances">
                     {visibleBalances.map((balance) => (
-                      <AssetCard key={balance.code} balance={balance} />
+                      <AssetRow key={balance.code} balance={balance} />
                     ))}
-                  </div>
+                  </ul>
                 ) : (
                   <p className="empty-state" role="status">
                     {connected

@@ -30,18 +30,19 @@ export function StatusBadge({ className, ...props }: HTMLAttributes<HTMLSpanElem
   return <span className={cn('ui-status', className)} {...props} />;
 }
 
-export function AssetCard({ balance }: { balance: Balance }) {
+export function AssetRow({ balance }: { balance: Balance }) {
   return (
-    <article className="balance-card ui-panel" data-asset={balance.code}>
-      <div className="balance-card-top">
-        <AssetIcon code={balance.code} size="large" />
-        <span className="balance-code">{balance.code}</span>
+    <li className="asset-row" data-asset={balance.code}>
+      <AssetIcon code={balance.code} size="large" />
+      <div className="asset-name">
+        <strong>{balance.label}</strong>
+        <span>{balance.code}</span>
       </div>
-      <div className="balance-value">
-        {balance.amount} <small>{balance.unit}</small>
+      <div className="asset-amount">
+        <span>{balance.amount}</span>
+        <small>{balance.unit}</small>
       </div>
-      <p>{balance.label}</p>
-    </article>
+    </li>
   );
 }
 
