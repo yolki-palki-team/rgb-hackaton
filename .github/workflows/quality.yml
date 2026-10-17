@@ -1,0 +1,41 @@
+name: Code quality
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.17.0'
+          cache: npm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.3'
+          enable-cache: true
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Install RTK used by the existing wallet scripts
+        run: cargo install --locked --git https://github.com/rtk-ai/rtk --rev 8a7106c8f2996ebc75b38a71c5f342f17811ce39 rtk
+      - name: Install locked dependencies
+        run: |
+          rtk proxy npm ci --no-audit --no-fund
+          rtk proxy uv sync --locked
+      - name: Materialize pinned RGB SDK with the local bridge
+        run: rtk proxy uv run --locked python scripts/demo/bootstrap-native.py
+      - name: Lint, format, typecheck, test and build
+        run: rtk proxy npm run check

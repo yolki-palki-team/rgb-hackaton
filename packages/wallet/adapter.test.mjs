@@ -13,7 +13,9 @@ test('missing native backend cannot advertise real settlement', async () => {
 test('production adapter cannot bypass experimental approval gate', async () => {
   const wallet = createWalletAdapter({ profile: 'alice' });
   for (const op of ['prepare', 'sign', 'broadcast']) {
-    await assert.rejects(wallet[op]({ approved: true }), { code: 'UNVERIFIED_SETTLEMENT_CAPABILITY' });
+    await assert.rejects(wallet[op]({ approved: true }), {
+      code: 'UNVERIFIED_SETTLEMENT_CAPABILITY',
+    });
   }
 });
 

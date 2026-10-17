@@ -1,20 +1,24 @@
 """Protocol-v1 local wallet backend. Market materials are never signing authority."""
+
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
 import time
+from pathlib import Path
+
+from journal import Journal, canonical
+from journal import digest as approval_digest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts/demo"))
+from regtest import STATE, native, rpc
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts/demo"))
-from regtest import STATE, native, rpc
-from journal import Journal, canonical, digest as approval_digest
 
 MAX = 2**64 - 1
-BTC = {"kind":"btc", "network":"regtest", "symbol":"BTC", "precision":8}
+BTC = {"kind": "btc", "network": "regtest", "symbol": "BTC", "precision": 8}
 FORMAT = "rgb-cooperative-v1"
 
 
@@ -24,36 +28,54 @@ def sha(data):
 
 def digest(value):
     # Exact protocol-v1 JS localeCompare ordering, not Python's different key ordering.
-    return subprocess.check_output(["rtk","proxy","node",str(ROOT/"packages/wallet/digest.mjs"),"--stdin"],
-                                   input=json.dumps(value), text=True).strip()
+    return subprocess.check_output(
+        ["rtk", "proxy", "node", str(ROOT / "packages/wallet/digest.mjs"), "--stdin"],
+        input=json.dumps(value),
+        text=True,
+    ).strip()
 
 
 def units(value):
-    if not isinstance(value,str) or not re.fullmatch(r"0|[1-9][0-9]{0,19}",value) or int(value)>MAX:
+    if (
+        not isinstance(value, str)
+        or not re.fullmatch(r"0|[1-9][0-9]{0,19}", value)
+        or int(value) > MAX
+    ):
         raise ValueError("invalid atomic amount")
     return int(value)
 
 
 def asset_key(asset):
-    if asset.get("network")!="regtest" or asset.get("kind") not in ("btc","rgb"):
+    if asset.get("network") != "regtest" or asset.get("kind") not in ("btc", "rgb"):
         raise ValueError("unsupported asset/network")
-    if asset["kind"]=="btc":
-        if asset.get("precision")!=8: raise ValueError("BTC precision")
+    if asset["kind"] == "btc":
+        if asset.get("precision") != 8:
+            raise ValueError("BTC precision")
         return "regtest:btc:btc"
-    if asset.get("precision")!=0 or not isinstance(asset.get("contractId"),str) or not asset["contractId"].startswith("rgb:"):
+    if (
+        asset.get("precision") != 0
+        or not isinstance(asset.get("contractId"), str)
+        or not asset["contractId"].startswith("rgb:")
+    ):
         raise ValueError("only verified precision-0 NIA is supported")
-    return "regtest:rgb:"+asset["contractId"]
+    return "regtest:rgb:" + asset["contractId"]
 
 
 def save(path, value):
-    path=Path(path); path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
-    temp=path.with_suffix(path.suffix+".tmp")
+    path = Path(path)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
     with temp.open("w") as f:
-        os.chmod(temp,0o600); f.write(canonical(value)); f.flush(); os.fsync(f.fileno())
-    os.replace(temp,path)
-    fd=os.open(path.parent,os.O_RDONLY)
-    try: os.fsync(fd)
-    finally: os.close(fd)
+        os.chmod(temp, 0o600)
+        f.write(canonical(value))
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp, path)
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def read(path):
@@ -61,342 +83,729 @@ def read(path):
 
 
 def plan_check(plan, owner):
-    if plan.get("protocolVersion")!=1 or plan.get("network")!="regtest" or plan.get("digest")!=digest({k:v for k,v in plan.items() if k!="digest"}):
+    if (
+        plan.get("protocolVersion") != 1
+        or plan.get("network") != "regtest"
+        or plan.get("digest") != digest({k: v for k, v in plan.items() if k != "digest"})
+    ):
         raise ValueError("invalid plan digest/network")
-    people=plan["participants"]; n=len(people)
-    if n not in (2,3) or len(set(people))!=n or owner not in people or len(plan["legs"])!=n or len(plan["fees"])!=n:
+    people = plan["participants"]
+    n = len(people)
+    if (
+        n not in (2, 3)
+        or len(set(people)) != n
+        or owner not in people
+        or len(plan["legs"]) != n
+        or len(plan["fees"]) != n
+    ):
         raise ValueError("invalid participants")
-    if not isinstance(plan["revision"],int) or plan["revision"]<0 or not isinstance(plan["tradeId"],str) or len(plan["tradeId"])>200:
+    if (
+        not isinstance(plan["revision"], int)
+        or plan["revision"] < 0
+        or not isinstance(plan["tradeId"], str)
+        or len(plan["tradeId"]) > 200
+    ):
         raise ValueError("invalid plan identity")
-    if len(plan["orderRefs"])!=n or len({r["orderId"] for r in plan["orderRefs"]})!=n:
+    if len(plan["orderRefs"]) != n or len({r["orderId"] for r in plan["orderRefs"]}) != n:
         raise ValueError("invalid order references")
-    if {f["ownerId"] for f in plan["fees"]}!=set(people): raise ValueError("invalid fee owners")
+    if {f["ownerId"] for f in plan["fees"]} != set(people):
+        raise ValueError("invalid fee owners")
     for leg in plan["legs"]:
         asset_key(leg["asset"])
-        if units(leg["amount"])==0 or leg["fromOwnerId"]==leg["toOwnerId"] or leg["fromOwnerId"] not in people or leg["toOwnerId"] not in people:
+        if (
+            units(leg["amount"]) == 0
+            or leg["fromOwnerId"] == leg["toOwnerId"]
+            or leg["fromOwnerId"] not in people
+            or leg["toOwnerId"] not in people
+        ):
             raise ValueError("invalid leg")
     for p in people:
-        if sum(l["fromOwnerId"]==p for l in plan["legs"])!=1 or sum(l["toOwnerId"]==p for l in plan["legs"])!=1:
+        if (
+            sum(leg["fromOwnerId"] == p for leg in plan["legs"]) != 1
+            or sum(leg["toOwnerId"] == p for leg in plan["legs"]) != 1
+        ):
             raise ValueError("not a direct swap or three-party cycle")
-        outgoing=next(l for l in plan["legs"] if l["fromOwnerId"]==p)
-        incoming=next(l for l in plan["legs"] if l["toOwnerId"]==p)
-        if asset_key(outgoing["asset"])==asset_key(incoming["asset"]): raise ValueError("same-asset exchange")
-    caps={f["ownerId"]:units(f["feeSats"]) for f in plan["fees"]}
-    if plan["feeState"]=="final": fees=caps
-    elif plan["feeState"]=="estimate": fees={p:1000//n+(1000%n if i==n-1 else 0) for i,p in enumerate(people)}
-    else: raise ValueError("invalid fee state")
-    if any(fees[p]>caps[p] for p in people) or not 1<=sum(fees.values())<=100000:
+        outgoing = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == p)
+        incoming = next(leg for leg in plan["legs"] if leg["toOwnerId"] == p)
+        if asset_key(outgoing["asset"]) == asset_key(incoming["asset"]):
+            raise ValueError("same-asset exchange")
+    caps = {f["ownerId"]: units(f["feeSats"]) for f in plan["fees"]}
+    if plan["feeState"] == "final":
+        fees = caps
+    elif plan["feeState"] == "estimate":
+        fees = {p: 1000 // n + (1000 % n if i == n - 1 else 0) for i, p in enumerate(people)}
+    else:
+        raise ValueError("invalid fee state")
+    if any(fees[p] > caps[p] for p in people) or not 1 <= sum(fees.values()) <= 100000:
         raise ValueError("fee limits")
     return fees
 
 
 class Backend:
     def __init__(self, profile, owner=None):
-        if profile not in ("alice","bob","carol"): raise ValueError("profile")
-        self.profile=profile; self.owner=owner or profile; self.root=STATE/profile
-        self.identity=native("identity",profile)
-        self.wallet_id="rgb-"+self.identity["fingerprint"]
+        if profile not in ("alice", "bob", "carol"):
+            raise ValueError("profile")
+        self.profile = profile
+        self.owner = owner or profile
+        self.root = STATE / profile
+        self.identity = native("identity", profile)
+        self.wallet_id = "rgb-" + self.identity["fingerprint"]
 
     def folder(self, trade):
-        return self.root/"trades"/sha(trade.encode())
+        return self.root / "trades" / sha(trade.encode())
 
     def call_native(self, op, trade=None, **kwargs):
-        if trade is not None: kwargs["contextKey"]=sha(trade.encode())
-        return native(op,self.profile,**kwargs)
+        if trade is not None:
+            kwargs["contextKey"] = sha(trade.encode())
+        return native(op, self.profile, **kwargs)
 
     def state(self):
         self.call_native("check-index")
-        raw=self.call_native("state")
-        balances=[{"asset":BTC,"amount":str(sum(int(raw["btc"][k]["settled"]) for k in ("vanilla","colored")))}]
+        raw = self.call_native("state")
+        balances = [
+            {
+                "asset": BTC,
+                "amount": str(sum(int(raw["btc"][k]["settled"]) for k in ("vanilla", "colored"))),
+            }
+        ]
         for a in raw["assets"]["nia"]:
-            balances.append({"asset":{"kind":"rgb","network":"regtest","symbol":a["ticker"],"precision":a["precision"],"contractId":a["asset_id"]},
-                             "amount":raw["stockBalances"].get(a["asset_id"],"0")})
-        return {"walletId":self.wallet_id,"ownerId":self.owner,"network":"regtest","mode":"real","balances":balances,"observedAt":int(time.time()*1000)}
+            balances.append(
+                {
+                    "asset": {
+                        "kind": "rgb",
+                        "network": "regtest",
+                        "symbol": a["ticker"],
+                        "precision": a["precision"],
+                        "contractId": a["asset_id"],
+                    },
+                    "amount": raw["stockBalances"].get(a["asset_id"], "0"),
+                }
+            )
+        return {
+            "walletId": self.wallet_id,
+            "ownerId": self.owner,
+            "network": "regtest",
+            "mode": "real",
+            "balances": balances,
+            "observedAt": int(time.time() * 1000),
+        }
 
     def capabilities(self):
         try:
-            native("health"); self.call_native("check-index")
-            ready=True; reason="Regtest NIA; SegWit v0; one active trade per profile; fixed deterministic fee allocation"
+            native("health")
+            self.call_native("check-index")
+            ready = True
+            reason = "Regtest NIA; SegWit v0; one active trade per profile; fixed deterministic fee allocation"
         except Exception:
-            ready=False; reason="Local chain/indexer or allocation index is unavailable; reconciliation required"
-        return {"protocolVersion":1,"mode":"real","network":"regtest","directSwap":ready,"ringSwap":ready,
-                "signing":ready,"broadcast":ready,"adapterVersion":FORMAT,"reason":reason}
+            ready = False
+            reason = (
+                "Local chain/indexer or allocation index is unavailable; reconciliation required"
+            )
+        return {
+            "protocolVersion": 1,
+            "mode": "real",
+            "network": "regtest",
+            "directSwap": ready,
+            "ringSwap": ready,
+            "signing": ready,
+            "broadcast": ready,
+            "adapterVersion": FORMAT,
+            "reason": reason,
+        }
 
     def reserve(self, plan):
-        fees=plan_check(plan,self.owner); folder=self.folder(plan["tradeId"])
-        j=Journal(self.root/"journal.sqlite")
+        fees = plan_check(plan, self.owner)
+        folder = self.folder(plan["tradeId"])
+        j = Journal(self.root / "journal.sqlite")
         try:
-            row=j.snapshot(plan["tradeId"])
+            row = j.snapshot(plan["tradeId"])
             if row:
-                if row["state"] not in ("PREPARING","AWAITING_APPROVAL") or read(folder/"plan.json")!=plan:
+                if (
+                    row["state"] not in ("PREPARING", "AWAITING_APPROVAL")
+                    or read(folder / "plan.json") != plan
+                ):
                     raise ValueError("existing plan immutable or already signed")
-                return {"reservationId":plan["tradeId"]}
+                return {"reservationId": plan["tradeId"]}
             # A validates its saved publication/private policy locally before this authenticated RPC.
-            state=self.state(); known={asset_key(b["asset"]):b for b in state["balances"]}
-            give=next(l for l in plan["legs"] if l["fromOwnerId"]==self.owner)
-            receive=next(l for l in plan["legs"] if l["toOwnerId"]==self.owner)
-            for leg in (give,receive):
-                if asset_key(leg["asset"]) not in known: raise ValueError("contract must be imported and verified locally first")
-            if int(known[asset_key(give["asset"])]["amount"])<units(give["amount"]): raise ValueError("insufficient give asset")
-            raw=self.call_native("state"); selected=[]; allocated={}; total=0
-            reserved={r[0] for r in j.db.execute("SELECT outpoint FROM reservations")}
-            candidates=[]
+            state = self.state()
+            known = {asset_key(b["asset"]): b for b in state["balances"]}
+            give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == self.owner)
+            receive = next(leg for leg in plan["legs"] if leg["toOwnerId"] == self.owner)
+            for leg in (give, receive):
+                if asset_key(leg["asset"]) not in known:
+                    raise ValueError("contract must be imported and verified locally first")
+            if int(known[asset_key(give["asset"])]["amount"]) < units(give["amount"]):
+                raise ValueError("insufficient give asset")
+            raw = self.call_native("state")
+            selected = []
+            allocated = {}
+            total = 0
+            reserved = {r[0] for r in j.db.execute("SELECT outpoint FROM reservations")}
+            candidates = []
             for u in raw["unspents"]:
-                point=u["utxo"]["outpoint"]; key=f'{point["txid"]}:{point["vout"]}'
-                if key in reserved or u.get("pending_blinded",0) or any(not a["settled"] for a in u["rgb_allocations"]): continue
-                chain=rpc("gettxout",point["txid"],point["vout"])
-                if not chain or chain["confirmations"]<1 or (chain["coinbase"] and chain["confirmations"]<101): continue
-                candidates.append((u,chain))
+                point = u["utxo"]["outpoint"]
+                key = f"{point['txid']}:{point['vout']}"
+                if (
+                    key in reserved
+                    or u.get("pending_blinded", 0)
+                    or any(not a["settled"] for a in u["rgb_allocations"])
+                ):
+                    continue
+                chain = rpc("gettxout", point["txid"], point["vout"])
+                if (
+                    not chain
+                    or chain["confirmations"] < 1
+                    or (chain["coinbase"] and chain["confirmations"] < 101)
+                ):
+                    continue
+                candidates.append((u, chain))
+
             def take(pair):
                 nonlocal total
-                u,chain=pair; point=u["utxo"]["outpoint"]
-                selected.append({**point,"amountSats":str(u["utxo"]["btc_amount"]),"scriptPubKey":chain["scriptPubKey"]["hex"],"rawTx":rpc("getrawtransaction",point["txid"],False)})
-                total+=int(u["utxo"]["btc_amount"])
+                u, chain = pair
+                point = u["utxo"]["outpoint"]
+                selected.append(
+                    {
+                        **point,
+                        "amountSats": str(u["utxo"]["btc_amount"]),
+                        "scriptPubKey": chain["scriptPubKey"]["hex"],
+                        "rawTx": rpc("getrawtransaction", point["txid"], False),
+                    }
+                )
+                total += int(u["utxo"]["btc_amount"])
                 for a in u["rgb_allocations"]:
-                    if set(a["assignment"])!={"Fungible"} or not a["asset_id"]: raise ValueError("non-NIA allocation")
-                    allocated[a["asset_id"]]=allocated.get(a["asset_id"],0)+int(a["assignment"]["Fungible"])
+                    if set(a["assignment"]) != {"Fungible"} or not a["asset_id"]:
+                        raise ValueError("non-NIA allocation")
+                    allocated[a["asset_id"]] = allocated.get(a["asset_id"], 0) + int(
+                        a["assignment"]["Fungible"]
+                    )
                 candidates.remove(pair)
-            if give["asset"]["kind"]=="rgb":
-                contract=give["asset"]["contractId"]
+
+            if give["asset"]["kind"] == "rgb":
+                contract = give["asset"]["contractId"]
                 for pair in list(candidates):
-                    if allocated.get(contract,0)>=units(give["amount"]): break
-                    if any(a["asset_id"]==contract for a in pair[0]["rgb_allocations"]): take(pair)
-                if allocated.get(contract,0)<units(give["amount"]): raise ValueError("no spendable RGB inputs")
-            needed=2000+fees[self.owner]+(units(give["amount"]) if give["asset"]["kind"]=="btc" else 0)
+                    if allocated.get(contract, 0) >= units(give["amount"]):
+                        break
+                    if any(a["asset_id"] == contract for a in pair[0]["rgb_allocations"]):
+                        take(pair)
+                if allocated.get(contract, 0) < units(give["amount"]):
+                    raise ValueError("no spendable RGB inputs")
+            needed = (
+                2000
+                + fees[self.owner]
+                + (units(give["amount"]) if give["asset"]["kind"] == "btc" else 0)
+            )
             for pair in list(candidates):
-                if total>=needed: break
-                if not pair[0]["rgb_allocations"]: take(pair)
-            if total<needed: raise ValueError("not enough spendable BTC for payments, change and fee")
-            addresses=self.call_native("addresses")
-            funding={"stage":"funding","ownerId":self.owner,"planDigest":plan["digest"],"inputs":selected,
-                     "allocations":{k:str(v) for k,v in allocated.items()},**addresses}
-            points=[f'{i["txid"]}:{i["vout"]}' for i in selected]
-            save(folder/"plan.json",plan); save(folder/"funding.json",funding)
-            j.reserve_plan(plan["tradeId"],plan,points)
-        finally: j.db.close()
-        return {"reservationId":plan["tradeId"]}
+                if total >= needed:
+                    break
+                if not pair[0]["rgb_allocations"]:
+                    take(pair)
+            if total < needed:
+                raise ValueError("not enough spendable BTC for payments, change and fee")
+            addresses = self.call_native("addresses")
+            funding = {
+                "stage": "funding",
+                "ownerId": self.owner,
+                "planDigest": plan["digest"],
+                "inputs": selected,
+                "allocations": {k: str(v) for k, v in allocated.items()},
+                **addresses,
+            }
+            points = [f"{i['txid']}:{i['vout']}" for i in selected]
+            save(folder / "plan.json", plan)
+            save(folder / "funding.json", funding)
+            j.reserve_plan(plan["tradeId"], plan, points)
+        finally:
+            j.db.close()
+        return {"reservationId": plan["tradeId"]}
 
     def release(self, tradeId):
-        j=Journal(self.root/"journal.sqlite")
-        try: j.release(tradeId)
-        finally: j.db.close()
+        j = Journal(self.root / "journal.sqlite")
+        try:
+            j.release(tradeId)
+        finally:
+            j.db.close()
 
     def collect(self, plan, materials, stage):
-        found={}
+        found = {}
         for item in materials:
-            m=item.get("material")
-            if not isinstance(m,dict) or m.get("stage")!=stage: continue
-            owner=item["ownerId"]
-            if owner not in plan["participants"] or m.get("ownerId")!=owner or m.get("planDigest")!=plan["digest"]:
+            m = item.get("material")
+            if not isinstance(m, dict) or m.get("stage") != stage:
+                continue
+            owner = item["ownerId"]
+            if (
+                owner not in plan["participants"]
+                or m.get("ownerId") != owner
+                or m.get("planDigest") != plan["digest"]
+            ):
                 raise ValueError("foreign contribution")
-            if owner in found and found[owner]!=m: raise ValueError("conflicting contribution")
-            found[owner]=m
+            if owner in found and found[owner] != m:
+                raise ValueError("conflicting contribution")
+            found[owner] = m
         return found
 
     def skeleton(self, plan, funding):
-        fees=plan_check(plan,self.owner); people=plan["participants"]
-        inputs=[]; outputs=[]; assignments={p:{} for p in people}; receivers=[]; seen_contracts=set()
+        fees = plan_check(plan, self.owner)
+        people = plan["participants"]
+        inputs = []
+        outputs = []
+        assignments = {p: {} for p in people}
+        receivers = []
+        seen_contracts = set()
         for p in people:
-            f=funding[p]; inputs+=f["inputs"]
-            outputs.append({"address":f["rgbAddress"],"amountSats":"1000"})
+            f = funding[p]
+            inputs += f["inputs"]
+            outputs.append({"address": f["rgbAddress"], "amountSats": "1000"})
         for p in people:
-            own=sum(units(i["amountSats"]) for i in funding[p]["inputs"])
-            change=own+self.btc_delta(plan,p,fees)-1000
-            if change<546 or change>MAX: raise ValueError("invalid change")
-            outputs.append({"address":funding[p]["btcAddress"],"amountSats":str(change)})
-            give=next(l for l in plan["legs"] if l["fromOwnerId"]==p)
-            if give["asset"]["kind"]=="rgb" and give["asset"]["contractId"] not in funding[p]["allocations"]: raise ValueError("missing outgoing allocation")
-            for contract,s in funding[p]["allocations"].items():
-                if contract in seen_contracts: raise ValueError("same-contract multi-sender inputs unsupported")
-                seen_contracts.add(contract); amount=units(s); assigned={}
-                if give["asset"]["kind"]=="rgb" and give["asset"]["contractId"]==contract:
-                    send=units(give["amount"])
-                    if send>amount: raise ValueError("RGB overspend")
-                    assigned[str(people.index(give["toOwnerId"]))]=str(send); amount-=send
-                if amount: assigned[str(people.index(p))]=str(amount)
-                assignments[p][contract]=assigned
-                for vout,n in assigned.items(): receivers.append({"sender":p,"receiver":people[int(vout)],"contractId":contract,"vout":int(vout),"amount":n,"address":outputs[int(vout)]["address"]})
-        base=native("build",inputs=inputs,outputs=outputs)
-        return {"inputs":inputs,"outputs":outputs,"assignments":assignments,"receivers":receivers,"base":base,"fees":fees}
+            own = sum(units(i["amountSats"]) for i in funding[p]["inputs"])
+            change = own + self.btc_delta(plan, p, fees) - 1000
+            if change < 546 or change > MAX:
+                raise ValueError("invalid change")
+            outputs.append({"address": funding[p]["btcAddress"], "amountSats": str(change)})
+            give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == p)
+            if (
+                give["asset"]["kind"] == "rgb"
+                and give["asset"]["contractId"] not in funding[p]["allocations"]
+            ):
+                raise ValueError("missing outgoing allocation")
+            for contract, s in funding[p]["allocations"].items():
+                if contract in seen_contracts:
+                    raise ValueError("same-contract multi-sender inputs unsupported")
+                seen_contracts.add(contract)
+                amount = units(s)
+                assigned = {}
+                if give["asset"]["kind"] == "rgb" and give["asset"]["contractId"] == contract:
+                    send = units(give["amount"])
+                    if send > amount:
+                        raise ValueError("RGB overspend")
+                    assigned[str(people.index(give["toOwnerId"]))] = str(send)
+                    amount -= send
+                if amount:
+                    assigned[str(people.index(p))] = str(amount)
+                assignments[p][contract] = assigned
+                for vout, n in assigned.items():
+                    receivers.append(
+                        {
+                            "sender": p,
+                            "receiver": people[int(vout)],
+                            "contractId": contract,
+                            "vout": int(vout),
+                            "amount": n,
+                            "address": outputs[int(vout)]["address"],
+                        }
+                    )
+        base = native("build", inputs=inputs, outputs=outputs)
+        return {
+            "inputs": inputs,
+            "outputs": outputs,
+            "assignments": assignments,
+            "receivers": receivers,
+            "base": base,
+            "fees": fees,
+        }
 
     @staticmethod
     def btc_delta(plan, owner, fees):
-        return sum((1 if l["toOwnerId"]==owner else -1 if l["fromOwnerId"]==owner else 0)*units(l["amount"]) for l in plan["legs"] if l["asset"]["kind"]=="btc")-fees[owner]
+        return (
+            sum(
+                (1 if leg["toOwnerId"] == owner else -1 if leg["fromOwnerId"] == owner else 0)
+                * units(leg["amount"])
+                for leg in plan["legs"]
+                if leg["asset"]["kind"] == "btc"
+            )
+            - fees[owner]
+        )
 
     def prepare(self, plan, materials):
-        self.reserve(plan); folder=self.folder(plan["tradeId"]); n=len(plan["participants"])
-        funding=self.collect(plan,materials,"funding"); published=self.owner in funding
-        funding[self.owner]=read(folder/"funding.json")
-        if not published or len(funding)<n: return {"status":"pending","material":funding[self.owner]}
-        skeleton=self.skeleton(plan,funding)
-        colored=self.collect(plan,materials,"colored")
-        path=folder/"colored.json"
+        self.reserve(plan)
+        folder = self.folder(plan["tradeId"])
+        n = len(plan["participants"])
+        funding = self.collect(plan, materials, "funding")
+        published = self.owner in funding
+        funding[self.owner] = read(folder / "funding.json")
+        if not published or len(funding) < n:
+            return {"status": "pending", "material": funding[self.owner]}
+        skeleton = self.skeleton(plan, funding)
+        colored = self.collect(plan, materials, "colored")
+        path = folder / "colored.json"
         if not path.exists():
-            own=skeleton["assignments"][self.owner]
-            contribution=self.call_native("color",psbt=skeleton["base"]["psbt"],assignments=own)["psbt"] if own else None
-            save(path,{"stage":"colored","ownerId":self.owner,"planDigest":plan["digest"],"baseTxid":skeleton["base"]["candidateTxid"],"psbt":contribution})
-        published=self.owner in colored; colored[self.owner]=read(path)
-        if any(c["baseTxid"]!=skeleton["base"]["candidateTxid"] for c in colored.values()): raise ValueError("different skeleton")
-        if not published or len(colored)<n: return {"status":"pending","material":colored[self.owner]}
-        final=native("merge",basePsbt=skeleton["base"]["psbt"],contributions=[colored[p]["psbt"] for p in plan["participants"] if colored[p]["psbt"]])
-        if units(final["feeSats"])!=sum(skeleton["fees"].values()): raise ValueError("fee changed")
-        proofs=self.collect(plan,materials,"proofs"); path=folder/"proofs.json"
+            own = skeleton["assignments"][self.owner]
+            contribution = (
+                self.call_native("color", psbt=skeleton["base"]["psbt"], assignments=own)["psbt"]
+                if own
+                else None
+            )
+            save(
+                path,
+                {
+                    "stage": "colored",
+                    "ownerId": self.owner,
+                    "planDigest": plan["digest"],
+                    "baseTxid": skeleton["base"]["candidateTxid"],
+                    "psbt": contribution,
+                },
+            )
+        published = self.owner in colored
+        colored[self.owner] = read(path)
+        if any(c["baseTxid"] != skeleton["base"]["candidateTxid"] for c in colored.values()):
+            raise ValueError("different skeleton")
+        if not published or len(colored) < n:
+            return {"status": "pending", "material": colored[self.owner]}
+        final = native(
+            "merge",
+            basePsbt=skeleton["base"]["psbt"],
+            contributions=[colored[p]["psbt"] for p in plan["participants"] if colored[p]["psbt"]],
+        )
+        if units(final["feeSats"]) != sum(skeleton["fees"].values()):
+            raise ValueError("fee changed")
+        proofs = self.collect(plan, materials, "proofs")
+        path = folder / "proofs.json"
         if not path.exists():
-            own=[]
+            own = []
             for receive in skeleton["receivers"]:
-                if receive["sender"]!=self.owner: continue
-                proof=self.call_native("export",fascia=final["fascia"],contractId=receive["contractId"],vouts=[receive["vout"]])
-                own.append({**receive,"consignment":proof["consignment"]})
-            save(path,{"stage":"proofs","ownerId":self.owner,"planDigest":plan["digest"],"txid":final["candidateTxid"],"proofs":own})
-        published=self.owner in proofs; proofs[self.owner]=read(path)
-        if any(p["txid"]!=final["candidateTxid"] for p in proofs.values()): raise ValueError("different committed transaction")
-        if not published or len(proofs)<n: return {"status":"pending","material":proofs[self.owner]}
-        all_proofs=[proof for p in plan["participants"] for proof in proofs[p]["proofs"]]
-        if [{k:v for k,v in p.items() if k!="consignment"} for p in all_proofs]!=skeleton["receivers"]: raise ValueError("incomplete or changed proofs")
-        package={"protocolVersion":1,"packageId":final["candidateTxid"],"tradeId":plan["tradeId"],"planRevision":plan["revision"],"planDigest":plan["digest"],"network":"regtest",
-                 "unsignedTxDigest":sha(bytes.fromhex(final["unsignedTxHex"])),
-                 "commitmentDigest":digest({"scripts":final["commitmentScripts"],"proofs":[sha(p["consignment"].encode()) for p in all_proofs]}),
-                 "format":FORMAT,"payload":{"funding":funding,"colored":colored,"proofs":all_proofs,"final":final}}
-        self.validate(package,plan)
-        return {"status":"ready","material":proofs[self.owner],"settlementPackage":package}
+                if receive["sender"] != self.owner:
+                    continue
+                proof = self.call_native(
+                    "export",
+                    fascia=final["fascia"],
+                    contractId=receive["contractId"],
+                    vouts=[receive["vout"]],
+                )
+                own.append({**receive, "consignment": proof["consignment"]})
+            save(
+                path,
+                {
+                    "stage": "proofs",
+                    "ownerId": self.owner,
+                    "planDigest": plan["digest"],
+                    "txid": final["candidateTxid"],
+                    "proofs": own,
+                },
+            )
+        published = self.owner in proofs
+        proofs[self.owner] = read(path)
+        if any(p["txid"] != final["candidateTxid"] for p in proofs.values()):
+            raise ValueError("different committed transaction")
+        if not published or len(proofs) < n:
+            return {"status": "pending", "material": proofs[self.owner]}
+        all_proofs = [proof for p in plan["participants"] for proof in proofs[p]["proofs"]]
+        if [{k: v for k, v in p.items() if k != "consignment"} for p in all_proofs] != skeleton[
+            "receivers"
+        ]:
+            raise ValueError("incomplete or changed proofs")
+        package = {
+            "protocolVersion": 1,
+            "packageId": final["candidateTxid"],
+            "tradeId": plan["tradeId"],
+            "planRevision": plan["revision"],
+            "planDigest": plan["digest"],
+            "network": "regtest",
+            "unsignedTxDigest": sha(bytes.fromhex(final["unsignedTxHex"])),
+            "commitmentDigest": digest(
+                {
+                    "scripts": final["commitmentScripts"],
+                    "proofs": [sha(p["consignment"].encode()) for p in all_proofs],
+                }
+            ),
+            "format": FORMAT,
+            "payload": {
+                "funding": funding,
+                "colored": colored,
+                "proofs": all_proofs,
+                "final": final,
+            },
+        }
+        self.validate(package, plan)
+        return {"status": "ready", "material": proofs[self.owner], "settlementPackage": package}
 
     def validate(self, package, plan):
-        fees=plan_check(plan,self.owner); trade=plan["tradeId"]; folder=self.folder(trade)
-        if read(folder/"plan.json")!=plan: raise ValueError("unreserved plan")
-        for k,v in {"protocolVersion":1,"tradeId":trade,"planRevision":plan["revision"],"planDigest":plan["digest"],"network":"regtest","format":FORMAT}.items():
-            if package.get(k)!=v: raise ValueError("package identity mismatch")
-        payload=package["payload"]; funding=payload["funding"]
-        if funding[self.owner]!=read(folder/"funding.json"): raise ValueError("own funding replaced")
-        if set(funding)!=set(plan["participants"]) or set(payload["colored"])!=set(plan["participants"]): raise ValueError("participant materials missing")
-        skeleton=self.skeleton(plan,funding)
-        final=native("merge",basePsbt=skeleton["base"]["psbt"],contributions=[payload["colored"][p]["psbt"] for p in plan["participants"] if payload["colored"][p]["psbt"]])
-        if final!=payload["final"] or package["packageId"]!=final["candidateTxid"] or package["unsignedTxDigest"]!=sha(bytes.fromhex(final["unsignedTxHex"])):
+        fees = plan_check(plan, self.owner)
+        trade = plan["tradeId"]
+        folder = self.folder(trade)
+        if read(folder / "plan.json") != plan:
+            raise ValueError("unreserved plan")
+        for k, v in {
+            "protocolVersion": 1,
+            "tradeId": trade,
+            "planRevision": plan["revision"],
+            "planDigest": plan["digest"],
+            "network": "regtest",
+            "format": FORMAT,
+        }.items():
+            if package.get(k) != v:
+                raise ValueError("package identity mismatch")
+        payload = package["payload"]
+        funding = payload["funding"]
+        if funding[self.owner] != read(folder / "funding.json"):
+            raise ValueError("own funding replaced")
+        if set(funding) != set(plan["participants"]) or set(payload["colored"]) != set(
+            plan["participants"]
+        ):
+            raise ValueError("participant materials missing")
+        skeleton = self.skeleton(plan, funding)
+        final = native(
+            "merge",
+            basePsbt=skeleton["base"]["psbt"],
+            contributions=[
+                payload["colored"][p]["psbt"]
+                for p in plan["participants"]
+                if payload["colored"][p]["psbt"]
+            ],
+        )
+        if (
+            final != payload["final"]
+            or package["packageId"] != final["candidateTxid"]
+            or package["unsignedTxDigest"] != sha(bytes.fromhex(final["unsignedTxHex"]))
+        ):
             raise ValueError("transaction/commitment changed")
-        proofs=payload["proofs"]
-        if [{k:v for k,v in p.items() if k!="consignment"} for p in proofs]!=skeleton["receivers"]: raise ValueError("proof routing changed")
-        if package["commitmentDigest"]!=digest({"scripts":final["commitmentScripts"],"proofs":[sha(p["consignment"].encode()) for p in proofs]}): raise ValueError("proof commitment changed")
-        receives=[]
+        proofs = payload["proofs"]
+        if [{k: v for k, v in p.items() if k != "consignment"} for p in proofs] != skeleton[
+            "receivers"
+        ]:
+            raise ValueError("proof routing changed")
+        if package["commitmentDigest"] != digest(
+            {
+                "scripts": final["commitmentScripts"],
+                "proofs": [sha(p["consignment"].encode()) for p in proofs],
+            }
+        ):
+            raise ValueError("proof commitment changed")
+        receives = []
         for p in proofs:
-            if p["receiver"]==self.owner:
-                check={k:p[k] for k in ("contractId","vout","amount","address","consignment")}
-                self.call_native("validate",**check,psbt=final["psbt"]); receives.append(check)
-        state=self.state()
-        give=next(l for l in plan["legs"] if l["fromOwnerId"]==self.owner)
-        receive=next(l for l in plan["legs"] if l["toOwnerId"]==self.owner)
-        intent={"network":"regtest","profile":self.profile,"fingerprint":self.identity["fingerprint"],"tradeId":trade,"planRevision":plan["revision"],
-                "candidateTxid":final["candidateTxid"],"feeSats":final["feeSats"],"expectedBtcDeltaSats":str(self.btc_delta(plan,self.owner,fees)),
-                "assignments":skeleton["assignments"][self.owner],"receives":receives,"sighash":"ALL",
-                "ownedInputs":[f'{i["txid"]}:{i["vout"]}' for i in funding[self.owner]["inputs"]],
-                "protocolBinding":{k:package[k] for k in ("packageId","planDigest","unsignedTxDigest","commitmentDigest")}}
-        j=Journal(self.root/"journal.sqlite")
+            if p["receiver"] == self.owner:
+                check = {
+                    k: p[k] for k in ("contractId", "vout", "amount", "address", "consignment")
+                }
+                self.call_native("validate", **check, psbt=final["psbt"])
+                receives.append(check)
+        state = self.state()
+        give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == self.owner)
+        receive = next(leg for leg in plan["legs"] if leg["toOwnerId"] == self.owner)
+        intent = {
+            "network": "regtest",
+            "profile": self.profile,
+            "fingerprint": self.identity["fingerprint"],
+            "tradeId": trade,
+            "planRevision": plan["revision"],
+            "candidateTxid": final["candidateTxid"],
+            "feeSats": final["feeSats"],
+            "expectedBtcDeltaSats": str(self.btc_delta(plan, self.owner, fees)),
+            "assignments": skeleton["assignments"][self.owner],
+            "receives": receives,
+            "sighash": "ALL",
+            "ownedInputs": [f"{i['txid']}:{i['vout']}" for i in funding[self.owner]["inputs"]],
+            "protocolBinding": {
+                k: package[k]
+                for k in ("packageId", "planDigest", "unsignedTxDigest", "commitmentDigest")
+            },
+        }
+        j = Journal(self.root / "journal.sqlite")
         try:
-            row=j.snapshot(trade)
-            if row["state"] not in ("PREPARING","AWAITING_APPROVAL"): raise ValueError("signature may exist; sync instead")
+            row = j.snapshot(trade)
+            if row["state"] not in ("PREPARING", "AWAITING_APPROVAL"):
+                raise ValueError("signature may exist; sync instead")
             # Refuse replacing approved review bytes even before a signature is released.
-            if (folder/"approval-intent.json").exists() and read(folder/"approval-intent.json")!=intent: raise ValueError("immutable review changed")
-            save(folder/"review-package.json",{"final":final})
-            save(folder/"approval-intent.json",intent)
-            h=j.bind_approval(trade,plan,intent)
-            self.call_native("preflight-sign",trade,approvalDigest=h)
-        finally: j.db.close()
-        after=[]
+            if (folder / "approval-intent.json").exists() and read(
+                folder / "approval-intent.json"
+            ) != intent:
+                raise ValueError("immutable review changed")
+            save(folder / "review-package.json", {"final": final})
+            save(folder / "approval-intent.json", intent)
+            h = j.bind_approval(trade, plan, intent)
+            self.call_native("preflight-sign", trade, approvalDigest=h)
+        finally:
+            j.db.close()
+        after = []
         for b in state["balances"]:
-            value=int(b["amount"])
-            if asset_key(b["asset"])==asset_key(give["asset"]): value-=units(give["amount"])
-            if asset_key(b["asset"])==asset_key(receive["asset"]): value+=units(receive["amount"])
-            if b["asset"]["kind"]=="btc": value-=fees[self.owner]
-            if not 0<=value<=MAX: raise ValueError("balance limit")
-            after.append({"asset":b["asset"],"amount":str(value)})
-        preview={"walletId":self.wallet_id,"ownerId":self.owner,"mode":"real","network":"regtest",
-                 **intent["protocolBinding"],"validated":True,"reasons":[],"give":{"asset":give["asset"],"amount":give["amount"]},
-                 "receive":{"asset":receive["asset"],"amount":receive["amount"]},"feeSats":str(fees[self.owner]),"btcDelta":intent["expectedBtcDeltaSats"],"balancesAfter":after}
-        save(folder/"package.json",package); save(folder/"preview.json",preview)
-        save(folder/"before.json",state)
+            value = int(b["amount"])
+            if asset_key(b["asset"]) == asset_key(give["asset"]):
+                value -= units(give["amount"])
+            if asset_key(b["asset"]) == asset_key(receive["asset"]):
+                value += units(receive["amount"])
+            if b["asset"]["kind"] == "btc":
+                value -= fees[self.owner]
+            if not 0 <= value <= MAX:
+                raise ValueError("balance limit")
+            after.append({"asset": b["asset"], "amount": str(value)})
+        preview = {
+            "walletId": self.wallet_id,
+            "ownerId": self.owner,
+            "mode": "real",
+            "network": "regtest",
+            **intent["protocolBinding"],
+            "validated": True,
+            "reasons": [],
+            "give": {"asset": give["asset"], "amount": give["amount"]},
+            "receive": {"asset": receive["asset"], "amount": receive["amount"]},
+            "feeSats": str(fees[self.owner]),
+            "btcDelta": intent["expectedBtcDeltaSats"],
+            "balancesAfter": after,
+        }
+        save(folder / "package.json", package)
+        save(folder / "preview.json", preview)
+        save(folder / "before.json", state)
         return preview
 
     def sign(self, package, approval):
-        trade=package["tradeId"]; folder=self.folder(trade)
-        if package!=read(folder/"package.json"): raise ValueError("unreviewed package")
-        expected={"protocolVersion":1,"walletId":self.wallet_id,"ownerId":self.owner,"network":"regtest","tradeId":trade,"planRevision":package["planRevision"],
-                  **{k:package[k] for k in ("packageId","planDigest","unsignedTxDigest","commitmentDigest")}}
-        if any(approval.get(k)!=v for k,v in expected.items()) or not approval.get("approvalId") or not isinstance(approval.get("approvedAt"),int):
+        trade = package["tradeId"]
+        folder = self.folder(trade)
+        if package != read(folder / "package.json"):
+            raise ValueError("unreviewed package")
+        expected = {
+            "protocolVersion": 1,
+            "walletId": self.wallet_id,
+            "ownerId": self.owner,
+            "network": "regtest",
+            "tradeId": trade,
+            "planRevision": package["planRevision"],
+            **{
+                k: package[k]
+                for k in ("packageId", "planDigest", "unsignedTxDigest", "commitmentDigest")
+            },
+        }
+        if (
+            any(approval.get(k) != v for k, v in expected.items())
+            or not approval.get("approvalId")
+            or not isinstance(approval.get("approvedAt"), int)
+        ):
             raise ValueError("stale or foreign approval")
-        intent=read(folder/"approval-intent.json"); h=approval_digest(intent)
-        j=Journal(self.root/"journal.sqlite")
+        intent = read(folder / "approval-intent.json")
+        h = approval_digest(intent)
+        j = Journal(self.root / "journal.sqlite")
         try:
-            signed=j.begin_signing(trade,h,True)
+            signed = j.begin_signing(trade, h, True)
             if signed is None:
-                save(folder/"user-approval.json",approval)
-                signed=self.call_native("sign",trade,approved=True,approvalDigest=h)["signedPsbt"]
-                j.record_signature(trade,signed)
-            return {"status":"signed","signature":{"ownerId":self.owner,"packageId":package["packageId"],"psbt":signed}}
-        finally: j.db.close()
+                save(folder / "user-approval.json", approval)
+                signed = self.call_native("sign", trade, approved=True, approvalDigest=h)[
+                    "signedPsbt"
+                ]
+                j.record_signature(trade, signed)
+            return {
+                "status": "signed",
+                "signature": {
+                    "ownerId": self.owner,
+                    "packageId": package["packageId"],
+                    "psbt": signed,
+                },
+            }
+        finally:
+            j.db.close()
 
     def finalize(self, package, signatures):
-        trade=package["tradeId"]; folder=self.folder(trade); plan=read(folder/"plan.json")
-        if package!=read(folder/"package.json"): raise ValueError("changed package")
-        j=Journal(self.root/"journal.sqlite")
+        trade = package["tradeId"]
+        folder = self.folder(trade)
+        plan = read(folder / "plan.json")
+        if package != read(folder / "package.json"):
+            raise ValueError("changed package")
+        j = Journal(self.root / "journal.sqlite")
         try:
-            row=j.snapshot(trade)
-            if not row["signature"]: raise ValueError("no local signature")
-            if not (folder/"finalized.json").exists():
-                if len(signatures)!=len(plan["participants"]) or {s["ownerId"] for s in signatures}!=set(plan["participants"]): raise ValueError("incomplete signatures")
-                psbts=[]
+            row = j.snapshot(trade)
+            if not row["signature"]:
+                raise ValueError("no local signature")
+            if not (folder / "finalized.json").exists():
+                if len(signatures) != len(plan["participants"]) or {
+                    s["ownerId"] for s in signatures
+                } != set(plan["participants"]):
+                    raise ValueError("incomplete signatures")
+                psbts = []
                 for item in signatures:
-                    s=item["signature"]
-                    if s["ownerId"]!=item["ownerId"] or s["packageId"]!=package["packageId"]: raise ValueError("signature identity")
-                    if item["ownerId"]==self.owner and s["psbt"]!=row["signature"]: raise ValueError("local signature replaced")
+                    s = item["signature"]
+                    if s["ownerId"] != item["ownerId"] or s["packageId"] != package["packageId"]:
+                        raise ValueError("signature identity")
+                    if item["ownerId"] == self.owner and s["psbt"] != row["signature"]:
+                        raise ValueError("local signature replaced")
                     psbts.append(s["psbt"])
-                final=rpc("finalizepsbt",rpc("combinepsbt",psbts))
-                if not final["complete"] or rpc("decoderawtransaction",final["hex"])["txid"]!=package["packageId"]: raise ValueError("incomplete/changed transaction")
-                save(folder/"finalized.json",{"hex":final["hex"],"txid":package["packageId"]})
-            final=read(folder/"finalized.json")
-            try: known=rpc("getrawtransaction",final["txid"],True)
-            except RuntimeError: known=None
+                final = rpc("finalizepsbt", rpc("combinepsbt", psbts))
+                if (
+                    not final["complete"]
+                    or rpc("decoderawtransaction", final["hex"])["txid"] != package["packageId"]
+                ):
+                    raise ValueError("incomplete/changed transaction")
+                save(folder / "finalized.json", {"hex": final["hex"], "txid": package["packageId"]})
+            final = read(folder / "finalized.json")
+            try:
+                known = rpc("getrawtransaction", final["txid"], True)
+            except RuntimeError:
+                known = None
             if known is None:
-                if not rpc("testmempoolaccept",[final["hex"]])[0].get("allowed"): raise ValueError("mempool rejected; inputs remain pinned")
-                try: rpc("sendrawtransaction",final["hex"])
+                if not rpc("testmempoolaccept", [final["hex"]])[0].get("allowed"):
+                    raise ValueError("mempool rejected; inputs remain pinned")
+                try:
+                    rpc("sendrawtransaction", final["hex"])
                 except RuntimeError:
-                    try: rpc("getrawtransaction",final["txid"],True)
+                    try:
+                        rpc("getrawtransaction", final["txid"], True)
                     except RuntimeError:
-                        j.broadcast_result(trade,final["txid"],False)
-                        return self.receipt(trade,"reconciling",False,False,final["txid"])
-            if row["state"]!="CONFIRMED": j.broadcast_result(trade,final["txid"],True)
-        finally: j.db.close()
+                        j.broadcast_result(trade, final["txid"], False)
+                        return self.receipt(trade, "reconciling", False, False, final["txid"])
+            if row["state"] != "CONFIRMED":
+                j.broadcast_result(trade, final["txid"], True)
+        finally:
+            j.db.close()
         return self.sync(trade)
 
     @staticmethod
     def receipt(trade, state, chain, rgb, txid=None):
-        return {"mode":"real","tradeId":trade,"network":"regtest","state":state,"chainConfirmed":chain,"rgbAccepted":rgb,**({"txid":txid} if txid else {})}
+        return {
+            "mode": "real",
+            "tradeId": trade,
+            "network": "regtest",
+            "state": state,
+            "chainConfirmed": chain,
+            "rgbAccepted": rgb,
+            **({"txid": txid} if txid else {}),
+        }
 
     def sync(self, tradeId):
-        folder=self.folder(tradeId); j=Journal(self.root/"journal.sqlite")
+        folder = self.folder(tradeId)
+        j = Journal(self.root / "journal.sqlite")
         try:
-            row=j.snapshot(tradeId)
-            if not row: raise ValueError("unknown trade")
-            if not row["signature"]: return self.receipt(tradeId,"pending",False,False)
-            package=read(folder/"package.json"); txid=package["packageId"]
-            try: chain=rpc("getrawtransaction",txid,True)
-            except RuntimeError: return self.receipt(tradeId,"reconciling",False,False,txid)
-            if row["state"]!="CONFIRMED": j.broadcast_result(tradeId,txid,True)
-            if chain.get("confirmations",0)<1: return self.receipt(tradeId,"pending",False,False,txid)
-            if row["state"]=="CONFIRMED" and (folder/"receipt.json").exists():
-                return self.receipt(tradeId,"confirmed",True,True,txid)
+            row = j.snapshot(tradeId)
+            if not row:
+                raise ValueError("unknown trade")
+            if not row["signature"]:
+                return self.receipt(tradeId, "pending", False, False)
+            package = read(folder / "package.json")
+            txid = package["packageId"]
             try:
-                result=self.call_native("sync-confirmed",tradeId,rawTx=chain["hex"])
-                state=self.state(); expected=read(folder/"preview.json")["balancesAfter"]
-                actual={asset_key(b["asset"]):b["amount"] for b in state["balances"]}
-                if any(actual.get(asset_key(b["asset"]))!=b["amount"] for b in expected): raise ValueError("actual settled balances differ from preview")
+                chain = rpc("getrawtransaction", txid, True)
+            except RuntimeError:
+                return self.receipt(tradeId, "reconciling", False, False, txid)
+            if row["state"] != "CONFIRMED":
+                j.broadcast_result(tradeId, txid, True)
+            if chain.get("confirmations", 0) < 1:
+                return self.receipt(tradeId, "pending", False, False, txid)
+            if row["state"] == "CONFIRMED" and (folder / "receipt.json").exists():
+                return self.receipt(tradeId, "confirmed", True, True, txid)
+            try:
+                result = self.call_native("sync-confirmed", tradeId, rawTx=chain["hex"])
+                state = self.state()
+                expected = read(folder / "preview.json")["balancesAfter"]
+                actual = {asset_key(b["asset"]): b["amount"] for b in state["balances"]}
+                if any(actual.get(asset_key(b["asset"])) != b["amount"] for b in expected):
+                    raise ValueError("actual settled balances differ from preview")
             except Exception:
-                j.receipt(tradeId,True,False)
-                return self.receipt(tradeId,"reconciling",True,False,txid)
-            j.receipt(tradeId,True,True)
-            save(folder/"receipt.json",result)
-            return self.receipt(tradeId,"confirmed",True,True,txid)
-        finally: j.db.close()
+                j.receipt(tradeId, True, False)
+                return self.receipt(tradeId, "reconciling", True, False, txid)
+            j.receipt(tradeId, True, True)
+            save(folder / "receipt.json", result)
+            return self.receipt(tradeId, "confirmed", True, True, txid)
+        finally:
+            j.db.close()
 
     def handle(self, method, params):
-        if method not in ("capabilities","state","reserve","release","prepare","validate","sign","finalize","sync"):
+        if method not in (
+            "capabilities",
+            "state",
+            "reserve",
+            "release",
+            "prepare",
+            "validate",
+            "sign",
+            "finalize",
+            "sync",
+        ):
             raise ValueError("unknown operation")
-        if "package" in params: params={**params,"package":params["package"]}
-        return getattr(self,method)(**params)
+        if "package" in params:
+            params = {**params, "package": params["package"]}
+        return getattr(self, method)(**params)

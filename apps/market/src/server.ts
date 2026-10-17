@@ -31,12 +31,19 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
     if (size > MAX_BODY_BYTES) throw new MarketError('BODY_TOO_LARGE', 413);
     chunks.push(chunk);
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-  catch { throw new MarketError('INVALID_JSON', 400); }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throw new MarketError('INVALID_JSON', 400);
+  }
 }
 
 function json(response: ServerResponse, status: number, data: unknown): void {
-  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
   response.end(JSON.stringify(data));
 }
 
@@ -45,8 +52,10 @@ export function createMarketServer(store: MarketStore, owners: Map<string, strin
     try {
       const url = new URL(request.url ?? '/', 'http://localhost');
       const path = url.pathname;
-      if (request.method === 'GET' && path === '/health') return json(response, 200, { ok: true, protocolVersion: 1, mode: 'coordination-only' });
-      if (request.method === 'GET' && path === '/orders') return json(response, 200, { orders: store.listOpen() });
+      if (request.method === 'GET' && path === '/health')
+        return json(response, 200, { ok: true, protocolVersion: 1, mode: 'coordination-only' });
+      if (request.method === 'GET' && path === '/orders')
+        return json(response, 200, { orders: store.listOpen() });
       if (request.method === 'POST' && path === '/orders') {
         const owner = authenticate(request, owners);
         return json(response, 201, store.createOrder(owner, await readJson(request)));
@@ -54,13 +63,19 @@ export function createMarketServer(store: MarketStore, owners: Map<string, strin
       const cancel = /^\/orders\/([^/]+)\/cancel$/.exec(path);
       if (request.method === 'POST' && cancel) {
         const owner = authenticate(request, owners);
-        const payload = z.object({ revision: z.number().int().nonnegative() }).strict().parse(await readJson(request));
-        return json(response, 200, { order: store.cancelOrder(owner, cancel[1], payload.revision) });
+        const payload = z
+          .object({ revision: z.number().int().nonnegative() })
+          .strict()
+          .parse(await readJson(request));
+        return json(response, 200, {
+          order: store.cancelOrder(owner, cancel[1], payload.revision),
+        });
       }
       const order = /^\/orders\/([^/]+)$/.exec(path);
       if (request.method === 'GET' && order) {
         const found = store.getOrder(order[1]);
-        if (!found || (found.status !== 'OPEN' && found.ownerId !== authenticate(request, owners))) throw new MarketError('ORDER_NOT_FOUND', 404);
+        if (!found || (found.status !== 'OPEN' && found.ownerId !== authenticate(request, owners)))
+          throw new MarketError('ORDER_NOT_FOUND', 404);
         return json(response, 200, { order: found });
       }
       if (request.method === 'GET' && path === '/snapshot') {
@@ -79,12 +94,18 @@ export function createMarketServer(store: MarketStore, owners: Map<string, strin
       const message = /^\/trades\/([^/]+)\/messages$/.exec(path);
       if (request.method === 'POST' && message) {
         const owner = authenticate(request, owners);
-        return json(response, 200, { event: store.relayTradeMessage(owner, message[1], await readJson(request)) });
+        return json(response, 200, {
+          event: store.relayTradeMessage(owner, message[1], await readJson(request)),
+        });
       }
       throw new MarketError('NOT_FOUND', 404);
     } catch (error) {
       if (error instanceof MarketError) json(response, error.status, { error: error.code });
-      else if (error instanceof z.ZodError) json(response, 400, { error: 'INVALID_REQUEST', issues: error.issues.map((issue) => ({ path: issue.path, message: issue.message })) });
+      else if (error instanceof z.ZodError)
+        json(response, 400, {
+          error: 'INVALID_REQUEST',
+          issues: error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
+        });
       else json(response, 500, { error: 'INTERNAL_ERROR' });
     }
   });
@@ -93,28 +114,51 @@ export function createMarketServer(store: MarketStore, owners: Map<string, strin
   const sessions = new Map<WebSocket, string>();
   const unsubscribe = store.subscribe((event, audience) => {
     const serialized = JSON.stringify(event);
-    for (const [socket, owner] of sessions) if (socket.readyState === 1 && (audience.length === 0 || audience.includes(owner))) socket.send(serialized);
+    for (const [socket, owner] of sessions)
+      if (socket.readyState === 1 && (audience.length === 0 || audience.includes(owner)))
+        socket.send(serialized);
   });
   server.on('upgrade', (request, socket, head) => {
-    if (request.url !== '/events') { socket.destroy(); return; }
+    if (request.url !== '/events') {
+      socket.destroy();
+      return;
+    }
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws));
   });
   wss.on('connection', (socket) => {
     const timeout = setTimeout(() => socket.close(1008, 'AUTH_REQUIRED'), 10000);
     socket.on('message', (raw) => {
-      if (sessions.has(socket)) { socket.close(1008, 'READ_ONLY'); return; }
+      if (sessions.has(socket)) {
+        socket.close(1008, 'READ_ONLY');
+        return;
+      }
       try {
-        const payload = z.object({ type: z.literal('authenticate'), token: z.string().min(1).max(2048), afterSequence: z.number().int().nonnegative() }).strict().parse(JSON.parse(raw.toString()));
+        const payload = z
+          .object({
+            type: z.literal('authenticate'),
+            token: z.string().min(1).max(2048),
+            afterSequence: z.number().int().nonnegative(),
+          })
+          .strict()
+          .parse(JSON.parse(raw.toString()));
         const owner = tokenOwner(payload.token, owners);
         if (!owner) throw new Error('INVALID_AUTH');
         const snapshot = store.snapshot(owner, payload.afterSequence);
         sessions.set(socket, owner);
         clearTimeout(timeout);
         socket.send(JSON.stringify({ type: 'snapshot', ...snapshot }));
-      } catch { socket.close(1008, 'INVALID_AUTH'); }
+      } catch {
+        socket.close(1008, 'INVALID_AUTH');
+      }
     });
-    socket.on('close', () => { clearTimeout(timeout); sessions.delete(socket); });
+    socket.on('close', () => {
+      clearTimeout(timeout);
+      sessions.delete(socket);
+    });
   });
-  server.on('close', () => { unsubscribe(); wss.close(); });
+  server.on('close', () => {
+    unsubscribe();
+    wss.close();
+  });
   return server;
 }

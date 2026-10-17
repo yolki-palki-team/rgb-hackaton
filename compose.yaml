@@ -15,15 +15,15 @@ services:
     # Local wallet interfaces bind to host loopback. The market is reachable
     # only inside Docker; web proxies only its two unauthenticated GET routes.
     ports:
-      - "127.0.0.1:4101:4101"
-      - "127.0.0.1:4102:4102"
-      - "127.0.0.1:4103:4103"
+      - '127.0.0.1:4101:4101'
+      - '127.0.0.1:4102:4102'
+      - '127.0.0.1:4103:4103'
     volumes:
       - exchange-state:/app/.state
       - qvac-models:/home/node/.qvac
     healthcheck:
       # Readiness checks all APIs without downloading/loading three models.
-      test: ["CMD", "node", "--import", "tsx", "apps/local-client/scripts/docker-healthcheck.ts"]
+      test: ['CMD', 'node', '--import', 'tsx', 'apps/local-client/scripts/docker-healthcheck.ts']
       interval: 20s
       timeout: 10s
       start_period: 5m
@@ -39,9 +39,9 @@ services:
       runtime:
         condition: service_healthy
     ports:
-      - "127.0.0.1:5173:8080"
+      - '127.0.0.1:5173:8080'
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health"]
+      test: ['CMD', 'wget', '--quiet', '--spider', 'http://127.0.0.1:8080/health']
       interval: 20s
       timeout: 5s
       retries: 3
