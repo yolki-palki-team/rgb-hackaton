@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { extname, join, relative, resolve, sep } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -15,6 +15,7 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import { parseOfferLink, validateTradeId, validateWalletRequest } from './security.ts';
+import { loadDesktopConfig, type DesktopConfig } from './config.ts';
 import type { FundingStatus } from '../../local-client/src/funding-types.ts';
 
 const APP_URL = 'palka-app://local/';
@@ -30,17 +31,6 @@ const MIME: Record<string, string> = {
   '.webp': 'image/webp',
   '.woff2': 'font/woff2',
 };
-type DesktopConfig = {
-  ownerId: string;
-  marketUrl: string;
-  marketToken: string;
-  walletRpcUrl: string;
-  walletRpcToken: string;
-  walletMode: 'real' | 'mock';
-  port: number;
-  publicMarketUrl: string;
-};
-
 protocol.registerSchemesAsPrivileged([
   { scheme: 'palka-app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
@@ -59,104 +49,6 @@ let backendToken = '';
 let config: DesktopConfig;
 let startupStage = 'configuration';
 
-function asLoopbackUrl(raw: string, label: string): string {
-  const url = new URL(raw);
-  if (
-    url.protocol !== 'http:' ||
-    !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    url.pathname !== '/'
-  )
-    throw new Error(`Invalid ${label}`);
-  return url.origin;
-}
-function asMarketUrl(raw: string): string {
-  const url = new URL(raw);
-  if (
-    (url.protocol !== 'https:' &&
-      !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    url.pathname !== '/'
-  )
-    throw new Error('Invalid market URL');
-  return url.origin;
-}
-function asPublicMarketUrl(raw: string): string {
-  const url = new URL(raw);
-  if (
-    (url.protocol !== 'https:' &&
-      !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    url.pathname !== '/market'
-  )
-    throw new Error('Invalid public market URL');
-  return url.toString();
-}
-function loadConfig(): DesktopConfig {
-  const userData = app.getPath('userData');
-  mkdirSync(userData, { recursive: true, mode: 0o700 });
-  const path = join(userData, 'desktop-config.json');
-  if (!existsSync(path)) {
-    const initial = {
-      ownerId: 'A',
-      port: 4211,
-      walletMode: 'real',
-      marketUrl: 'http://127.0.0.1:4100/',
-      marketToken: randomBytes(32).toString('hex'),
-      walletRpcUrl: 'http://127.0.0.1:4201/',
-      walletRpcToken: '',
-      publicMarketUrl: 'http://127.0.0.1:5173/market',
-    };
-    try {
-      writeFileSync(path, JSON.stringify(initial, null, 2), { mode: 0o600, flag: 'wx' });
-    } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
-    }
-  }
-  if ((statSync(path).mode & 0o077) !== 0)
-    throw new Error('Desktop configuration must be readable only by the current user');
-  let saved: Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-    saved = parsed as Record<string, unknown>;
-  } catch {
-    throw new Error('Invalid private desktop configuration');
-  }
-  const value = (key: string, env: string, fallback: string) =>
-    String(process.env[env] ?? saved[key] ?? fallback);
-  const ownerId = value('ownerId', 'PALKA_OWNER_ID', 'A');
-  if (!/^[a-zA-Z0-9:._-]{1,200}$/.test(ownerId)) throw new Error('Invalid local owner ID');
-  const port = Number(value('port', 'PALKA_LOCAL_PORT', '4211'));
-  if (!Number.isInteger(port) || port < 1024 || port > 65535 || port === 5173)
-    throw new Error('Invalid local port');
-  const walletMode = value('walletMode', 'PALKA_WALLET_MODE', 'real');
-  if (walletMode !== 'real' && walletMode !== 'mock') throw new Error('Invalid wallet mode');
-  return {
-    ownerId,
-    port,
-    walletMode,
-    marketUrl: asMarketUrl(value('marketUrl', 'PALKA_MARKET_URL', 'http://127.0.0.1:4100/')),
-    marketToken: value('marketToken', 'PALKA_MARKET_TOKEN', randomBytes(32).toString('hex')),
-    walletRpcUrl: asLoopbackUrl(
-      value('walletRpcUrl', 'PALKA_WALLET_RPC_URL', 'http://127.0.0.1:4201/'),
-      'wallet RPC URL',
-    ),
-    walletRpcToken: value('walletRpcToken', 'PALKA_WALLET_RPC_TOKEN', ''),
-    publicMarketUrl: asPublicMarketUrl(
-      value('publicMarketUrl', 'PALKA_PUBLIC_MARKET_URL', 'http://127.0.0.1:5173/market'),
-    ),
-  };
-}
 function rejectSecrets(value: unknown): unknown {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) return value;
@@ -309,6 +201,7 @@ function startBackend(): void {
     LOCAL_ALLOWED_ORIGINS: `http://127.0.0.1:${config.port}`,
     MARKET_URL: config.marketUrl,
     MARKET_TOKEN: config.marketToken,
+    MARKET_AUTO_REGISTER: String(config.marketRegistration === 'automatic'),
     WALLET_MODE: config.walletMode,
     WALLET_RPC_URL: config.walletRpcUrl,
     WALLET_RPC_TOKEN: config.walletRpcToken,
@@ -402,7 +295,7 @@ else {
   app
     .whenReady()
     .then(async () => {
-      config = loadConfig();
+      config = loadDesktopConfig(app.getPath('userData'));
       startupStage = 'registering the local UI protocol';
       protocol.handle('palka-app', (request) => bundledUi(request.url));
       session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>

@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { participantId } from '@rgb-exchange/contracts/participant';
 import {
   MarketSnapshotSchema,
   EventEnvelopeSchema,
@@ -14,10 +15,14 @@ export class MarketClient {
   private timer?: ReturnType<typeof setTimeout>;
   private closed = false;
   private backoff = 250;
+  private enrolled = false;
+  private enrollment?: Promise<void>;
+  private connecting = false;
   constructor(
     readonly url: string,
     private readonly token: string,
     private readonly onEvent: (event: EventEnvelope) => void = () => {},
+    private readonly registrationOwnerId?: string,
   ) {
     const parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password)
@@ -27,8 +32,35 @@ export class MarketClient {
       !['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)
     )
       throw new Error('Remote market requires HTTPS');
+    if (registrationOwnerId && participantId(token) !== registrationOwnerId)
+      throw new Error('Registration identity does not match the saved token');
   }
   async request(path: string, method = 'GET', body?: unknown): Promise<unknown> {
+    await this.ensureEnrollment();
+    const result = await this.send(path, method, body);
+    this.connected = true;
+    return result;
+  }
+  private async ensureEnrollment(): Promise<void> {
+    if (!this.registrationOwnerId || this.enrolled) return;
+    if (!this.enrollment) {
+      this.enrollment = (async () => {
+        const result = await this.send('/participants', 'POST', {});
+        if (
+          !result ||
+          typeof result !== 'object' ||
+          !('ownerId' in result) ||
+          result.ownerId !== this.registrationOwnerId
+        )
+          throw new Error('Market returned a different participant identity');
+        this.enrolled = true;
+      })().finally(() => {
+        this.enrollment = undefined;
+      });
+    }
+    return this.enrollment;
+  }
+  private async send(path: string, method = 'GET', body?: unknown): Promise<unknown> {
     const response = await fetch(new URL(path, this.url), {
       method,
       headers: {
@@ -43,7 +75,6 @@ export class MarketClient {
       const error = (await response.json().catch(() => ({}))) as { error?: string };
       throw new Error(error.error || `Market HTTP ${response.status}`);
     }
-    this.connected = true;
     return response.json();
   }
   accept(event: EventEnvelope): boolean {
@@ -67,10 +98,31 @@ export class MarketClient {
   connect(): void {
     if (
       this.closed ||
+      this.connecting ||
       this.ws?.readyState === WebSocket.OPEN ||
       this.ws?.readyState === WebSocket.CONNECTING
     )
       return;
+    this.connecting = true;
+    void this.ensureEnrollment()
+      .then(() => {
+        if (!this.closed) this.openSocket();
+      })
+      .catch(() => {
+        this.connected = false;
+        this.scheduleReconnect();
+      })
+      .finally(() => {
+        this.connecting = false;
+      });
+  }
+  private scheduleReconnect(): void {
+    if (this.closed) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.connect(), this.backoff);
+    this.backoff = Math.min(this.backoff * 2, 10_000);
+  }
+  private openSocket(): void {
     const url = new URL('/events', this.url);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     this.ws = new WebSocket(url);
@@ -104,10 +156,7 @@ export class MarketClient {
     });
     this.ws.on('close', () => {
       this.connected = false;
-      if (!this.closed) {
-        this.timer = setTimeout(() => this.connect(), this.backoff);
-        this.backoff = Math.min(this.backoff * 2, 10_000);
-      }
+      this.scheduleReconnect();
     });
   }
   close() {

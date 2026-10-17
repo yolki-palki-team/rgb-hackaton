@@ -3,17 +3,16 @@ import { dirname, resolve } from 'node:path';
 import { MarketStore } from './store.ts';
 import { createMarketServer } from './server.ts';
 
+const selfRegistration = process.env.MARKET_SELF_REGISTRATION === 'true';
+
 function tokenMap(raw: string | undefined): Map<string, string> {
-  if (!raw)
-    throw new Error(
-      'MARKET_TOKENS_JSON is required (JSON object mapping bearer tokens to owner IDs)',
-    );
+  // Persisted participants remain usable even when new registration is disabled.
+  if (!raw) return new Map();
   const parsed: unknown = JSON.parse(raw);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
     throw new Error('MARKET_TOKENS_JSON must be a JSON object');
   const entries = Object.entries(parsed);
   if (
-    entries.length === 0 ||
     entries.some(
       ([token, owner]) =>
         !token || typeof owner !== 'string' || !/^[a-zA-Z0-9:._-]{1,200}$/.test(owner),
@@ -30,7 +29,7 @@ const port = Number(process.env.MARKET_PORT ?? '4100');
 if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('Invalid MARKET_PORT');
 mkdirSync(dirname(path), { recursive: true });
 const store = new MarketStore(path);
-const server = createMarketServer(store, owners);
+const server = createMarketServer(store, owners, { selfRegistration });
 const expiryTimer = setInterval(() => store.expireOrders(), 30000);
 server.listen(port, host, () =>
   process.stdout.write(`Market listening at http://${host}:${port}\n`),

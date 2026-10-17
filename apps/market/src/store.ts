@@ -18,6 +18,7 @@ import {
   type TradeSnapshot,
 } from '@rgb-exchange/contracts';
 import { digestValue, planDigest } from '@rgb-exchange/contracts/digest';
+import { participantId, participantTokenHash } from '@rgb-exchange/contracts/participant';
 import { findMatch } from './matcher.ts';
 
 type OrderRow = { data: string; status: PublicOrder['status']; revision: number };
@@ -43,6 +44,7 @@ export class MarketStore {
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS registered_participants (token_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, revision INTEGER NOT NULL, status TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at, id);
       CREATE INDEX IF NOT EXISTS idx_orders_owner_status ON orders(owner_id, status);
@@ -57,6 +59,38 @@ export class MarketStore {
 
   close(): void {
     this.db.close();
+  }
+  participantOwner(token: string): string | null {
+    if (!token || token.length > 2048) return null;
+    const row = this.db
+      .prepare('SELECT owner_id FROM registered_participants WHERE token_hash=?')
+      .get(participantTokenHash(token)) as { owner_id: string } | undefined;
+    return row?.owner_id ?? null;
+  }
+
+  registerParticipant(token: string, reservedOwners: Set<string>, limit = 10000): string {
+    const owner = participantId(token);
+    return this.transaction(() => {
+      const existing = this.participantOwner(token);
+      if (existing) return existing;
+      if (
+        reservedOwners.has(owner) ||
+        this.db.prepare('SELECT 1 FROM orders WHERE owner_id=? LIMIT 1').get(owner)
+      )
+        throw new MarketError('PARTICIPANT_ID_RESERVED', 409);
+      const row = this.db
+        .prepare('SELECT COUNT(*) AS count FROM registered_participants')
+        .get() as {
+        count: number;
+      };
+      if (row.count >= limit) throw new MarketError('REGISTRATION_CAPACITY_REACHED', 503);
+      this.db
+        .prepare(
+          'INSERT INTO registered_participants (token_hash, owner_id, created_at) VALUES (?, ?, ?)',
+        )
+        .run(participantTokenHash(token), owner, Date.now());
+      return owner;
+    });
   }
   subscribe(listener: (event: EventEnvelope, audience: string[]) => void): () => void {
     this.listeners.add(listener);

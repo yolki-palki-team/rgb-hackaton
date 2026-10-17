@@ -32,7 +32,6 @@ def load_tokens(path: Path) -> dict[str, str]:
         raise ValueError("Invalid credential JSON; refusing to replace it") from None
     if (
         not isinstance(tokens, dict)
-        or not tokens
         or any(
             not TOKEN.fullmatch(token) or not isinstance(owner, str) or not OWNER.fullmatch(owner)
             for token, owner in tokens.items()
@@ -59,7 +58,7 @@ def save_tokens(path: Path, tokens: dict[str, str]) -> None:
 
 
 def provision(state: Path, owners: list[str]) -> dict[str, str]:
-    if not owners or any(not OWNER.fullmatch(owner) for owner in owners):
+    if any(not OWNER.fullmatch(owner) for owner in owners):
         raise ValueError("Specify owner IDs using 1-200 letters, digits, colon, dot, _ or -")
     if state.is_symlink():
         raise ValueError("Credential directory must not be a symlink")
@@ -85,7 +84,7 @@ def provision(state: Path, owners: list[str]) -> dict[str, str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("init", "user"))
-    parser.add_argument("owners", nargs="+")
+    parser.add_argument("owners", nargs="*")
     parser.add_argument(
         "--state-dir", type=Path, default=Path(__file__).resolve().parent / ".state"
     )
@@ -94,7 +93,9 @@ def main() -> None:
     try:
         if args.action == "init":
             provision(args.state_dir, args.owners)
-            print("Participants configured; existing tokens preserved. Run server.sh start/up.")
+            print(
+                "Server configured; existing tokens preserved. Desktop self-registration is enabled by default."
+            )
         else:
             if len(args.owners) != 1:
                 raise ValueError("Specify exactly one owner ID")
