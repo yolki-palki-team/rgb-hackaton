@@ -1,0 +1,5 @@
+{
+  "bitcoind": {"version":"30.2","image":"registry.gitlab.com/hashbeam/docker/bitcoind:30.2","digest":"sha256:5473c951ca8a703f7c15d9a353f99135e0a1f0cc7ef976f29d073160950098bf","platform":"linux/amd64"},
+  "electrs": {"version":"0.11.0","image":"registry.gitlab.com/hashbeam/docker/electrs:0.11.0","digest":"sha256:560778444e7fa47a718ffaee371de9066e61aab4a674aae9ab90038899c50da6","platform":"linux/amd64"},
+  "proxy": {"version":"0.3.0","image":"ghcr.io/rgb-tools/rgb-proxy-server:0.3.0","digest":"sha256:b06fe0f234c53030d54fe1e704daf4bc6ff2879a335124353175130a5112d313","platform":"linux/amd64"}
+}
