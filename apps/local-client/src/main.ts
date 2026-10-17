@@ -9,6 +9,7 @@ import { MarketClient } from './market-client.ts';
 import { QvacInterpreter } from './qvac.ts';
 import { LocalService } from './service.ts';
 import { createLocalServer } from './server.ts';
+import { WdkFunding } from './wdk-funding.ts';
 
 const owner = IdSchema.parse(process.env.LOCAL_OWNER_ID ?? 'A');
 const mode = process.env.WALLET_MODE ?? 'real';
@@ -47,7 +48,16 @@ const host = process.env.LOCAL_HOST ?? '127.0.0.1';
 if (!['127.0.0.1', '0.0.0.0'].includes(host))
   throw new Error('LOCAL_HOST must be 127.0.0.1 or 0.0.0.0');
 const uiDirectory = fileURLToPath(new URL('../ui/dist/', import.meta.url));
-const server = createLocalServer(service, { token, allowedOrigins: origins, uiDirectory });
+const funding =
+  mode === 'real'
+    ? new WdkFunding({
+        directory: resolve(stateDir, 'funding'),
+        ownerId: owner,
+        wallet,
+        electrumPort: Number(process.env.WDK_ELECTRUM_PORT ?? 50001),
+      })
+    : undefined;
+const server = createLocalServer(service, { token, allowedOrigins: origins, uiDirectory, funding });
 server.listen(port, host, () => {
   market.connect();
   console.log(
@@ -73,6 +83,7 @@ const close = () => {
   market.close();
   server.close(() => {
     void qvac.dispose().finally(() => {
+      funding?.close();
       store.close();
       process.exit(0);
     });

@@ -227,11 +227,22 @@ class Backend:
                 db.close()
             if active:
                 raise ValueError("finish or reconcile the active trade before funding")
-        address = self.call_native("addresses")["btcAddress"]
+        # get_address derives a NEW address. Persist one target so preview and
+        # approval bind to the same destination, including after restart.
+        target_path = self.root / "funding-target.json"
+        if target_path.exists():
+            target = read(target_path)
+            if target.get("walletId") != self.wallet_id:
+                raise ValueError("funding target wallet identity changed")
+            address = target["address"]
+        else:
+            address = self.call_native("addresses")["btcAddress"]
         if not isinstance(address, str) or not re.fullmatch(
             r"bcrt1[ac-hj-np-z02-9]{8,87}", address
         ):
             raise ValueError("native wallet did not return a regtest BTC address")
+        if not target_path.exists():
+            save(target_path, {"walletId": self.wallet_id, "address": address})
         return {
             "walletId": self.wallet_id,
             "ownerId": self.owner,

@@ -3,8 +3,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { z } from 'zod';
 import { LocalError, LocalService } from './service.ts';
 import { serveLocalUi } from './ui.ts';
+import { FundingError, type WdkFunding } from './wdk-funding.ts';
 
-type ServerOptions = { token: string; allowedOrigins?: string[]; uiDirectory?: string };
+type ServerOptions = {
+  token: string;
+  allowedOrigins?: string[];
+  uiDirectory?: string;
+  funding?: WdkFunding;
+};
 const BODY_LIMIT = 128 * 1024;
 const LOCAL_CSP =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -85,6 +91,20 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
         throw new LocalError('Local pairing required', 401);
       const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
       if (request.method === 'GET') {
+        if (path === '/api/funding') {
+          if (!options.funding)
+            return json(response, 200, {
+              available: false,
+              network: 'regtest',
+              operation: null,
+              reason: 'WDK funding requires a real local wallet.',
+            });
+          return json(
+            response,
+            200,
+            await options.funding.exclusive(() => options.funding!.status()),
+          );
+        }
         if (path === '/api/health') return json(response, 200, await service.health());
         if (path === '/api/state') return json(response, 200, await service.state());
         if (path === '/api/policy') return json(response, 200, await service.policy());
@@ -96,6 +116,31 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
       if (request.method === 'POST') {
         const input = await body(request);
         const result = await service.exclusive(async () => {
+          if (path.startsWith('/api/funding/')) {
+            const funding = options.funding;
+            if (!funding) throw new LocalError('WDK funding requires a real local wallet.', 409);
+            return funding
+              .exclusive(async () => {
+                if (path === '/api/funding/create') return funding.create(input);
+                if (path === '/api/funding/preview') return funding.preview(input);
+                if (path === '/api/funding/approve') return funding.approve(input);
+                if (path === '/api/funding/sync') {
+                  z.object({}).strict().parse(input);
+                  return funding.sync();
+                }
+                throw new LocalError('Not found', 404);
+              })
+              .catch((error: unknown) => {
+                if (error instanceof z.ZodError || error instanceof LocalError) throw error;
+                if (error instanceof FundingError)
+                  throw new LocalError(error.message, 409, 'FUNDING_VALIDATION');
+                throw new LocalError(
+                  'WDK could not complete this operation. Check local regtest connectivity and refresh before retrying.',
+                  503,
+                  'FUNDING_UNAVAILABLE',
+                );
+              });
+          }
           if (path === '/api/interpret') return service.interpret(input);
           if (path === '/api/draft/validate') return service.validateDraft(input);
           if (path === '/api/orders') return service.publish(input);

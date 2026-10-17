@@ -36,6 +36,15 @@ class ProtocolTests(unittest.TestCase):
                     },
                 )
                 native_call.assert_called_once_with("addresses")
+                self.assertEqual(backend.fundingTarget()["address"], address)
+                native_call.assert_called_once_with("addresses")
+            with patch.object(backend, "call_native") as native_call:
+                self.assertEqual(backend.fundingTarget()["address"], address)
+                native_call.assert_not_called()
+            backend.wallet_id = "rgb-different-wallet"
+            with self.assertRaisesRegex(ValueError, "identity changed"):
+                backend.fundingTarget()
+            backend.wallet_id = "rgb-test-wallet"
             with self.assertRaises(TypeError):
                 backend.handle("fundingTarget", {"tradeId": "unexpected"})
 

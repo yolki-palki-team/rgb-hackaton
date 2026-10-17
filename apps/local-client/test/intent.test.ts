@@ -1,11 +1,50 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assetKey, AssetRefSchema, type AiIntent } from '@rgb-exchange/contracts';
+import { assetKey, AssetRefSchema, assertPolicy, type AiIntent } from '@rgb-exchange/contracts';
 import { defaultPolicy, draftFromIntent } from '../src/intent.ts';
 import { MockWalletAdapter } from '../src/wallet.ts';
 import { LocalService } from '../src/service.ts';
 import { LocalStore } from '../src/store.ts';
 import { MarketClient } from '../src/market-client.ts';
+
+test('a newly funded BTC-only wallet loads its policy without allowing unverified swap assets', async () => {
+  const wallet = new MockWalletAdapter('A');
+  const catalog = await wallet.state();
+  const state = { ...catalog, balances: [catalog.balances[0]] };
+  wallet.state = async () => state;
+  const store = new LocalStore(':memory:');
+  const market = new MarketClient('http://127.0.0.1:4100', 'test-token');
+  const service = new LocalService('A', wallet, market, store, {
+    health: async () => ({ available: false, model: 'not used' }),
+    interpret: async () => {
+      throw new Error('not used');
+    },
+  });
+  try {
+    const policy = await service.policy();
+    assert.deepEqual(policy.allowedAssetKeys, [assetKey(state.balances[0].asset)]);
+    assert.equal(policy.allowBtcSale, false);
+    assert.throws(
+      () =>
+        assertPolicy(
+          {
+            giveAsset: state.balances[0].asset,
+            giveAmount: '1000',
+            receiveAsset: catalog.balances[1].asset,
+            minReceiveAmount: '1',
+            maxFeeSats: '1000',
+            expiresAt: Date.now() + 60_000,
+          },
+          policy,
+          state,
+        ),
+      /Unverified asset/,
+    );
+  } finally {
+    store.close();
+    market.close();
+  }
+});
 
 test('intent conversion computes percentage reserves with exact BigInt rounding', async () => {
   const state = await new MockWalletAdapter('A').state();

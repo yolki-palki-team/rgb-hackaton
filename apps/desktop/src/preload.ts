@@ -9,6 +9,8 @@ const palkaWallet = {
     ipcRenderer.invoke('wallet:request', method, path, body),
   approveTrade: (tradeId: string, approvalToken: string): Promise<unknown> =>
     ipcRenderer.invoke('wallet:approve', tradeId, approvalToken),
+  approveFunding: (operationId: string): Promise<unknown> =>
+    ipcRenderer.invoke('funding:approve', operationId),
   getPendingOffer: (): Promise<string | null> => ipcRenderer.invoke('offer:pending'),
   onOfferSelected: (callback: OfferCallback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, orderId: unknown) => {

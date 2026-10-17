@@ -78,7 +78,8 @@ export const PublicOrderSchema = z
 export type PublicOrder = z.infer<typeof PublicOrderSchema>;
 export const PrivatePolicySchema = z
   .object({
-    allowedAssetKeys: z.array(z.string().min(1).max(250)).min(2).max(100),
+    // A newly funded wallet may only know BTC; assertPolicy still checks both swap assets.
+    allowedAssetKeys: z.array(z.string().min(1).max(250)).min(1).max(100),
     protectedBalances: z.record(AtomicAmountSchema),
     maxFeeSats: AtomicAmountSchema,
     allowBtcSale: z.boolean(),

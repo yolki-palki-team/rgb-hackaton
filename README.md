@@ -11,7 +11,7 @@ Users describe their goals in plain language. An on-device QVAC assistant turns 
 - Fixed order amounts, full execution and explicit approval before signing.
 - Public web interface, matching server, local wallet client and packaged macOS shell.
 
-**Status:** Developer A's local QVAC, order review, deterministic matching, SQLite market, authenticated event stream, public marketplace and separate local wallet UI are implemented. Direct and three-party **matching** are tested. Real atomic Bitcoin/RGB settlement still requires developer B's adapter; mock mode cannot sign, broadcast or report blockchain success.
+**Status:** Local QVAC, order review, deterministic matching, SQLite market, authenticated events, the public marketplace and the separate wallet UI are implemented. The native wallet sidecar is in `packages/wallet`; its direct/ring settlement evidence and setup are documented in [B's handoff](docs/handoffs/b.md) and [settlement.md](docs/settlement.md). Separate WDK Bitcoin funding has passed a real regtest transfer and restart check; see [WDK funding](docs/handoffs/wdk-funding.md). These checks do not establish the complete desktop QVAC-to-RGB-swap flow. Mock mode cannot sign, broadcast or report blockchain success.
 
 Hackathon resources and stack guidance are in [materials.md](materials.md).
 
@@ -79,11 +79,13 @@ npm ci
 npm run dev:desktop
 # Or build a distributable macOS app:
 npm run package:desktop
+# Open the built Apple Silicon app:
+open .dist/desktop/palka-darwin-arm64/palka.app
 ```
 
-The macOS package is written to `.dist/desktop/palka-darwin-arm64/palka.app`. A packaged launch loaded the local UI and the six-method `window.palkaWallet` bridge; real mode without B's RPC showed an unavailable wallet. The app keeps the market token, wallet RPC token and local API bearer in Electron's main process. Signing requires a fresh wallet preview and a native approval dialog showing amounts and fee. A `palka://offer/order-<UUID>` argument delivered to an already running second instance selected the offer for review and did not act on the trade. The macOS scheme is declared in the app bundle; delivery through LaunchServices `open` remains unverified. The public marketplace has no access to this bridge.
+The macOS package is written to `.dist/desktop/palka-darwin-arm64/palka.app`. The `dev:desktop` command rebuilds the UI and desktop shell before opening them; rebuild the package after source changes to update the Finder app. The app keeps the market token, wallet RPC token and local API bearer in Electron's main process. Signing requires a fresh wallet preview and a native approval dialog showing amounts and fee. WDK funding uses its own native approval dialog. A `palka://offer/order-<UUID>` argument delivered to an already running second instance selected the offer for review and did not act on the trade. The macOS scheme is declared in the app bundle; delivery through LaunchServices `open` remains unverified. The public marketplace has no access to this bridge.
 
-The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. Configure a market token that the market recognizes and B's loopback wallet RPC URL/token there; the file is reused across restarts. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, and `PALKA_PUBLIC_MARKET_URL` can override those values for a run. The current repository does not provide B's sidecar. Until it exists and reports the required capabilities, the client shows an unavailable wallet and cannot trade. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
+The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. Configure a market token that the market recognizes and the native sidecar's loopback wallet RPC URL/token there; the file is reused across restarts. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, and `PALKA_PUBLIC_MARKET_URL` can override those values for a run. Start `packages/wallet/server.py` separately using [B's instructions](docs/handoffs/b.md). Until it is reachable and reports the required capabilities, the client shows an unavailable wallet and cannot trade. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
 
 ## Layout and integration
 
@@ -98,7 +100,7 @@ The old Expo `front/` directory was removed at the user's request. Root `node_mo
 
 See [A handoff](docs/handoffs/a.md) for the complete adapter boundary and ports, [QVAC evidence](docs/handoffs/qvac-evidence.md) for actual inference checks, and [.env.example](.env.example) for local configuration names. The application does not automatically load the existing root `.env`. Never put private wallet state or pairing tokens in Git.
 
-To connect B, start its loopback sidecar and configure a local profile with `WALLET_RPC_URL` and `WALLET_RPC_TOKEN`; real mode is already the default. Its declared capabilities must support the requested direct/ring swap. A's HTTP bridge is implemented and protocol-tested against a test double; a real B sidecar, its RGB codec and actual on-chain receipts are still missing. Unsupported rings are never replaced with sequential transfers.
+To connect the native wallet, start its loopback sidecar and configure a local profile with `WALLET_RPC_URL` and `WALLET_RPC_TOKEN`; real mode is already the default. Match `LOCAL_OWNER_ID` to the sidecar owner. Its declared capabilities must support the requested direct/ring swap. Unsupported rings are never replaced with sequential transfers.
 
 ## Checks
 

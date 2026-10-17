@@ -19,11 +19,16 @@ export function validateWalletRequest(method: unknown, path: unknown): boolean {
   )
     return false;
   if (method === 'GET') {
-    if (['/api/health', '/api/state', '/api/policy', '/api/snapshot'].includes(path)) return true;
+    if (
+      ['/api/health', '/api/state', '/api/policy', '/api/snapshot', '/api/funding'].includes(path)
+    )
+      return true;
     const trade = /^\/api\/trades\/([^/]+)$/.exec(path);
     return Boolean(trade && tradeId.test(trade[1]));
   }
   if (['/api/interpret', '/api/draft/validate', '/api/orders'].includes(path)) return true;
+  if (['/api/funding/create', '/api/funding/preview', '/api/funding/sync'].includes(path))
+    return true;
   const cancel = /^\/api\/orders\/([^/]+)\/cancel$/.exec(path);
   if (cancel) return orderId.test(cancel[1]);
   const trade = /^\/api\/trades\/([^/]+)\/(prepare|preview|sync|reject)$/.exec(path);

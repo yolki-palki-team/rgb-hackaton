@@ -15,6 +15,7 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import { parseOfferLink, validateTradeId, validateWalletRequest } from './security.ts';
+import type { FundingStatus } from '../../local-client/src/funding-types.ts';
 
 const APP_URL = 'palka-app://local/';
 const CSP =
@@ -241,7 +242,9 @@ async function requestLocal(
     },
     body: payload,
     redirect: 'error',
-    signal: AbortSignal.timeout(path === '/api/interpret' ? 60_000 : 15_000),
+    signal: AbortSignal.timeout(
+      path === '/api/interpret' || path.startsWith('/api/funding') ? 60_000 : 15_000,
+    ),
   }).catch(() => {
     throw new Error('Local wallet service is unavailable');
   });
@@ -480,6 +483,32 @@ else {
     const id = pendingOffer;
     pendingOffer = null;
     return id;
+  });
+  ipcMain.handle('funding:approve', async (event, operationId: unknown) => {
+    validatedSender(event);
+    if (!validateTradeId(operationId)) throw new Error('Invalid funding operation.');
+    const status = (await requestLocal('GET', '/api/funding')) as FundingStatus;
+    const operation = status.operation;
+    if (
+      !status.available ||
+      !operation ||
+      operation.id !== operationId ||
+      operation.status !== 'PREVIEW' ||
+      operation.expiresAt <= Date.now()
+    )
+      throw new Error('Funding preview changed or expired. Review it again.');
+    const decision = await dialog.showMessageBox(window!, {
+      type: 'warning',
+      buttons: ['Cancel', 'Approve funding'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      title: 'Approve WDK funding',
+      message: 'Send BTC to your exchange wallet?',
+      detail: `Network: regtest\nDestination: ${operation.address}\nAmount: ${operation.amountSats} sats\nEstimated fee: ${operation.feeSats} sats\nMaximum fee: ${operation.maxFeeSats} sats\nThis is a separate funding transaction, not an RGB exchange.`,
+    });
+    if (decision.response !== 1) throw new Error('Funding was not approved.');
+    return requestLocal('POST', '/api/funding/approve', { operationId, confirmed: true });
   });
   ipcMain.handle('market:open', async (event) => {
     validatedSender(event);

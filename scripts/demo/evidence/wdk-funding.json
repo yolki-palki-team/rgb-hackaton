@@ -1,0 +1,21 @@
+{
+  "checkedAt": "2026-10-17T12:58:39.994Z",
+  "network": "regtest",
+  "provider": "@tetherto/wdk-wallet-btc@1.0.0-beta.17",
+  "path": "authenticated local HTTP API -> WDK sign/send -> native RGB wallet state",
+  "initialFundingTxid": "712ea61be7386d8f370aac4eb484f18734a82bb23e640283e40bf2e53401f0ce",
+  "txid": "a8b15b0bf2593a64a15977cff2a12d63ee25e0e3984153aed9ceaf993cef4b2f",
+  "operationId": "963ca41e-820b-4258-90cd-12eba048088e",
+  "amountSats": "50000",
+  "feeSats": "141",
+  "maxFeeSats": "241",
+  "status": "CONFIRMED",
+  "recipientBtcDeltaSats": "50000",
+  "accountAndTransactionPersistedAcrossRestart": true,
+  "confirmations": 1,
+  "limits": [
+    "Funding only; no RGB asset transfer or atomic swap in this check.",
+    "Unit tests cover lost broadcast responses; this live check covers restart before confirmation.",
+    "Regtest private state is unencrypted, local and ignored by Git."
+  ]
+}

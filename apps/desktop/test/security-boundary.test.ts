@@ -29,6 +29,7 @@ test('generic renderer bridge allows only named local operations, with signing i
     '/api/state',
     '/api/policy',
     '/api/snapshot',
+    '/api/funding',
     `/api/trades/${tradeId}`,
   ]) {
     assert.equal(validateWalletRequest('GET', path), true, path);
@@ -37,6 +38,9 @@ test('generic renderer bridge allows only named local operations, with signing i
     '/api/interpret',
     '/api/draft/validate',
     '/api/orders',
+    '/api/funding/create',
+    '/api/funding/preview',
+    '/api/funding/sync',
     `/api/orders/${orderId}/cancel`,
     `/api/trades/${tradeId}/prepare`,
     `/api/trades/${tradeId}/preview`,
@@ -47,6 +51,9 @@ test('generic renderer bridge allows only named local operations, with signing i
   }
   for (const [method, path] of [
     ['POST', `/api/trades/${tradeId}/approve`],
+    ['POST', '/api/funding/approve'],
+    ['POST', '/api/funding/preview?address=attacker'],
+    ['GET', '/api/funding/seed'],
     ['GET', '/api/orders'],
     ['POST', '/api/state'],
     ['POST', `/api/trades/${tradeId}/approve?approvalToken=secret`],
