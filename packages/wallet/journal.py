@@ -173,8 +173,17 @@ class Journal:
 
     def release(self, trade_id):
         def op():
-            row = self.db.execute("SELECT state FROM trades WHERE id=?", (trade_id,)).fetchone()
-            if not row or row[0] not in ("PREPARING", "AWAITING_APPROVAL"):
+            row = self.db.execute(
+                "SELECT state,signature FROM trades WHERE id=?", (trade_id,)
+            ).fetchone()
+            # An HTTP response can be lost after the cancellation committed.
+            if row and row[0] == "CANCELLED" and row[1] is None:
+                if self.db.execute(
+                    "SELECT 1 FROM reservations WHERE trade_id=?", (trade_id,)
+                ).fetchone():
+                    raise ValueError("cancelled trade still has reservations")
+                return
+            if not row or row[0] not in ("PREPARING", "AWAITING_APPROVAL") or row[1] is not None:
                 raise ValueError("signature may exist: TTL cannot release these inputs")
             self.db.execute("DELETE FROM reservations WHERE trade_id=?", (trade_id,))
             self.db.execute("UPDATE trades SET state='CANCELLED' WHERE id=?", (trade_id,))

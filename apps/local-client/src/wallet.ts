@@ -100,6 +100,9 @@ export class HttpWalletAdapter implements WalletAdapter {
   async sign(pkg: SettlementPackage, approval: Approval) {
     return SignatureResultSchema.parse(await this.call('sign', { package: pkg, approval }));
   }
+  async recoverSignature(pkg: SettlementPackage) {
+    return SignatureResultSchema.parse(await this.call('recoverSignature', { package: pkg }));
+  }
   async finalize(
     pkg: SettlementPackage,
     signatures: Array<{ ownerId: string; signature: unknown }>,

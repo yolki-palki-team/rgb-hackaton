@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { planDigest } from '@rgb-exchange/contracts/digest';
 import type {
+  CoordinationMessage,
   AssetRef,
   Approval,
   PrivatePolicy,
@@ -176,7 +177,13 @@ class FakeMarket {
   messages: unknown[] = [];
   failSignatureRelay = false;
   async snapshot() {
-    return { sequence: 0, orders: [], myOrders: [], trades: [], events: [] };
+    return {
+      sequence: 0,
+      orders: [],
+      myOrders: [],
+      trades: this.trade ? [this.trade] : [],
+      events: [],
+    };
   }
   async request(path: string, method = 'GET', body?: unknown): Promise<unknown> {
     if (path === '/orders' && method === 'POST') return { order: body };
@@ -191,6 +198,18 @@ class FakeMarket {
       const message = body as { type?: string; payload?: { signatureMayExist?: boolean } };
       if (this.trade && message.type === 'signature' && message.payload?.signatureMayExist)
         this.trade = { ...this.trade, status: 'SIGNING' };
+      if (this.trade) {
+        if (message.type === 'reject')
+          this.trade.status = ['SIGNING', 'RECONCILING'].includes(this.trade.status)
+            ? 'RECONCILING'
+            : 'REJECTED';
+        if (
+          !this.trade.messages.some(
+            (item) => item.message.messageId === (body as CoordinationMessage).messageId,
+          )
+        )
+          this.trade.messages.push({ ownerId: 'a', message: body as CoordinationMessage });
+      }
       return { event: { sequence: this.messages.length } };
     }
     if (path.startsWith('/trades/') && this.trade) return { trade: this.trade };
@@ -640,5 +659,223 @@ test('three local mock clients form one ring on the real market server without s
     await new Promise<void>((resolve) => server.close(() => resolve()));
     for (const store of stores) store.close();
     marketStore.close();
+  }
+});
+
+test('lost sign response recovers original durable authorization after restart', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rgb-sign-recovery-'));
+  const path = join(dir, 'local.sqlite');
+  let store = new LocalStore(path);
+  try {
+    const { service, wallet, market } = await fixture(store);
+    const { approvalToken } = await service.preview('trade-1');
+    const original = store.get<{ approval: Approval }>('approval:trade-1')!.approval;
+    let calls = 0;
+    wallet.sign = async (_pkg, approval) => {
+      assert.deepEqual(approval, original);
+      calls++;
+      if (calls === 1) throw new Error('HTTP response lost after signing');
+      return { status: 'signed', signature: { testOnly: true } };
+    };
+    await assert.rejects(
+      service.approve('trade-1', { approvalToken, confirmed: true }),
+      /response lost/,
+    );
+    store.close();
+    store = new LocalStore(path);
+    const restarted = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
+    market.trade!.status = 'RECONCILING';
+    await restarted.sync('trade-1');
+    await restarted.sync('trade-1');
+    assert.equal(calls, 2); // Wallet replay once, then local cached signature only.
+    assert.equal(
+      market.trade!.messages.filter(
+        (m) => (m.message.payload as { signature?: unknown })?.signature !== undefined,
+      ).length,
+      1,
+    );
+    assert.deepEqual(store.get('signature:trade-1'), { testOnly: true });
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('lost signature relay uses saved signature without invoking sign again', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    const { approvalToken } = await service.preview('trade-1');
+    market.failSignatureRelay = true;
+    await assert.rejects(
+      service.approve('trade-1', { approvalToken, confirmed: true }),
+      /relay unavailable/,
+    );
+    market.failSignatureRelay = false;
+    await service.sync('trade-1');
+    assert.equal(wallet.signCount, 1);
+    assert.equal(
+      market.trade!.messages.filter(
+        (m) => (m.message.payload as { signature?: unknown })?.signature !== undefined,
+      ).length,
+      1,
+    );
+  } finally {
+    store.close();
+  }
+});
+
+test('sync retries unchanged finalization after broadcast failure but not while transaction is pending', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    const { approvalToken } = await service.preview('trade-1');
+    const packageValue = market.trade!.settlementPackage!;
+    market.trade!.messages.push({
+      ownerId: 'b',
+      message: {
+        messageId: 'other-signature',
+        revision: 0,
+        type: 'signature',
+        payload: {
+          packageId: packageValue.packageId,
+          unsignedTxDigest: digest0,
+          commitmentDigest: digest1,
+          signature: 'test-b',
+        },
+      },
+    });
+    let calls = 0;
+    wallet.finalize = async (packageInput, signatures) => {
+      assert.deepEqual(packageInput, packageValue);
+      assert.equal(signatures.length, 2);
+      calls++;
+      if (calls === 1) throw new Error('broadcast unavailable');
+      return {
+        mode: 'real',
+        tradeId: 'trade-1',
+        network: 'regtest',
+        txid: 'a'.repeat(64),
+        chainConfirmed: false,
+        rgbAccepted: false,
+        state: 'pending',
+      };
+    };
+    await assert.rejects(
+      service.approve('trade-1', { approvalToken, confirmed: true }),
+      /broadcast unavailable/,
+    );
+    const receipt = await service.sync('trade-1');
+    assert.equal(calls, 2);
+    assert.equal(wallet.signCount, 1);
+    wallet.sync = async () => receipt;
+    await service.sync('trade-1');
+    assert.equal(calls, 2);
+    market.trade!.settlementPackage = { ...packageValue, payload: { tampered: true } };
+    wallet.sync = async () => ({ ...receipt, state: 'reconciling' });
+    await assert.rejects(service.sync('trade-1'), /Recovery package/);
+    assert.equal(calls, 2);
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('peer pre-sign cancellation cleans reservations on snapshot/restart and repeated reject is idempotent', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { wallet, market } = await fixture(store);
+    store.set('operation:trade-1', { state: 'PREPARING' });
+    market.trade!.status = 'REJECTED';
+    const restarted = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
+    await restarted.snapshot();
+    assert.equal(wallet.releaseCount, 1);
+    assert.equal((await restarted.reject('trade-1', 'already rejected')).status, 'cancelled');
+    await restarted.sync('trade-1');
+    assert.equal(wallet.releaseCount, 1);
+    assert.equal(market.messages.length, 0);
+    assert.deepEqual(store.get('operation:trade-1'), { state: 'CANCELLED' });
+  } finally {
+    store.close();
+  }
+});
+
+test('terminal market state never releases a possibly signed local operation', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    store.set('operation:trade-1', { state: 'SIGNING' });
+    market.trade!.status = 'REJECTED';
+    await assert.rejects(service.reject('trade-1', 'unsafe'), /automatic release is prohibited/);
+    await assert.rejects(service.sync('trade-1'), /automatic release is prohibited/);
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('sync resumes a committed authorization if process stopped before the wallet RPC', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    await service.preview('trade-1');
+    const saved = store.get<{ package: SettlementPackage; approval: Approval }>(
+      'approval:trade-1',
+    )!;
+    store.set('signing:trade-1', { package: saved.package, approval: saved.approval });
+    wallet.sync = async () => ({
+      mode: 'real',
+      tradeId: 'trade-1',
+      network: 'regtest',
+      state: 'pending',
+      chainConfirmed: false,
+      rgbAccepted: false,
+    });
+    await service.sync('trade-1');
+    assert.equal(wallet.signCount, 1);
+    assert.equal(market.trade!.status, 'SIGNING');
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('legacy lost approval recovers an existing signature without calling sign', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    store.set('operation:trade-1', { state: 'RECONCILING' });
+    market.trade!.status = 'RECONCILING';
+    let reads = 0;
+    Object.assign(wallet, {
+      recoverSignature: async (value: SettlementPackage) => {
+        assert.deepEqual(value, market.trade!.settlementPackage);
+        reads++;
+        return { status: 'signed', signature: { testOnly: true } };
+      },
+    });
+    await service.sync('trade-1');
+    await service.sync('trade-1');
+    assert.equal(wallet.signCount, 0);
+    assert.equal(reads, 1);
+    assert.equal(store.get('signing:trade-1'), null);
+    assert.deepEqual(store.get('signature:trade-1'), { testOnly: true });
+  } finally {
+    store.close();
+  }
+});
+
+test('an unsigned participant can approve the unchanged package while a peer is reconciling', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    const { approvalToken } = await service.preview('trade-1');
+    market.trade!.status = 'RECONCILING';
+    await service.approve('trade-1', { approvalToken, confirmed: true });
+    assert.equal(wallet.signCount, 1);
+    await assert.rejects(service.preview('trade-1'), /has sent or may have sent/);
+  } finally {
+    store.close();
   }
 });

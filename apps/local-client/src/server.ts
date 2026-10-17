@@ -88,7 +88,8 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
         if (path === '/api/health') return json(response, 200, await service.health());
         if (path === '/api/state') return json(response, 200, await service.state());
         if (path === '/api/policy') return json(response, 200, await service.policy());
-        if (path === '/api/snapshot') return json(response, 200, await service.market.snapshot());
+        if (path === '/api/snapshot')
+          return json(response, 200, await service.exclusive(() => service.snapshot()));
         const trade = /^\/api\/trades\/([a-zA-Z0-9:._-]+)$/.exec(path);
         if (trade) return json(response, 200, await service.trade(trade[1]));
       }

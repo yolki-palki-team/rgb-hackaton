@@ -8,8 +8,10 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest.mock import patch
 
-from protocol import BTC, digest, plan_check, units
+from journal import Journal
+from protocol import BTC, Backend, digest, plan_check, read, save, units
 from server import create_server
 
 
@@ -112,6 +114,101 @@ class HttpTests(unittest.TestCase):
             finally:
                 server.shutdown()
                 server.server_close()
+
+
+class RecoveryTests(unittest.TestCase):
+    """Synthetic crash-boundary regressions, not RGB settlement evidence."""
+
+    def backend(self, tmp):
+        backend = Backend.__new__(Backend)
+        backend.root = Path(tmp)
+        backend.owner = "alice"
+        backend.wallet_id = "unit-wallet"
+        folder = backend.folder("unit")
+        package = {
+            "protocolVersion": 1,
+            "tradeId": "unit",
+            "planRevision": 0,
+            "packageId": "unit-tx",
+            "planDigest": "plan",
+            "unsignedTxDigest": "tx",
+            "commitmentDigest": "rgb",
+        }
+        approval = {
+            "protocolVersion": 1,
+            "walletId": "unit-wallet",
+            "ownerId": "alice",
+            "network": "regtest",
+            "tradeId": "unit",
+            "planRevision": 0,
+            **{
+                k: package[k]
+                for k in ("packageId", "planDigest", "unsignedTxDigest", "commitmentDigest")
+            },
+            "approvalId": "original",
+            "approvedAt": 1,
+        }
+        intent = {"network": "regtest", "fixture": "synthetic"}
+        save(folder / "package.json", package)
+        save(folder / "approval-intent.json", intent)
+        journal = Journal(backend.root / "journal.sqlite")
+        journal.reserve("unit", intent, ["synthetic:0"])
+        journal.db.close()
+        return backend, folder, package, approval
+
+    def test_original_approval_and_signature_survive_replay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend, folder, package, approval = self.backend(tmp)
+            with patch.object(
+                backend, "call_native", return_value={"signedPsbt": "synthetic-signature"}
+            ) as signer:
+                original = backend.sign(package, approval)
+                self.assertEqual(backend.sign(package, approval), original)
+                signer.assert_called_once()
+                with self.assertRaisesRegex(ValueError, "immutable"):
+                    backend.sign(package, {**approval, "approvedAt": 2})
+                self.assertEqual(read(folder / "user-approval.json"), approval)
+
+    def test_read_only_recovery_never_signs_and_requires_original_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend, folder, package, approval = self.backend(tmp)
+            save(folder / "user-approval.json", approval)
+            with patch.object(
+                backend, "call_native", return_value={"signedPsbt": "synthetic-signature"}
+            ) as signer:
+                with self.assertRaisesRegex(ValueError, "no durable signature"):
+                    backend.recoverSignature(package)
+                signer.assert_not_called()
+                original = backend.sign(package, approval)
+                self.assertEqual(backend.recoverSignature(package), original)
+                signer.assert_called_once()
+                with self.assertRaisesRegex(ValueError, "changed recovery package"):
+                    backend.recoverSignature({**package, "payload": "changed"})
+                self.assertEqual(read(folder / "user-approval.json"), approval)
+
+    def test_independent_btc_credit_is_not_rgb_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend, folder, package, approval = self.backend(tmp)
+            with patch.object(
+                backend, "call_native", return_value={"signedPsbt": "synthetic-signature"}
+            ):
+                backend.sign(package, approval)
+            save(folder / "preview.json", {"balancesAfter": [{"asset": BTC, "amount": "1000"}]})
+            with (
+                patch("protocol.rpc", return_value={"confirmations": 1, "hex": "synthetic"}),
+                patch.object(
+                    backend,
+                    "call_native",
+                    return_value={"txid": "unit-tx", "rgbAccepted": True, "chainConfirmed": True},
+                ),
+                patch.object(
+                    backend, "state", return_value={"balances": [{"asset": BTC, "amount": "1200"}]}
+                ),
+            ):
+                self.assertEqual(backend.sync("unit")["state"], "confirmed")
+            self.assertEqual(
+                read(folder / "receipt.json")["btcBalanceDifferenceFromPreviewSats"], "200"
+            )
 
 
 if __name__ == "__main__":
