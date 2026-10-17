@@ -1,0 +1,54 @@
+{
+  "network": "regtest",
+  "published": false,
+  "signed": false,
+  "beforeFix": {
+    "requests": "Bob DUSD -> BTC, Bob DUSD -> X, Alice Russian X -> DUSD",
+    "result": "Rejected by deterministic balance/policy validation",
+    "diagnostic": "Standalone Bob DUSD -> X inference inverted the asset direction."
+  },
+  "intermediatePromptVariant": {
+    "result": "Rejected protected balance with both amount and percentage; another run returned no matching draft",
+    "note": "Generic prompt example was discarded; the original explicit no-reserve example is retained."
+  },
+  "final": {
+    "goal": "Sell 10 X for at least 10 DUSD. Maximum fee 1000 sats. Do not sell BTC. No protected balances or reserves.",
+    "ownerId": "alice",
+    "catalog": "real verified wallet assets",
+    "draft": {
+      "expiresAt": 1792242812803,
+      "giveAmount": "10",
+      "giveAsset": {
+        "contractId": "rgb:kMCj25pU-eHDDxAT-R6b4UZU-dLN8Vt4-Gr5uHKt-lrWEFWU",
+        "kind": "rgb",
+        "network": "regtest",
+        "precision": 0,
+        "symbol": "X"
+      },
+      "maxFeeSats": "1000",
+      "minReceiveAmount": "10",
+      "receiveAsset": {
+        "contractId": "rgb:5zh2Lqv2-116emRH-JZpmFKY-rycu~1S-cG9B_42-RG_M088",
+        "kind": "rgb",
+        "network": "regtest",
+        "precision": 0,
+        "symbol": "DUSD"
+      }
+    },
+    "diagnostics": {
+      "durationMs": 3126,
+      "model": "QWEN3_1_7B_INST_Q4",
+      "provider": "qvac"
+    },
+    "clarification": null,
+    "deterministicValidation": true
+  },
+  "syntheticSmoke": {
+    "command": "npm run smoke:qvac",
+    "passed": true,
+    "actualInference": true,
+    "catalog": "synthetic mock wallet",
+    "durationMs": 879
+  },
+  "limitations": "A reviewed draft is required; the model remains fallible. No AI draft was published in this check."
+}

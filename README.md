@@ -11,7 +11,23 @@ Users describe their goals in plain language. An on-device QVAC assistant turns 
 - Fixed order amounts, full execution and explicit approval before signing.
 - Public web interface, matching server, local wallet client and packaged macOS shell.
 
-**Status:** The current tree includes local QVAC, deterministic direct/ring matching, the public marketplace, private local wallet UI, Electron shell and a real authenticated RGB wallet sidecar. Recorded service integration checks completed direct and three-party atomic regtest swaps through the market/local-client APIs, including received-asset re-spending and signature/broadcast recovery. These are historical service-level results, not a fresh check of this checkout or proof of a complete desktop/UI trading journey. Integration verification and a unified usage guide are the next stage. Mock mode cannot sign, broadcast or report blockchain success. See [settlement evidence and limits](docs/settlement.md) and [B handoff](docs/handoffs/b.md); their older sections describe superseded milestones.
+**Status:** Public web, deterministic direct/ring matching, local QVAC, private wallet UI, Electron and the real RGB sidecar are integrated. Fresh service checks on the combined tree confirmed direct and atomic three-party swaps, plus re-spending received RGB after restart. Historical recovery evidence is retained separately. The persistent host launcher now starts the real stack together; UI preparation and recovery no longer disappear between cooperative rounds or when balance reconciliation fails. Complete native-dialog/cloud/multi-computer verification remains separate. Mock cannot sign or report blockchain success.
+
+Start with the practical [usage and deployment guide](docs/usage.md) (Russian): first setup, restart without wallet reinitialization, pairing, direct/ring orders, approval, recovery, and the concrete remaining work for two/three computers. See [current integration evidence](docs/integration.md) and [historical settlement evidence](docs/settlement.md).
+
+For an **already initialized and configured** real profile set:
+
+```sh
+# Use the same private state directory as during setup/configure.
+export RGB_DEMO_STATE="$PWD/packages/wallet/state/my-direct"
+rtk proxy uv run --locked python scripts/demo/service-profile.py up
+# Or, after stopping that runner, use desktop Alice and browser Bob/Carol:
+rtk proxy uv run --locked python scripts/demo/service-profile.py up --desktop alice
+```
+
+The launcher runs on the host alongside `infra/compose.yaml` Bitcoin infrastructure.
+It preserves wallets, pairing credentials and local approval history. The Docker
+quickstart below is a separate web/runtime option and does not start real sidecars.
 
 Hackathon resources and stack guidance are in [materials.md](materials.md).
 
@@ -83,7 +99,7 @@ npm run package:desktop
 
 The macOS package is written to `.dist/desktop/palka-darwin-arm64/palka.app`. A packaged launch loaded the local UI and the six-method `window.palkaWallet` bridge; real mode without B's RPC showed an unavailable wallet. The app keeps the market token, wallet RPC token and local API bearer in Electron's main process. Signing requires a fresh wallet preview and a native approval dialog showing amounts and fee. A `palka://offer/order-<UUID>` argument delivered to an already running second instance selected the offer for review and did not act on the trade. The macOS scheme is declared in the app bundle; delivery through LaunchServices `open` remains unverified. The public marketplace has no access to this bridge.
 
-The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. Configure a market token that the market recognizes and B's loopback wallet RPC URL/token there; the file is reused across restarts. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, and `PALKA_PUBLIC_MARKET_URL` can override those values for a run. The repository provides the sidecar in `packages/wallet/server.py` and persistent host profiles through `scripts/demo/service-profile.py`. Configure an initialized real profile as described in [settlement.md](docs/settlement.md); desktop launch does not initialize or start that sidecar. Missing RPC or unsupported capabilities leave the wallet unavailable. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
+The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. Configure a market token that the market recognizes and B's loopback wallet RPC URL/token there; the file is reused across restarts. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, `PALKA_PUBLIC_MARKET_URL`, and `PALKA_LOCAL_STATE_DIR` can override those values for a run. The repository provides the sidecar in `packages/wallet/server.py` and persistent host profiles through `scripts/demo/service-profile.py`. Configure an initialized real profile as described in [settlement.md](docs/settlement.md); desktop launch does not initialize or start that sidecar. Missing RPC or unsupported capabilities leave the wallet unavailable. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
 
 ## Layout and integration
 
