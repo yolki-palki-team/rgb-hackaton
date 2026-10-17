@@ -4,6 +4,7 @@
 import argparse
 import fcntl
 import hashlib
+import http.client
 import json
 import os
 import secrets
@@ -350,7 +351,7 @@ def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", choices=["init", "start", "connect", "fund", "issue", "sync", "desktop"]
+        "command", choices=["init", "start", "connect", "fund", "issue", "sync", "desktop", "auto"]
     )
     parser.add_argument("--desktop-data-dir", required=True, type=Path)
     parser.add_argument("--invite", type=Path)
@@ -358,6 +359,54 @@ def main():
     parser.add_argument("--wdk-address")
     args = parser.parse_args()
     config_path = args.desktop_data_dir.expanduser().resolve() / "desktop-config.json"
+    if args.command == "auto":
+        initialize(config_path)
+        config, state, _ = settings(config_path)
+        if (state / "automatic-ready.json").exists():
+            start(config_path)
+            return
+        market = urlsplit(config["marketUrl"])
+        if market.scheme != "https":
+            raise ValueError("Automatic shared-network setup requires HTTPS")
+        connection = http.client.HTTPSConnection(market.hostname, market.port or 443, timeout=30)
+        try:
+            connection.request(
+                "POST",
+                "/chain/bootstrap",
+                b"{}",
+                {
+                    "Authorization": "Bearer " + config["marketToken"],
+                    "Content-Type": "application/json",
+                },
+            )
+            response = connection.getresponse()
+            bootstrap = json.loads(response.read(8192))
+            if response.status != 200 or bootstrap.get("network") != "regtest":
+                raise ValueError(
+                    "Server onboarding unavailable; run deploy/server.sh network on the server"
+                )
+        finally:
+            connection.close()
+        invite = state / "automatic-invite.json"
+        save_private(
+            invite,
+            {
+                "url": config["marketUrl"] + "/chain",
+                "token": bootstrap["token"],
+                "chainId": bootstrap["chainId"],
+            },
+        )
+        args.invite = invite
+        for command in ("connect", "fund", "issue" if bootstrap.get("asset") else "sync"):
+            args.command = command
+            args.asset = bootstrap.get("asset")
+            network_command(config_path, args)
+        save_private(
+            state / "automatic-ready.json",
+            {"chainId": bootstrap["chainId"], "ownerId": config["ownerId"]},
+        )
+        start(config_path)
+        return
     if args.command == "init":
         state = initialize(config_path)
         print(

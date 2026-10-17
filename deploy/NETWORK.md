@@ -1,5 +1,17 @@
 # Shared Oracle regtest network
 
+**Recommended:** after the server `network` command below, each participant runs
+`bash deploy/desktop.sh`, then uses `npm run dev:desktop` for later launches.
+See [automatic startup](DESKTOP.md#automatic-shared-network-startup-recommended).
+Invitation copy and manual wallet commands below are retained for diagnostics;
+they are no longer required for normal desktop use. Do not run a separate sidecar
+alongside automatic desktop startup.
+
+The `/chain/bootstrap` endpoint enrolls a desktop using its existing market token.
+It returns private network access over HTTPS and assigns the first two issuers
+persistently. This intentionally enables automatic test funding for registered
+demo participants; it is not a production admission policy.
+
 The public market and the blockchain are separate services. This opt-in profile
 adds Bitcoin Core, a persistent Electrum indexer, RGB proxy, an authenticated
 HTTPS gateway, and a small test-BTC faucet to the existing `palka-demo` project.
