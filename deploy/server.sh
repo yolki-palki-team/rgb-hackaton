@@ -69,7 +69,9 @@ case "$action" in
     "${compose[@]}" restart chain
     "${compose[@]}" up -d --wait chain
     "${compose[@]}" exec -T chain cat /state/checkpoint.json | python3 "$deploy_dir/network_setup.py" checkpoint
-    "${compose[@]}" exec -T edge caddy reload --config /etc/caddy/Caddyfile
+    # Git may replace the mounted file's inode. Recreate the container so Caddy
+    # reads the current host file, preserving its certificate/config volumes.
+    "${compose[@]}" up -d --no-deps --force-recreate --wait edge
     echo 'Shared regtest is running. Copy deploy/.state/chain-invite.json privately to each desktop.'
     ;;
   https)
