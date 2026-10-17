@@ -29,6 +29,7 @@ test('chat composer blocks empty, disconnected, and loading submissions', () => 
           createElement(ChatInputTextArea, {
             key: 'input',
             'aria-label': 'Swap terms',
+            examples: ['Can I swap 10 X for 5 DUSD?'],
             readOnly: true,
           }),
           createElement(ChatInputSubmit, { key: 'submit' }),
@@ -37,6 +38,8 @@ test('chat composer blocks empty, disconnected, and loading submissions', () => 
     );
     assert.equal(/<button[^>]*disabled/.test(html), state.blocked);
     assert.match(html, /aria-label="Swap terms"/);
+    assert.match(html, /placeholder="Can I swap 10 X for 5 DUSD\?"/);
+    if (!state.value.trim()) assert.match(html, /<textarea[^>]*>\s*<\/textarea>/);
   }
 });
 
@@ -51,6 +54,10 @@ test('unpaired wallet starts with no synthetic balances, orders, or network', ()
     assert.match(html, /Local wallet unavailable/);
     assert.match(html, /NETWORK UNAVAILABLE/);
     assert.match(html, /Preview sample data/);
+    assert.match(html, /Order book/);
+    assert.match(html, /Your assets/);
+    assert.match(html, /Connect your wallet to see open orders/);
+    assert.doesNotMatch(html, /<button[^>]*>Market<\/button>/);
     assert.match(html, /Top up/);
     assert.match(html, /<div hidden="">[\s\S]*Connect a real regtest wallet to top up/);
     assert.doesNotMatch(html, /Create WDK account/);
