@@ -1178,6 +1178,30 @@ function App() {
                   </div>
                 </div>
                 <fieldset className="policy-reserves">
+                  <legend>Assets allowed for swaps</legend>
+                  <p>
+                    Enable both assets in your order. Newly imported assets may need permission.
+                  </p>
+                  <div className="draft-grid">
+                    {policyAssets.map((asset) => (
+                      <label className="switch-field" key={asset.key}>
+                        <Input
+                          type="checkbox"
+                          checked={policy.allowedAssetKeys.includes(asset.key)}
+                          onChange={(event) =>
+                            updatePolicy({
+                              allowedAssetKeys: event.target.checked
+                                ? [...new Set([...policy.allowedAssetKeys, asset.key])]
+                                : policy.allowedAssetKeys.filter((key) => key !== asset.key),
+                            })
+                          }
+                        />
+                        <span>{asset.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset className="policy-reserves">
                   <legend>Keep after swap (base units)</legend>
                   <div className="draft-grid">
                     {policyAssets.map((asset) => (
