@@ -1,31 +1,31 @@
-# palka: запуск, сделки и подготовка облачного теста
+# palka: startup, trading, and cloud test preparation
 
-Актуально для интеграции 17 октября 2026. Это regtest-прототип с настоящими
-Bitcoin/RGB-подписями, не mainnet-кошелёк. Public market, local client и
-`packages/wallet/server.py` уже соединены. Старые разделы handoff-документов,
-где sidecar отсутствует, описывают историю разработки.
+Current for the October 17, 2026 integration. This is a regtest prototype with real
+Bitcoin/RGB signatures, not a mainnet wallet. Public market, local client, and
+`packages/wallet/server.py` are already connected. Older handoff sections that
+say the sidecar is missing describe earlier development stages.
 
-## Что где работает
+## What runs where
 
-| Компонент | Где | Данные |
+| Component | Location | Data |
 | --- | --- | --- |
-| Public web | Локально или статический HTTPS-хостинг | Только открытые заявки, contract IDs, ссылки на локальный клиент |
-| Market/coordinator | Общий сервер | Заявки, matching, сообщения участников, settlement packages, подписи, SQLite |
-| Local client и wallet UI | У каждого участника | Приватная политика, pairing, подтверждения, сохранённое разрешение на подпись |
-| Desktop | У каждого участника | Запускает local client; секреты остаются в main process; отдельный native dialog |
-| Wallet sidecar + Rust RGB backend | У каждого участника | Ключи, BTC/RGB state, journal, consignments, резервирование и подпись |
-| QVAC | У каждого участника | Модель и inference локально; нет облачного fallback |
-| Bitcoin Core/electrs/RGB proxy | В локальном тесте — Docker | Общая regtest-цепь и индексатор; это отдельная инфраструктура от market |
+| Public web | Local or static HTTPS hosting | Only open orders, contract IDs, and local client links |
+| Market/coordinator | Shared server | Orders, matching, participant messages, settlement packages, signatures, SQLite |
+| Local client and wallet UI | Each participant's computer | Private policy, pairing, approvals, persisted signing authorization |
+| Desktop | Each participant's computer | Launches local client; secrets stay in the main process; separate native dialog |
+| Wallet sidecar + Rust RGB backend | Each participant's computer | Keys, BTC/RGB state, journal, consignments, reservations, and signing |
+| QVAC | Each participant's computer | Local model and inference; no cloud fallback |
+| Bitcoin Core/electrs/RGB proxy | Docker in the local test | Shared regtest chain and indexer; infrastructure separate from market |
 
-Market не хранит seed, политику или полный баланс, но видит публичные материалы
-сделки и её RGB proofs. Это не приватность транзакций от coordinator.
-Подпись никогда не следует автоматически из публикации заявки или deep link.
+Market does not store seeds, policies, or complete balances, but it sees public
+trade materials and RGB proofs. Transactions are not private from the coordinator.
+Publishing an order or opening a deep link never automatically authorizes signing.
 
-## Требования и сборка
+## Requirements and build
 
-Работать из корня репозитория. Нужны RTK, Docker с Compose, Node 22.17,
-Python 3.12+ с uv и Rust 1.94 с rustfmt/Clippy в PATH. `.nvmrc` и
-`rust-toolchain.toml` фиксируют версии; npm устанавливает свой Node для scripts.
+Work from the repository root. You need RTK, Docker with Compose, Node 22.17,
+Python 3.12+ with uv, and Rust 1.94 with rustfmt/Clippy on PATH. `.nvmrc` and
+`rust-toolchain.toml` pin versions; npm installs its own Node for scripts.
 
 ```sh
 rtk proxy npm ci
@@ -36,23 +36,23 @@ rtk proxy npm run build
 rtk proxy npm run build:desktop
 ```
 
-Bootstrap материализует pinned rgb-lib и проверенную локальную cooperative
-extension. При обновлении extension используйте `bootstrap-native.py --refresh`,
-затем повторите cargo build. Это не создание и не пополнение кошелька.
-QVAC при первой загрузке скачивает примерно 1.06 GB; последующий inference
-локальный. Доступность модели отображается в UI; ручная форма работает отдельно.
+Bootstrap materializes the pinned rgb-lib and reviewed local cooperative extension.
+When updating the extension, use `bootstrap-native.py --refresh`, then repeat the
+cargo build. This does not create or fund a wallet. QVAC downloads approximately
+1.06 GB on first load; subsequent inference is local. The UI shows model readiness;
+the manual form works independently.
 
-## Инфраструктура: один раз и повторно
+## Infrastructure: initial setup and restarts
 
-На **новой** машине без прежней цепи:
+On a **new** machine without a previous chain:
 
 ```sh
 rtk proxy docker compose -f infra/compose.yaml up -d
 rtk proxy uv run --locked python scripts/demo/chain-volumes.py pin
 ```
 
-Для существующей цепи сначала `pin`, если это ещё не сделано; он записывает имена
-существующих volumes, а не пересоздаёт их. Обычный запуск далее:
+For an existing chain, run `pin` first if not already done; it records existing
+volume names without recreating them. For subsequent launches:
 
 ```sh
 rtk proxy docker compose -f infra/compose.yaml -f infra/state/chain-volumes.compose.json up -d
@@ -60,16 +60,16 @@ rtk proxy uv run --locked python scripts/demo/chain-volumes.py verify
 rtk proxy uv run --locked python scripts/demo/doctor.py
 ```
 
-После холодного старта дождитесь успешного doctor. Сохраняйте containers/volumes;
-не применяйте `down -v`, prune или новую цепь к старому RGB state. Root
-`compose.yaml` — другой режим: web + runtime, без wallet sidecar. Для настоящего
-обмена используйте host-launcher ниже, а не root Docker quickstart.
+After a cold start, wait for doctor to succeed. Preserve containers and volumes;
+do not apply `down -v`, prune, or a new chain to old RGB state. Root `compose.yaml`
+is a different mode: web + runtime, without the wallet sidecar. For real swaps,
+use the host launcher below instead of the root Docker quickstart.
 
-## Первое создание тестового набора
+## Creating the first test set
 
-Выберите постоянный каталог под игнорируемым `packages/wallet/state`.
-Следующие команды выполняются **один раз для нового набора**, а не при каждом
-старте. Пример создаёт Alice/Bob/Carol на одной машине с независимыми ключами.
+Choose a persistent directory under the ignored `packages/wallet/state`.
+Run the following **once for a new set**, not on every launch. This example creates
+Alice/Bob/Carol on one computer with independent keys.
 
 ```sh
 export RGB_DEMO_STATE="$PWD/packages/wallet/state/my-direct"
@@ -78,239 +78,242 @@ rtk proxy uv run --locked python scripts/demo/catalog.py
 rtk proxy uv run --locked python scripts/demo/service-profile.py configure --source "$PWD" --base-port 44100
 ```
 
-`setup` создаёт ключи, финансирует coinbase на regtest, ждёт зрелости и выпускает
-100 X + 7 KEEP у Alice, 100 DUSD у Bob. Carol имеет BTC. `catalog` импортирует
-проверенные публичные контракты всем участникам, включая активы с нулевым балансом.
-DUSD не обеспечен долларом и не является USDT. Все тестовые RGB активы precision 0.
-ID берётся из реального state; одинаковый ticker не означает одинаковый контракт.
-Не копируйте IDs из mock fixtures или другого тестового набора.
+`setup` creates keys, funds through regtest coinbase, waits for maturity, and issues
+100 X + 7 KEEP to Alice and 100 DUSD to Bob. Carol has BTC. `catalog` imports verified
+public contracts for all participants, including assets with zero balances.
+DUSD is not dollar-backed and is not USDT. All test RGB assets have precision 0.
+IDs come from real state; matching tickers do not imply matching contracts.
+Do not copy IDs from mock fixtures or another test set.
 
-`services/config.json` (0600) хранит стабильные токены и порты. Нельзя произвольно
-менять source/base-port уже настроенного набора: launcher откажет. Для проверки
-нового checkout существующего набора предусмотрен `RGB_SERVICE_SOURCE`; это не
-миграция кошелька. Конфиг, журналы, pairing и backup не должны попадать в Git.
+`services/config.json` (0600) stores stable tokens and ports. You cannot arbitrarily
+change source/base-port for an already configured set: the launcher will refuse.
+`RGB_SERVICE_SOURCE` allows testing a new checkout against an existing set; it is
+not a wallet migration. Keep configs, journals, pairing files, and backups out of Git.
 
-## Обычный запуск без повторной инициализации
+## Normal startup without reinitialization
 
-В каждом новом терминале укажите **тот же** `RGB_DEMO_STATE`:
+Set **the same** `RGB_DEMO_STATE` in each new terminal:
 
 ```sh
 export RGB_DEMO_STATE="$PWD/packages/wallet/state/my-direct"
 rtk proxy uv run --locked python scripts/demo/service-profile.py up
 ```
 
-Одна команда запускает market, три sidecar, три local client и public Vite web.
-Она не вызывает init/funding/issuance. Ctrl+C останавливает дочерние процессы,
-сохраняя данные. Повторный запуск использует те же ключи, токены и SQLite.
-Не запускайте второй экземпляр над тем же набором.
+One command starts market, three sidecars, three local clients, and public Vite web.
+It does not initialize, fund, or issue assets. Ctrl+C stops child processes while
+preserving data. Restarting reuses the same keys, tokens, and SQLite databases.
+Do not start a second instance against the same set.
 
-| Назначение | Адрес при base-port 44100 |
+| Purpose | Address with base-port 44100 |
 | --- | --- |
 | Public web / market | `http://127.0.0.1:5173/` / `/market` |
 | Coordinator | `http://127.0.0.1:44100` |
 | Alice / Bob / Carol browser wallet | `http://127.0.0.1:44101/`, `:44102/`, `:44103/` |
-| Их wallet RPC | `127.0.0.1:44111–44113`, только server-to-server |
+| Their wallet RPC | `127.0.0.1:44111–44113`, server-to-server only |
 
-Launcher печатает пути к `services/{profile}/pairing.json`. Откройте этот файл
-локально, возьмите только `sessionToken`, нажмите **Pair local wallet** на странице
-соответствующего профиля и введите его там. Не вводите токен на public web и
-не отправляйте его в чат. Вкладка хранит его только в памяти; после reload нужно
-повторное pairing. Wallet RPC token никогда не нужен браузеру.
+The launcher prints paths to `services/{profile}/pairing.json`. Open the file
+locally, copy only `sessionToken`, click **Pair local wallet** on the corresponding
+profile's page, and enter it there. Do not enter it on public web or send it to a
+chat. The tab stores it only in memory; pair again after reloading. The browser
+never needs the wallet RPC token.
 
-Public web получает `MARKET_URL` и `VITE_LOCAL_WALLET_PORT` от launcher; все ссылки
-на browser wallet ведут к Alice данного набора. Bob/Carol открывайте по их адресам.
-Полный ID контракта можно сверить в публичной заявке и native signing dialog;
-форма выбора активов использует проверенный wallet catalog, неоднозначный ticker
-отклоняется при валидации.
+Public web receives `MARKET_URL` and `VITE_LOCAL_WALLET_PORT` from the launcher;
+all browser wallet links point to Alice in that set. Open Bob/Carol at their own
+addresses. Check the full contract ID in the public order and native signing
+dialog; the asset selector uses the verified wallet catalog, and validation rejects
+ambiguous tickers.
 
-Для desktop Alice остановите browser-runner и выполните:
+For desktop Alice, stop the browser runner and run:
 
 ```sh
 rtk proxy uv run --locked python scripts/demo/service-profile.py up --desktop alice
 ```
 
-Можно выбрать `bob` или `carol`. Для выбранного участника запускается Electron
-вместо второго browser local-client. `PALKA_LOCAL_STATE_DIR` направляет его в ту же
-локальную историю, поэтому переключение не теряет policy/approval/recovery.
-Desktop подключается без ввода pairing; его локальный API использует отдельный
-session token в main process. Не используйте старый browser pairing для desktop
-API. При desktop-запуске открывайте его окно или offer deep link; ссылки browser
-wallet предназначены для browser-режима. Другие два профиля остаются браузерными.
+You can select `bob` or `carol`. Electron starts for the chosen participant instead
+of a second browser local client. `PALKA_LOCAL_STATE_DIR` points it at the same local
+history, so switching preserves policy/approval/recovery. Desktop connects without
+manual pairing; its local API uses a separate session token in the main process.
+Do not reuse browser pairing for the desktop API. Open the desktop window or an
+offer deep link; browser wallet links are intended for browser mode. The other two
+profiles remain in the browser.
 
-Отдельные процессы для диагностики: `service-profile.py market`,
+Separate processes for diagnostics: `service-profile.py market`,
 `service-profile.py run --profile bob`, `service-profile.py health --profile bob`.
-Не запускайте их одновременно с `up` для того же профиля. Для standalone desktop
-доступны `npm run dev:desktop` и `npm run package:desktop`; они требуют отдельной
-настройки `desktop-config.json` и сами sidecar не запускают.
+Do not run these alongside `up` for the same profile. Standalone desktop commands
+`npm run dev:desktop` and `npm run package:desktop` require separate
+`desktop-config.json` configuration and do not start sidecars themselves.
 
-## Заявки: QVAC или ручная форма
+## Orders: QVAC or the manual form
 
-В Overview введите цель, например `Sell 100 X for at least 100 DUSD. Fee up to
-1000 sats. Do not sell BTC.` Нажмите **Prepare order**, проверьте результат.
-QVAC не определяет сумму подписи: детерминированный код повторно проверяет draft,
-балансы, защищённые остатки, разрешённые активы, fee cap и срок действия.
-При неоднозначном ответе или недоступной модели используйте **Fill in manually**.
-В первоначальной проверке модель инвертировала DUSD → X в X → DUSD; код отклонил
-черновик из-за отсутствия X у отправителя. При достаточном балансе такую ошибку
-должен заметить пользователь при review: AI не является authority для намерения.
-После перехода на короткие внутренние aliases прошла реальная проверка
+In Overview, enter a goal such as `Sell 100 X for at least 100 DUSD. Fee up to
+1000 sats. Do not sell BTC.` Click **Prepare order** and review the result.
+QVAC does not determine signing amounts: deterministic code revalidates the draft,
+balances, protected reserves, allowed assets, fee cap, and expiry. If the response
+is ambiguous or the model is unavailable, use **Fill in manually**.
+In an initial check, the model inverted DUSD → X into X → DUSD; code rejected the
+draft because the sender had no X. With sufficient balance, the user must catch
+this error during review: AI is not the authority for intent.
+After switching to short internal aliases, a real check passed with
 `Sell 10 X for at least 10 DUSD. Maximum fee 1000 sats. Do not sell BTC. No protected balances or reserves.`
-Используйте последнее уточнение только если действительно не задаёте новые резервы;
-оно не отменяет ранее сохранённую private policy.
+Use that final clarification only when you truly intend no new reserves; it does
+not override an existing private policy.
 
-Поля сумм используют **atomic units**: BTC в sats, RGB в единицах контракта.
-100000 sats = 0.001 BTC. В private policy явно разрешите BTC sale только если
-заявка отдаёт BTC. Fee cap 1000 sats у каждой стороны; при этих тестах вся сделка
-платит 1000 sats суммарно. Кнопка **Publish order** сначала проверяет draft, затем публикует его. Отдельный клик для проверки не нужен; подпись сделки запрашивается позже.
+Amount fields use **atomic units**: sats for BTC and contract units for RGB.
+100000 sats = 0.001 BTC. Explicitly allow BTC sales in private policy only when the
+order gives BTC. Each party's fee cap is 1000 sats; these tests pay 1000 sats total
+for the entire trade. **Publish order** validates the draft, then publishes it.
+No separate validation click is needed; trade signing is requested later.
 
-Direct на исходном наборе:
+Direct swap on the initial set:
 
-| Участник | Give | Receive at least | BTC sale |
+| Participant | Give | Receive at least | BTC sale |
 | --- | --- | --- | --- |
-| Alice | 100000 sats BTC | 100 DUSD | Да |
-| Bob | 100 DUSD | 100000 sats BTC | Нет |
+| Alice | 100000 sats BTC | 100 DUSD | Yes |
+| Bob | 100 DUSD | 100000 sats BTC | No |
 
-Для ring создайте **отдельный исходный набор** `my-ring`, например base-port 44200,
-командами setup/catalog/configure выше. Не предполагается, что после direct
-активы по-прежнему принадлежат исходным владельцам.
+For a ring, create a **separate initial set** `my-ring`, for example at base-port
+44200, using the setup/catalog/configure commands above. Do not assume assets
+still belong to their original owners after a direct swap.
 
-| Участник | Give | Receive at least | BTC sale |
+| Participant | Give | Receive at least | BTC sale |
 | --- | --- | --- | --- |
-| Alice | 100 X | 100 DUSD | Нет |
-| Bob | 100 DUSD | 100000 sats BTC | Нет |
-| Carol | 100000 sats BTC | 100 X | Да |
+| Alice | 100 X | 100 DUSD | No |
+| Bob | 100 DUSD | 100000 sats BTC | No |
+| Carol | 100000 sats BTC | 100 X | Yes |
 
-Matching сначала ищет direct, затем тройной цикл; заявки исполняются полностью.
-У ring направления: Alice → Carol X, Bob → Alice DUSD, Carol → Bob BTC.
-Это **одна общая Bitcoin-транзакция** с общим RGB commitment, не три перевода.
+Matching looks for direct swaps first, then three-party cycles; orders fill in full.
+Ring directions: Alice → Carol X, Bob → Alice DUSD, Carol → Bob BTC.
+This is **one shared Bitcoin transaction** with a shared RGB commitment, not three transfers.
 
-## Подготовка, подтверждение и результат
+## Preparation, approval, and results
 
-1. После matching UI автоматически готовит и проверяет пакет у каждого участника.
-   Держите приложения всех участников открытыми. В **Trade** видны loader и этапы
-   Prepare → Your approval → All wallets → Confirmation. funding → colored → proofs
-   проходят без повторных нажатий. При уходе на Overview/Market работа продолжается;
-   при закрытом приложении UI-loop остановлен и возобновится после запуска.
-2. После проверки wallet появятся точные Give, Receive, комиссия и BTC change.
-   Сверьте суммы и нажмите **Review & sign**. В desktop откроется native dialog
-   с сетью, суммами и RGB contract ID. Автоматические запросы не создают разрешение
-   на подпись. Отмена native dialog возвращает к проверке сделки.
-3. Каждый участник отдельно разрешает подпись. Первое разрешение не подписывает
-   за остальных. Не подменяйте пакет после первой подписи.
-4. После всех подписей sidecar отправляет общую транзакцию. Regtest сам не майнит.
-   Тестовый оператор подтверждает блоком (wallet `regtest-miner` создан setup):
+1. After matching, the UI automatically prepares and validates the package for each
+   participant. Keep all participants' apps open. **Trade** shows a loader and the
+   stages Prepare → Your approval → All wallets → Confirmation. funding → colored
+   → proofs proceed without repeated clicks. Work continues on Overview/Market;
+   closing the app stops the UI loop, which resumes when the app opens again.
+2. After wallet validation, exact Give, Receive, fee, and BTC change amounts appear.
+   Check them and click **Review & sign**. Desktop opens a native dialog with the
+   network, amounts, and RGB contract ID. Automatic requests do not authorize
+   signing. Canceling the native dialog returns to trade review.
+3. Each participant approves signing separately. The first approval does not sign
+   for anyone else. Do not replace the package after the first signature.
+4. After all signatures, the sidecar broadcasts the shared transaction. Regtest
+   does not mine automatically. The test operator confirms it with a block
+   (`regtest-miner` is created by setup):
 
 ```sh
 rtk proxy docker compose -f infra/compose.yaml exec -T -u blits bitcoind bitcoin-cli -regtest -rpcwallet=regtest-miner -generate 1
 ```
 
-Если после рестарта Core miner не загружен, один раз загрузите существующий:
+If the miner is not loaded after a Core restart, load the existing wallet once:
 
 ```sh
 rtk proxy docker compose -f infra/compose.yaml exec -T -u blits bitcoind bitcoin-cli -regtest loadwallet regtest-miner
 ```
 
-5. Приложения сами проверяют Bitcoin confirmation и RGB acceptance. Market ставит
-   CONFIRMED после совпадающих receipt всех сторон. После перезапуска UI читает
-   сохранённый локальный receipt; один статус market не доказывает завершение.
-   В **Transaction details** доступны txid и идентификатор плана.
+5. Apps check Bitcoin confirmation and RGB acceptance themselves. Market marks
+   CONFIRMED after receiving matching receipts from all parties. After restarting,
+   the UI reads its saved local receipt; market status alone does not prove
+   completion. **Transaction details** shows the txid and plan ID.
 
-## Восстановление и типовые ошибки
+## Recovery and common errors
 
-- Потеря ответа при подписи/отправке: UI читает сохранённый local intent и запускает
-  recovery той же сделки. Local client повторяет только сохранённую неизменную
-  авторизацию/подпись/финализацию. TTL не освобождает подписанные inputs.
-- Запросы подготовки/проверки идут последовательно. При ошибке пауза увеличивается;
-  после трёх ошибок автоматическое действие приостанавливается. Откройте **What
-  happened?**, устраните причину и нажмите **Try again**. Обычное ожидание peer или
-  блока не считается ошибкой. Сетевой snapshot продолжает обновляться.
-- При временной ошибке `/state` новые публикации и подписи недоступны, но recovery
-  продолжается. При общей потере связи последний экран сохраняется с предупреждением;
-  действия с устаревшими балансами заблокированы.
-- До подписи можно **Cancel swap**. Не подписавшие peers освобождают резерв при
-  следующем snapshot/рестарте. После возможной подписи не удаляйте journal,
-  не освобождайте резерв вручную и не создавайте новую сделку вместо recovery.
-- Wallet unavailable: проверьте выбранный state, работающий sidecar, совпадение
-  owner/token/port и doctor. Mock не включается автоматически.
-- Pairing/Origin/Host: используйте точный `http://127.0.0.1:PORT/` данного профиля.
-  Public origin и IP другой машины не подходят для wallet API.
-- EADDRINUSE: остановите свой прежний runner; не удаляйте state. Порт 5173 общий
-  для одного public web, поэтому два `up` одновременно конфликтуют по web.
-- Contract mismatch / no match: сравните network + contract ID + precision,
-  суммы и expiry. Один ticker на разных наборах не совпадает.
-- Process killed с `rgb_runtime.lock`: сначала остановите профиль. Только затем
-  применяйте `recover-sdk-lock.py --profile NAME` с правильным state; он проверяет
-  project locks/identity/SQL-stock. Это не repair повреждённой базы.
-- Backup: при остановленном coordinator выполните `backup.py` с тем же state.
-  Backup содержит секреты, не зашифрован и остаётся локально в ignored state.
-  Seed без RGB истории недостаточен; chain volumes сохраняются отдельно.
+- Lost signing/broadcast response: the UI reads the saved local intent and starts
+  recovery for the same trade. Local client retries only the saved, immutable
+  authorization/signature/finalization. TTL does not release signed inputs.
+- Preparation/validation requests run sequentially. Errors increase the delay;
+  after three failures the automatic action pauses. Open **What happened?**, fix
+  the cause, and click **Try again**. Waiting for a peer or block is not an error.
+  The network snapshot continues updating.
+- During a temporary `/state` failure, new orders and signing are disabled, but
+  recovery continues. If connectivity is lost entirely, the last screen remains
+  with a warning; actions using stale balances are blocked.
+- Before signing, you can **Cancel swap**. Peers that have not signed release their
+  reservations on the next snapshot/restart. After a possible signature, do not
+  delete the journal, release reservations manually, or create a new trade instead
+  of recovering the existing one.
+- Wallet unavailable: check the selected state, running sidecar, matching
+  owner/token/port, and doctor. Mock is not enabled automatically.
+- Pairing/Origin/Host: use that profile's exact `http://127.0.0.1:PORT/`.
+  Public origins and another computer's IP are not valid for wallet API access.
+- EADDRINUSE: stop your previous runner; do not delete state. Port 5173 is shared
+  by one public web instance, so two simultaneous `up` commands conflict there.
+- Contract mismatch / no match: compare network + contract ID + precision,
+  amounts, and expiry. The same ticker in different sets does not match.
+- Process killed with `rgb_runtime.lock`: stop the profile first. Only then use
+  `recover-sdk-lock.py --profile NAME` with the correct state; it checks project
+  locks/identity/SQL-stock. It does not repair a damaged database.
+- Backup: with the coordinator stopped, run `backup.py` against the same state.
+  Backups contain secrets, are unencrypted, and stay locally in ignored state.
+  A seed without RGB history is insufficient; chain volumes are backed up separately.
 
-## Автоматические реальные сценарии
+## Automated real scenarios
 
-На **новом отдельно подготовленном** наборе после setup/catalog, без работающего
-runner на его портах:
+On a **new, separately prepared** set after setup/catalog, with no runner using
+its ports:
 
 ```sh
 rtk proxy uv run --locked python scripts/demo/service-smoke.py --source "$PWD" --base-port 44300 --scenario direct --repeat --evidence-prefix my-integration
 ```
 
-Для отдельного ring-набора замените base-port и `--scenario ring`. Скрипт проходит
-реальные local-client/market/wallet API, явно подтверждает тестовые заявки и
-подписи, майнит, сверяет реальные дельты и RGB acceptance, перезапускает профили
-и расходует полученные RGB обратно. `--evidence-prefix` сохраняет новые результаты
-отдельно от исторических. Это service evidence, не клики UI и не AI-сценарий.
-Скрипт не предназначен для повторного запуска на незавершённой подписанной сделке.
+For a separate ring set, change base-port and use `--scenario ring`. The script
+uses real local-client/market/wallet APIs, explicitly approves test orders and
+signatures, mines, verifies actual balance deltas and RGB acceptance, restarts
+profiles, and spends received RGB back. `--evidence-prefix` stores new results
+separately from historical evidence. This is service evidence, not UI clicks or
+an AI scenario. Do not rerun it against an unfinished signed trade.
 
 ```sh
 rtk proxy npm run check
 rtk proxy npm run smoke:qvac
 ```
 
-`check` включает format, lint, typecheck, JS/Python unit tests и UI build.
-Он не включает реальные переводы, native dialog или QVAC inference. Результаты
-интеграции этой ветки и точные ограничения: [integration.md](integration.md).
+`check` includes formatting, lint, typecheck, JS/Python unit tests, and UI builds.
+It does not include real transfers, native dialogs, or QVAC inference. Integration
+results and exact limitations for this branch: [integration.md](integration.md).
 
-## Облако и несколько компьютеров
+## Cloud and multiple computers
 
-Для первого server-only запуска используйте [deploy/README.md](../deploy/README.md):
-Compose, автоматическая регистрация desktop, постоянные токены и команды
-обновления уже находятся в Git. Этот HTTP-профиль запускает web + market;
-приватный market доступен через SSH-туннель. TLS и распределённая Bitcoin/RGB
-инфраструктура остаются отдельными этапами, описанными ниже.
+For the initial server-only launch, use [deploy/README.md](../deploy/README.md):
+Compose, automatic desktop registration, persistent tokens, and update commands
+are already in Git. The default HTTP profile runs web + market with private market
+access through an SSH tunnel. For direct HTTPS/WSS access, follow the separate
+[owlpeer.com HTTPS instructions](../deploy/HTTPS.md). Distributed Bitcoin/RGB
+infrastructure remains a separate step described below.
 
-Public web и market можно вынести в облако. Local client, QVAC, sidecar, ключи,
-private policy и wallet state должны остаться **на машине каждого участника**.
-Root Compose нельзя целиком выдавать за облачную архитектуру: его runtime также
-запускает local wallet. Ни wallet RPC, ни pairing/API bearer нельзя публиковать.
+Public web and market can run in the cloud. Local client, QVAC, sidecar, keys,
+private policy, and wallet state must remain **on each participant's computer**.
+Do not present the entire root Compose stack as a cloud architecture: its runtime
+also launches a local wallet. Never expose wallet RPC or pairing/API bearer credentials.
 
-Готово в коде: `MARKET_HOST`, `MARKET_PORT`, `MARKET_DB_PATH`, статическая карта
-`MARKET_TOKENS_JSON` (token → owner) для прежних профилей и регистрация новых через
-`POST /participants` при `MARKET_SELF_REGISTRATION=true`; local client принимает `MARKET_URL`,
-`MARKET_TOKEN`; HTTPS автоматически превращается в WSS для `/events`.
-Desktop принимает `PALKA_MARKET_URL=https://market.example.org` (корневой origin,
-без path/query) и
-`PALKA_PUBLIC_MARKET_URL=https://palka.example.org/market`.
-Новый desktop сам сохраняет ID и токен в приватный `desktop-config.json` до первого
-подключения. Повторные запуски используют те же credentials; старые конфиги не
-переписываются. `PALKA_OWNER_ID` и `PALKA_MARKET_TOKEN` нужны для ручного подключения
-прежнего профиля. Регистрация не создаёт и не пополняет wallet sidecar.
-Токен WebSocket идёт первым сообщением, не в URL. Public web credentials не получает.
+Available in code: `MARKET_HOST`, `MARKET_PORT`, `MARKET_DB_PATH`, the static
+`MARKET_TOKENS_JSON` map (token → owner) for legacy profiles, and new registration
+through `POST /participants` when `MARKET_SELF_REGISTRATION=true`. Local client
+accepts `MARKET_URL` and `MARKET_TOKEN`; HTTPS automatically becomes WSS for `/events`.
+Desktop accepts `PALKA_MARKET_URL=https://market.example.org` (root origin without
+path/query) and `PALKA_PUBLIC_MARKET_URL=https://palka.example.org/market`.
+A new desktop saves its ID and token in private `desktop-config.json` before
+connecting. Restarts reuse those credentials; existing configs are not rewritten.
+`PALKA_OWNER_ID` and `PALKA_MARKET_TOKEN` support manual connection of an existing
+profile. Registration does not create or fund a wallet sidecar. The WebSocket
+token is sent in the first message, not the URL. Public web never receives credentials.
 
-План первого облачного развёртывания (ещё не выполнялся):
+Cloud deployment checklist (multi-computer settlement remains unverified):
 
-1. Один сервер Node 22.17 с постоянным диском под SQLite, process supervisor,
-   отдельный market origin и TLS reverse proxy. Включить регистрацию новых desktop;
-   сохранить прежнюю карту credentials для существующих кошельков. Сервер хранит
-   хеши новых токенов, ID детерминированно связан с токеном. Нет refresh/отзыва
-   токенов через UI и доказательства владения Bitcoin-ключами при регистрации.
-   Регистрация ограничена 60 новыми участниками в минуту и 10000 всего.
-   До публичного запуска нужны общие API rate limits,
-   лимиты соединений, журналирование без credentials и эксплуатационный backup.
-2. Запустить `npm run dev:market` с `MARKET_HOST=127.0.0.1`, нужным портом,
-   `MARKET_DB_PATH`, `MARKET_SELF_REGISTRATION=true` и при необходимости прежним
-   `MARKET_TOKENS_JSON` из private service environment. Разрешить
-   снаружи только TLS reverse proxy. Проксировать HTTP API и `/events`, сохраняя
-   Authorization; для WS нужны HTTP/1.1, Upgrade и Connection. Пример фрагмента:
+1. Use one Node 22.17 server with persistent SQLite storage, a process supervisor,
+   a separate market origin, and a TLS reverse proxy. Enable new desktop
+   registration and retain the old credential map for existing wallets. The
+   server stores hashes of new tokens; IDs are deterministically tied to tokens.
+   There is no token refresh/revocation UI or proof of Bitcoin key ownership at
+   registration. Registration is limited to 60 new participants per minute and
+   10000 total. Before a public launch, add general API rate limits, connection
+   limits, logging without credentials, and operational backups.
+2. Start `npm run dev:market` with `MARKET_HOST=127.0.0.1`, the chosen port,
+   `MARKET_DB_PATH`, `MARKET_SELF_REGISTRATION=true`, and, if needed, the original
+   `MARKET_TOKENS_JSON` from the private service environment. Expose only the TLS
+   reverse proxy. Proxy HTTP API and `/events`, preserving Authorization; WS needs
+   HTTP/1.1, Upgrade, and Connection. Example snippet:
 
 ```nginx
 location / {
@@ -322,96 +325,95 @@ location / {
 }
 ```
 
-   Фрагмент находится внутри TLS server, сертификат и firewall настраиваются
-   отдельно. Reconnect/replay клиентом предусмотрен. См. [официальный Nginx WS
+   This belongs inside a TLS server block; configure certificates and firewall
+   separately. The client supports reconnect/replay. See the [official Nginx WS
    guide](https://nginx.org/en/docs/http/websocket.html).
-3. Собрать `npm run build:web`, отдать `apps/web/dist` статическим HTTPS-хостом с
-   SPA fallback. Настроить **только** `/market-api/health` и `/market-api/orders`
-   как read-only proxy на общий market без Authorization/cookies/query/body,
-   по образцу `docker/nginx.conf`. Private market API не проксируется через
-   эти публичные пути. `VITE_LOCAL_WALLET_PORT` задаётся при build, обычно 4101.
-4. На каждой машине отдельно запустить local client/desktop и sidecar, задать
-   market URL; новый desktop получит постоянную identity автоматически. Sidecar
-   настраивается отдельно с тем же owner ID; существующему кошельку owner не менять.
-   `service-profile.py up` — однохостовый
-   fixture launcher, не распределённый provisioner. Для cloud используйте env
-   `LOCAL_OWNER_ID`, `LOCAL_STATE_DIR`, `LOCAL_PORT`, `MARKET_URL`, `MARKET_TOKEN`,
-   `WALLET_MODE=real`, `WALLET_RPC_URL`, `WALLET_RPC_TOKEN` либо desktop equivalents.
-5. Сначала проверить TLS health, публикацию/отмену одной тестовой заявки,
-   доставку авторизованного snapshot/WS только участникам и reconnect.
-   Затем отдельно провести settlement-сценарии ниже.
+3. Run `npm run build:web` and serve `apps/web/dist` from static HTTPS hosting with
+   an SPA fallback. Configure **only** `/market-api/health` and `/market-api/orders`
+   as read-only proxies to the shared market, without Authorization/cookies/query/body,
+   following `docker/nginx.conf`. Do not proxy private market API through these
+   public paths. `VITE_LOCAL_WALLET_PORT` is set at build time, usually to 4101.
+4. Run local client/desktop and sidecar separately on each computer, setting the
+   market URL; new desktops receive a persistent identity automatically. Configure
+   sidecar separately with the same owner ID; do not change an existing wallet's
+   owner. `service-profile.py up` is a single-host fixture launcher, not a
+   distributed provisioner. For cloud access, use `LOCAL_OWNER_ID`,
+   `LOCAL_STATE_DIR`, `LOCAL_PORT`, `MARKET_URL`, `MARKET_TOKEN`, `WALLET_MODE=real`,
+   `WALLET_RPC_URL`, and `WALLET_RPC_TOKEN`, or their desktop equivalents.
+5. First check TLS health, publication/cancellation of a test order, delivery of
+   authorized snapshots/WS only to participants, and reconnect. Then separately
+   perform the settlement scenarios below.
 
-### Переход public web → локальный кошелёк
+### Public web to local wallet navigation
 
-Ссылка `http://127.0.0.1:4101/` открывает кошелёк **компьютера посетителя**, не
-облачного сервера. Это top-level navigation в отдельную вкладку, не cross-origin
-fetch. HTTPS top-level переход сам по себе не считается mixed content; правила
-локального доступа/предупреждения браузера всё равно нужно проверить в целевых
-браузерах. См. [MDN mixed content](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Mixed_content)
-и [local network access](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Local_network_access).
+A link to `http://127.0.0.1:4101/` opens the wallet on **the visitor's computer**,
+not on the cloud server. This is top-level navigation to a separate tab, not a
+cross-origin fetch. Top-level navigation from HTTPS is not itself mixed content;
+local-access rules and browser warnings still need testing in target browsers.
+See [MDN mixed content](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Mixed_content)
+and [local network access](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Local_network_access).
 
-Public JavaScript не обращается к local API. Local API требует bearer, точный
-loopback Host:port и свой Origin/Fetch Metadata. Добавление облачного домена в
-`LOCAL_ALLOWED_ORIGINS` не открывает CORS: код также требует Origin == self.
-Это сохраняет границу между публичной страницей и кошельком. Для desktop renderer
-используется узкий IPC bridge, а HTTPS/WSS выполняет Node local client.
+Public JavaScript does not call the local API. Local API requires a bearer token,
+the exact loopback Host:port, and its own Origin/Fetch Metadata. Adding the cloud
+domain to `LOCAL_ALLOWED_ORIGINS` does not enable CORS: code also requires
+Origin == self. This preserves the boundary between the public page and wallet.
+Desktop renderer uses a narrow IPC bridge; Node local client handles HTTPS/WSS.
 
-`palka://offer/order-UUID` переносит только ID заявки. Он выбирает её для просмотра,
-не создаёт встречную заявку и не подписывает. Scheme объявлен в macOS bundle;
-доставка через LaunchServices и подписанный/notarized дистрибутив остаются
-проверкой перед распространением. В dev Electron надёжнее открыть окно вручную.
+`palka://offer/order-UUID` carries only an order ID. It selects the order for review
+without creating a counter-order or signing. The macOS bundle declares the scheme;
+LaunchServices delivery and a signed/notarized distribution still require testing
+before release. In dev Electron, opening the window manually is more reliable.
 
-### Общая сеть и реальные активы: оставшаяся работа
+### Shared network and real assets: remaining work
 
-Один облачный market **не соединяет разные regtest-цепи**. Все участники должны
-видеть одну и ту же chain history и одинаковые RGB contract IDs. Нельзя запустить
-`setup` независимо на трёх несвязанных chains и ожидать обмена.
+A shared cloud market **does not connect separate regtest chains**. Every
+participant must see the same chain history and RGB contract IDs. Running `setup`
+independently on three unrelated chains does not make them interoperable.
 
-Текущий backend намеренно привязан к regtest. Rust использует local electrs
-`127.0.0.1:50001` и proxy `127.0.0.1:3000`; Python вызывает Bitcoin RPC через
-`docker compose exec … bitcoin-cli`. Multi-host RPC transport и отдельное
-onboarding/funding одного профиля ещё не реализованы. `catalog.py` также ожидает
-три локальных профиля. Поэтому нижеследующий сценарий — критерий следующего этапа,
-а не заявленная проверенная команда «развернуть всё на трёх ПК».
+The current backend intentionally targets regtest. Rust uses local electrs
+`127.0.0.1:50001` and proxy `127.0.0.1:3000`; Python calls Bitcoin RPC through
+`docker compose exec … bitcoin-cli`. Multi-host RPC transport and separate
+onboarding/funding for one profile are not implemented yet. `catalog.py` also
+expects three local profiles. The scenario below is therefore an acceptance target
+for the next stage, not a verified command to deploy everything on three computers.
 
-Необходимый небольшой инфраструктурный этап:
+Required infrastructure work:
 
-- Сделать Bitcoin RPC transport конфигурируемым (защищённый private network либо
-  loopback через SSH tunnel), сохранив текущий Docker transport для local demo.
-  Electrs/proxy можно оставить loopback через туннели либо параметризовать.
-  Wallet RPC при этом всегда остаётся локальным.
-- Разделить init одного профиля, выдачу публичных funding addresses, operator
-  funding и импорт публичного RGB catalog. Wallet создаётся только у владельца;
-  сервер не генерирует и не рассылает seed. Имена alice/bob/carol — уникальные
-  market identities, разные локальные wallet IDs.
-- Выбрать общий regtest Core + electrs, проверить общий checkpoint block hash;
-  майнит только тестовый оператор. Не использовать публичный mainnet/signet:
-  это потребует изменения wallet capabilities и проверок, а не только env.
-- Выпустить X у Alice, DUSD у Bob; передать всем только публичные exported
-  contracts и импортировать их через native catalog-import. Incoming ownership
-  появляется после принятого consignment, а не после импорта genesis.
+- Make Bitcoin RPC transport configurable (a secured private network or loopback
+  through an SSH tunnel), preserving Docker transport for the local demo.
+  Electrs/proxy can remain on loopback through tunnels or become configurable.
+  Wallet RPC must always remain local.
+- Separate single-profile initialization, public funding address output, operator
+  funding, and public RGB catalog import. Create wallets only on their owners'
+  computers; the server must not generate or distribute seeds. Names such as
+  alice/bob/carol identify distinct market participants and local wallets.
+- Choose shared regtest Core + electrs and verify a common checkpoint block hash;
+  only the test operator mines. Do not switch to public mainnet/signet: this needs
+  wallet capability and validation changes, not just environment variables.
+- Issue X to Alice and DUSD to Bob; distribute only public exported contracts and
+  import them through native catalog-import. Incoming ownership appears after an
+  accepted consignment, not after importing genesis.
 
-Воспроизводимый приёмочный сценарий после этого этапа:
+Reproducible acceptance scenario after that stage:
 
-| Шаг | 2 компьютера | 3 компьютера |
+| Step | 2 computers | 3 computers |
 | --- | --- | --- |
-| Identity / keys | Alice на ПК1, Bob на ПК2 | Добавить Carol на ПК3 |
-| Сеть | Один checkpoint regtest у всех | Тот же checkpoint |
-| Активы | DUSD Bob, BTC Alice, общий DUSD ID | X Alice, DUSD Bob, BTC Carol; общие X/DUSD IDs |
-| Заявки | Таблица direct выше | Таблица ring выше, без direct пары |
-| Проверка до подписи | Общие packageId/tx/commitment digests; суммы, fees, recipient scripts | Три funding/colored/proofs contributions в одном пакете |
-| Подпись | Отдельное подтверждение на обоих ПК | Отдельное подтверждение на всех трёх |
-| Результат | Один txid, mine, обе RGB acceptance, точные дельты | Один txid, три receipt, KEEP неизменен |
-| Recovery | Рестарт после подписи; тот же intent/signature/txid; обратный обмен | То же для трёх участников |
+| Identity / keys | Alice on PC1, Bob on PC2 | Add Carol on PC3 |
+| Network | Same regtest checkpoint for everyone | Same checkpoint |
+| Assets | Bob's DUSD, Alice's BTC, shared DUSD ID | Alice's X, Bob's DUSD, Carol's BTC; shared X/DUSD IDs |
+| Orders | Direct table above | Ring table above, with no direct pair |
+| Before signing | Shared packageId/tx/commitment digests; amounts, fees, recipient scripts | Three funding/colored/proofs contributions in one package |
+| Signing | Separate approval on both computers | Separate approval on all three |
+| Result | One txid, mine, both RGB acceptances, exact deltas | One txid, three receipts, KEEP unchanged |
+| Recovery | Restart after signing; same intent/signature/txid; reverse swap | Same for three participants |
 
-В cooperative path consignments уже идут внутри authenticated settlement
-materials через market, а не через общую файловую систему участников. Проверенный
-размер укладывается в текущие 256 KiB market messages. Длинные RGB истории могут
-потребовать отдельного согласованного транспорта. Наличие proxy health не означает,
-что remote cooperative proxy delivery проверен: обычный SDK proxy smoke и этот
-cooperative transport — разные сценарии.
+In the cooperative path, consignments already travel through market inside
+authenticated settlement materials, not a shared participant filesystem. Tested
+sizes fit the current 256 KiB market messages. Long RGB histories may require a
+separate agreed transport. Proxy health does not prove remote cooperative proxy
+delivery: the standard SDK proxy smoke and this cooperative transport are different scenarios.
 
-Следующий безопасный milestone — закрытый облачный market + два/три локальных
-кошелька на общей regtest-сети с перечисленными transport/onboarding изменениями.
-Текущие deterministic blinding/nonce, фиксированная fee estimate, отсутствие
-fee bumping/reorg recovery и security audit исключают production/mainnet запуск.
+The next safe milestone is a closed cloud market with two/three local wallets on
+a shared regtest network, including the transport/onboarding changes above.
+Current deterministic blinding/nonces, fixed fee estimates, lack of fee bumping/reorg
+recovery, and lack of a security audit rule out a production/mainnet launch.

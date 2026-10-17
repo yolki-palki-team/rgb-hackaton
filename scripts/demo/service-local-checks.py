@@ -26,7 +26,7 @@ try:
         result = runtime.local(
             "alice",
             "/interpret",
-            {"goal": "Отдаю 10 X за минимум 10 DUSD. BTC не продавать. Комиссия до 1000 sats."},
+            {"goal": "Sell 10 X for at least 10 DUSD. Do not sell BTC. Maximum fee 1000 sats."},
         )
         assert (
             result["draft"]
