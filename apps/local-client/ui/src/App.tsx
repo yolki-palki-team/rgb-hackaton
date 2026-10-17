@@ -144,7 +144,8 @@ function App() {
     if (!client) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
-    let healthChecked = 0;
+    // Pairing already checked capabilities; avoid another full index check on the first refresh.
+    let healthChecked = Date.now();
     const refresh = async () => {
       try {
         if (foregroundBusy.current) return;

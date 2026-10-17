@@ -4,7 +4,9 @@ import hashlib
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import desktop_wallet
 from desktop_wallet import SLOT, initialize, read_private, save_private
 
 
@@ -90,6 +92,44 @@ class DesktopWalletTests(unittest.TestCase):
                 lambda *_: {"network": "regtest", "fingerprint": "other-wallet"},
             )
         self.assertEqual(self.config_path.read_bytes(), saved)
+
+    def test_completed_automatic_profile_uses_verified_start_without_reinitialization(self):
+        state = self.initialize()
+        save_private(state / "automatic-ready.json", {"ownerId": self.config["ownerId"]})
+        saved = self.config_path.read_bytes()
+        with (
+            patch.object(desktop_wallet.os, "umask"),
+            patch("sys.argv", ["desktop_wallet.py", "auto", "--desktop-data-dir", str(self.root)]),
+            patch.object(
+                desktop_wallet,
+                "settings",
+                return_value=(read_private(self.config_path), state, 4201),
+            ),
+            patch.object(
+                desktop_wallet, "initialize", side_effect=AssertionError("Unexpected setup")
+            ),
+            patch.object(desktop_wallet, "start") as start,
+        ):
+            desktop_wallet.main()
+            start.assert_called_once_with(self.config_path.resolve())
+        self.assertEqual(self.config_path.read_bytes(), saved)
+
+    def test_fast_start_still_rejects_wrong_fingerprint_or_missing_keys(self):
+        state = self.initialize()
+        config = read_private(self.config_path)
+        with (
+            patch.object(desktop_wallet, "settings", return_value=(config, state, 4201)),
+            patch.object(
+                desktop_wallet,
+                "native",
+                return_value={"network": "regtest", "fingerprint": "wrong"},
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "identity changed"):
+                desktop_wallet.start(self.config_path)
+            (state / SLOT / "keys.json").unlink()
+            with self.assertRaisesRegex(ValueError, "configuration mismatch"):
+                desktop_wallet.start(self.config_path)
 
 
 if __name__ == "__main__":

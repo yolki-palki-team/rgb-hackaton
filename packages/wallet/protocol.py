@@ -184,8 +184,8 @@ class Backend:
 
     def state(self):
         self.sync_shared_catalog()
-        self.call_native("check-index")
-        raw = self.call_native("state")
+        # One wallet open and online sync, retaining the same allocation-index validation.
+        raw = self.call_native("checked-state")
         balances = [
             {
                 "asset": BTC,

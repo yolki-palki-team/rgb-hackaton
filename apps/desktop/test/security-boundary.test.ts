@@ -5,10 +5,32 @@ import {
   validateTradeId,
   validateWalletRequest,
   walletReadyForDesktop,
+  walletSidecarStarted,
 } from '../src/security.ts';
 
 const orderId = 'order-123e4567-e89b-42d3-a456-426614174000';
 const tradeId = '123e4567-e89b-42d3-a456-426614174000';
+
+test('startup accepts only the expected child listener and participant identity', () => {
+  const message = {
+    listening: 'http://127.0.0.1:4201',
+    profile: 'alice',
+    ownerId: 'participant-test',
+  };
+  const matches = (value: unknown) =>
+    walletSidecarStarted(value, 'participant-test', 'http://localhost:4201');
+  assert.equal(matches(message), true);
+  for (const value of [
+    null,
+    {},
+    { ...message, ownerId: 'other' },
+    { ...message, profile: 'bob' },
+    { ...message, listening: 'http://127.0.0.1:4202' },
+    { ...message, listening: 'http://example.com:4201' },
+    { ...message, unexpected: true },
+  ])
+    assert.equal(matches(value), false);
+});
 
 test('offer deep links carry one published order ID and no credentials or actions', () => {
   assert.equal(parseOfferLink(`palka://offer/${orderId}`), orderId);

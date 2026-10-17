@@ -23,8 +23,20 @@ dependencies. `rustc 1.86.0 is not supported` means an older standalone Rust was
 used: update this checkout and rerun the launcher with rustup installed.
 
 For a new checkout, clone the repository first. The script installs locked
-dependencies and builds the local wallet; subsequent launches can use
-`npm run dev:desktop`. No local Docker, invitation copy, manual init/fund/issue/sync,
+dependencies and builds the local wallet. Repeated `bash deploy/desktop.sh` launches
+reuse Node dependencies when the lockfile, workspace manifests and Node runtime
+are unchanged, and the installed Node/Electron binaries are present. Missing or
+changed dependencies trigger `npm ci` again. The first run with this optimization
+installs once to record a verified dependency fingerprint.
+
+SDK setup verifies the cached source and bridge hashes before any network request;
+unchanged launches do not download Git history. A cache created by the older launcher
+is compared with the pinned upstream source once. New SDK downloads fetch only the
+pinned commit. Cargo keeps its incremental build cache. The UI and desktop shell
+are still rebuilt to include source edits. When dependencies and native code have
+not changed, `npm run dev:desktop` also skips the setup checks.
+
+No local Docker, invitation copy, manual init/fund/issue/sync,
 or second terminal is needed. Close any manually started sidecar before switching.
 
 Fresh desktop profiles default to owlpeer.com. Existing profiles keep their
@@ -38,6 +50,20 @@ the X issuer, the second the DUSD issuer (1,000 units each); later participants
 receive BTC. Existing catalog issuers are preserved. Verified public contracts
 sync automatically while the wallet is idle, including contracts published after
 it started. Restart uses the existing wallet and can recover an active trade.
+
+Completed profiles go straight to the verified sidecar start instead of repeating
+initialization. Desktop waits for its own child process to announce the expected
+listener, then checks authenticated wallet capabilities once during pairing. The
+first UI refresh reuses that recent capability check; each balance read performs
+one native online sync with the allocation-index check, instead of opening and
+syncing the wallet twice. Signing still validates current state and exact terms.
+
+Validation on 2026-10-17: dependency-cache invalidation, SDK corruption/refreshed
+bridge checks, desktop listener identity and wallet index-failure tests pass.
+The unchanged SDK cache check took 0.043 seconds locally. This measures only SDK
+setup, not end-to-end wallet startup. Fresh toolchain builds, the local model's
+first download, shared-chain latency and confirmation/indexing remain variable;
+no total startup speedup or new live settlement is claimed.
 
 Opening **Top up** creates the local WDK account and automatically requests its
 one-time test BTC allowance. Moving those funds into the RGB wallet still requires

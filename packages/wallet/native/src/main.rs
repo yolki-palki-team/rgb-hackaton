@@ -225,12 +225,15 @@ fn run() -> Result<()> {
         }
         "export" => cooperative::export(&wallet, &root, &req)?,
         "validate" => cooperative::validate(&mut wallet, &root, &req)?,
-        "state" | "offline-state" => {
-            let on = if op == "state" {
+        "state" | "checked-state" | "offline-state" => {
+            let on = if op != "offline-state" {
                 Some(online(&mut wallet)?)
             } else {
                 None
             };
+            if op == "checked-state" {
+                wallet.cooperative_check_index()?;
+            }
             let unspents = wallet.list_unspents(on, false, op == "offline-state")?;
             json!({"profile":profile,"network":"regtest","btc":wallet.get_btc_balance(on,op == "offline-state")?,
                 "stockBalances":wallet.cooperative_stock_balances()?.iter().map(|(k,v)|(k.clone(),v.to_string())).collect::<std::collections::BTreeMap<_,_>>(),

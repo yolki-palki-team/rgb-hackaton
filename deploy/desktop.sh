@@ -19,7 +19,7 @@ cargo_executable="$(rustup which cargo)"
 export PATH="${cargo_executable%/*}:$PATH"
 cargo --version
 rustc --version
-npm ci --no-audit --no-fund
+node deploy/desktop-dependencies.mjs
 uv sync --locked
 uv run --locked python scripts/demo/bootstrap-native.py --refresh
 cargo build --locked --manifest-path packages/wallet/native/Cargo.toml

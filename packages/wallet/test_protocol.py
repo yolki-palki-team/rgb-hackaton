@@ -16,6 +16,27 @@ from server import create_server
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_balances_require_a_fresh_checked_state_and_propagate_index_failures(self):
+        backend = Backend.__new__(Backend)
+        backend.owner = "alice"
+        backend.wallet_id = "rgb-synthetic"
+        raw = {
+            "btc": {"vanilla": {"settled": "10"}, "colored": {"settled": "20"}},
+            "assets": {"nia": []},
+            "stockBalances": {},
+        }
+        with (
+            patch.object(backend, "sync_shared_catalog"),
+            patch.object(
+                backend, "call_native", side_effect=[raw, ValueError("index mismatch")]
+            ) as call,
+        ):
+            self.assertEqual(backend.state()["balances"], [{"asset": BTC, "amount": "30"}])
+            call.assert_called_once_with("checked-state")
+            with self.assertRaisesRegex(ValueError, "index mismatch"):
+                backend.state()
+            self.assertEqual(call.call_count, 2, "completed balance reads must not be cached")
+
     def test_funding_target_is_owned_vanilla_regtest_address(self):
         with tempfile.TemporaryDirectory() as tmp:
             backend = Backend.__new__(Backend)

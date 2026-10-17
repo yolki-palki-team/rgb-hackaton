@@ -364,11 +364,14 @@ def main():
     args = parser.parse_args()
     config_path = args.desktop_data_dir.expanduser().resolve() / "desktop-config.json"
     if args.command == "auto":
-        initialize(config_path)
         config, state, _ = settings(config_path)
         if (state / "automatic-ready.json").exists():
+            # start() verifies saved ownership, keys, token and fingerprint itself.
+            # A completed profile must not repeat initialization or rewrite its config.
             start(config_path)
             return
+        initialize(config_path)
+        config, state, _ = settings(config_path)
         market = urlsplit(config["marketUrl"])
         if market.scheme != "https":
             raise ValueError("Automatic shared-network setup requires HTTPS")

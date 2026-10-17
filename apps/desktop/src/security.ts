@@ -58,3 +58,16 @@ export function walletReadyForDesktop(value: unknown): boolean {
     parsed.success && parsed.data.result.mode === 'real' && parsed.data.result.network === 'regtest'
   );
 }
+
+// Read only from the child process we spawned, never from a renderer or network response.
+export function walletSidecarStarted(value: unknown, ownerId: string, rpcUrl: string): boolean {
+  const parsed = z
+    .object({
+      listening: z.string(),
+      profile: z.literal('alice'),
+      ownerId: z.literal(ownerId),
+    })
+    .strict()
+    .safeParse(value);
+  return parsed.success && parsed.data.listening === `http://127.0.0.1:${new URL(rpcUrl).port}`;
+}

@@ -57,7 +57,10 @@ if [[ "$1" == which ]]; then echo "$TOOLCHAIN_BIN/cargo"; fi""",
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.log.read_text()
         self.assertNotIn("OLD CARGO", commands)
-        self.assertLess(commands.index("rustup show active-toolchain"), commands.index("npm ci"))
+        self.assertLess(
+            commands.index("rustup show active-toolchain"),
+            commands.index("node deploy/desktop-dependencies.mjs"),
+        )
         self.assertIn("selected cargo build --locked", commands)
         self.assertIn("npm run dev:desktop", commands)
 

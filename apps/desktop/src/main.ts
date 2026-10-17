@@ -18,7 +18,7 @@ import {
   parseOfferLink,
   validateTradeId,
   validateWalletRequest,
-  walletReadyForDesktop,
+  walletSidecarStarted,
 } from './security.ts';
 import { loadDesktopConfig, type DesktopConfig } from './config.ts';
 import type { FundingStatus } from '../../local-client/src/funding-types.ts';
@@ -77,10 +77,26 @@ async function startSharedWallet(): Promise<void> {
   walletSidecar = spawn(python, [helper, 'auto', '--desktop-data-dir', app.getPath('userData')], {
     cwd: appRoot,
     env: process.env,
-    stdio: ['ignore', 'ignore', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
   let failed = false;
   let runtimeLocked = false;
+  let listening = false;
+  let output = '';
+  walletSidecar.stdout?.on('data', (chunk: Buffer) => {
+    output = (output + chunk.toString()).slice(-65_536);
+    let newline: number;
+    while ((newline = output.indexOf('\n')) !== -1) {
+      const line = output.slice(0, newline);
+      output = output.slice(newline + 1);
+      try {
+        if (walletSidecarStarted(JSON.parse(line), config.ownerId, config.walletRpcUrl))
+          listening = true;
+      } catch {
+        // Setup may emit other diagnostics; do not expose its output or private data.
+      }
+    }
+  });
   walletSidecar.on('error', () => {
     failed = true;
   });
@@ -103,33 +119,14 @@ async function startSharedWallet(): Promise<void> {
       throw new Error(
         'Automatic wallet setup failed. Stop any manually started sidecar; check server network readiness. Existing wallets were preserved.',
       );
-    config = loadDesktopConfig(app.getPath('userData'));
-    if (config.walletRpcToken) {
-      try {
-        const response = await fetch(config.walletRpcUrl + '/rpc', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${config.walletRpcToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            protocolVersion: 1,
-            requestId: 'desktop-startup',
-            method: 'capabilities',
-            params: {},
-          }),
-          signal: AbortSignal.timeout(Math.min(60_000, Math.max(1, deadline - Date.now()))),
-        });
-        const body = await response.json();
-        if (response.ok && walletReadyForDesktop(body)) {
-          console.log('palka. Wallet service available. Opening the desktop…');
-          return;
-        }
-      } catch {
-        /* Setup and indexing are still in progress. */
-      }
+    if (listening) {
+      config = loadDesktopConfig(app.getPath('userData'));
+      if (!config.walletRpcToken) throw new Error('Local wallet credentials were not saved');
+      // Pairing performs the authenticated capability/index check once, through LocalService.
+      console.log('palka. Wallet service listening. Connecting the desktop…');
+      return;
     }
-    await delay(1000);
+    await delay(100);
   }
   throw new Error('Shared wallet startup timed out; retry after checking server connectivity.');
 }
