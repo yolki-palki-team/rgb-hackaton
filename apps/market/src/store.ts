@@ -6,6 +6,10 @@ import {
   HistoryCursorSchema,
   IdSchema,
   MarketSnapshotSchema,
+  OrderFillProgressSchema,
+  orderFillFeeSats,
+  orderRemainingGive,
+  isOrderFillValid,
   PROTOCOL_VERSION,
   PublicOrderSchema,
   PublicMarketOrderSchema,
@@ -58,6 +62,7 @@ export class MarketStore {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS registered_participants (token_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, revision INTEGER NOT NULL, status TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS order_fill_progress (order_id TEXT PRIMARY KEY REFERENCES orders(id), data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at, id);
       CREATE INDEX IF NOT EXISTS idx_orders_owner_status ON orders(owner_id, status);
       CREATE INDEX IF NOT EXISTS idx_orders_history ON orders(created_at DESC, id DESC);
@@ -163,8 +168,26 @@ export class MarketStore {
   }
 
   private order(row: OrderRow): PublicOrder {
+    const original = JSON.parse(row.data) as PublicOrder;
+    const progress = original.partialFill
+      ? (this.db
+          .prepare('SELECT data FROM order_fill_progress WHERE order_id=?')
+          .get(original.id) as { data: string } | undefined)
+      : undefined;
     return PublicOrderSchema.parse({
-      ...JSON.parse(row.data),
+      ...original,
+      ...(original.partialFill
+        ? {
+            fillProgress: progress
+              ? JSON.parse(progress.data)
+              : {
+                  filledGiveAmount: '0',
+                  receivedAmount: '0',
+                  feeBudgetUsedSats: '0',
+                  fillCount: 0,
+                },
+          }
+        : {}),
       revision: row.revision,
       status: row.status,
     });
@@ -208,13 +231,41 @@ export class MarketStore {
     }
   }
 
-  private fillTradeOrders(trade: TradeSnapshot): void {
+  private fillTradeOrders(trade: TradeSnapshot, now: number): void {
     for (const ref of trade.plan.orderRefs) {
+      const order = this.getOrder(ref.orderId);
+      if (!order || order.status !== 'RESERVED' || order.revision !== ref.revision)
+        throw new MarketError('STALE_ORDER', 409);
+      let status: PublicOrder['status'] = 'FILLED';
+      if (order.partialFill) {
+        const outgoing = trade.plan.legs.find((leg) => leg.fromOwnerId === order.ownerId)!;
+        const incoming = trade.plan.legs.find((leg) => leg.toOwnerId === order.ownerId)!;
+        const fee = trade.plan.fees.find((item) => item.ownerId === order.ownerId)!.feeSats;
+        if (
+          !isOrderFillValid(order, outgoing.amount, incoming.amount) ||
+          fee !== orderFillFeeSats(order, outgoing.amount)
+        )
+          throw new MarketError('INVALID_FILL', 409);
+        const prior = order.fillProgress!;
+        const progress = OrderFillProgressSchema.parse({
+          filledGiveAmount: (BigInt(prior.filledGiveAmount) + BigInt(outgoing.amount)).toString(),
+          receivedAmount: (BigInt(prior.receivedAmount) + BigInt(incoming.amount)).toString(),
+          feeBudgetUsedSats: (BigInt(prior.feeBudgetUsedSats) + BigInt(fee)).toString(),
+          fillCount: prior.fillCount + 1,
+        });
+        this.db
+          .prepare(
+            'INSERT INTO order_fill_progress (order_id, data) VALUES (?, ?) ON CONFLICT(order_id) DO UPDATE SET data=excluded.data',
+          )
+          .run(order.id, JSON.stringify(progress));
+        if (orderRemainingGive({ ...order, fillProgress: progress }) > 0n)
+          status = order.expiresAt > now ? 'OPEN' : 'EXPIRED';
+      }
       const result = this.db
         .prepare(
-          "UPDATE orders SET status='FILLED', revision=revision+1 WHERE id=? AND status='RESERVED' AND revision=?",
+          "UPDATE orders SET status=?, revision=revision+1 WHERE id=? AND status='RESERVED' AND revision=?",
         )
-        .run(ref.orderId, ref.revision);
+        .run(status, ref.orderId, ref.revision);
       if (result.changes !== 1) throw new MarketError('STALE_ORDER', 409);
     }
   }
@@ -223,6 +274,7 @@ export class MarketStore {
     trade: TradeSnapshot,
     ownerId: string,
     message: CoordinationMessage,
+    now: number,
   ): TradeSnapshot {
     const status = trade.status;
     if (['REJECTED', 'CANCELLED', 'EXPIRED', 'UNSUPPORTED', 'CONFIRMED'].includes(status))
@@ -341,7 +393,7 @@ export class MarketStore {
             status: 'RECONCILING',
             reason: 'Wallet reports disagree on transaction ID',
           };
-        this.fillTradeOrders(trade);
+        this.fillTradeOrders(trade, now);
         return { ...trade, status: 'CONFIRMED' };
       }
       if (
@@ -387,7 +439,7 @@ export class MarketStore {
     const input = PublicOrderSchema.parse(raw);
     if (ownerId !== input.ownerId) throw new MarketError('OWNER_MISMATCH', 403);
     if (input.network !== 'regtest') throw new MarketError('UNSUPPORTED_NETWORK', 400);
-    if (input.revision !== 0 || input.status !== 'OPEN')
+    if (input.revision !== 0 || input.status !== 'OPEN' || input.fillProgress !== undefined)
       throw new MarketError('INVALID_INITIAL_ORDER', 400);
     return this.transaction((pending) => {
       this.expireOpen(now, pending);
@@ -399,7 +451,7 @@ export class MarketStore {
           throw new MarketError('ORDER_ID_CONFLICT', 409);
         const row = this.db
           .prepare(
-            'SELECT t.data FROM trades t JOIN trade_orders o ON o.trade_id=t.id WHERE o.order_id=?',
+            'SELECT t.data FROM trades t JOIN trade_orders o ON o.trade_id=t.id WHERE o.order_id=? ORDER BY t.rowid DESC LIMIT 1',
           )
           .get(input.id) as TradeRow | undefined;
         return {
@@ -420,9 +472,7 @@ export class MarketStore {
       this.event('order.created', 0, { order: input }, [], pending);
       const trade = this.reserveFirstMatch(now, pending);
       return {
-        order: trade?.plan.orderRefs.some((ref) => ref.orderId === input.id)
-          ? { ...input, status: 'RESERVED' as const, revision: 1 }
-          : input,
+        order: this.getOrder(input.id)!,
         trade,
       };
     });
@@ -461,7 +511,13 @@ export class MarketStore {
         asset: leg.asset,
         amount: leg.amount,
       })),
-      fees: match.orders.map((order) => ({ ownerId: order.ownerId, feeSats: order.maxFeeSats })),
+      fees: match.orders.map((order) => ({
+        ownerId: order.ownerId,
+        feeSats: orderFillFeeSats(
+          order,
+          match.legs.find((leg) => leg.fromOrderId === order.id)!.amount,
+        ),
+      })),
       feeState: 'estimate' as const,
       createdAt: now,
     };
@@ -534,11 +590,14 @@ export class MarketStore {
         `
       SELECT o.data, o.status, o.revision, t.status AS trade_status,
         (SELECT COUNT(*) FROM trade_participants p WHERE p.trade_id=t.id) AS participants
-      FROM orders o JOIN trade_orders r ON r.order_id=o.id JOIN trades t ON t.id=r.trade_id
-      WHERE o.status='RESERVED' OR t.id IN (
+      FROM orders o JOIN trades t ON t.id=(
+        SELECT r.trade_id FROM trade_orders r JOIN trades linked ON linked.id=r.trade_id
+        WHERE r.order_id=o.id ORDER BY linked.rowid DESC LIMIT 1
+      )
+      WHERE o.status!='OPEN' AND (o.status='RESERVED' OR t.id IN (
         SELECT id FROM trades WHERE status IN ('CONFIRMED','REJECTED','CANCELLED','EXPIRED','UNSUPPORTED')
         ORDER BY rowid DESC LIMIT 50
-      ) ORDER BY o.created_at DESC, o.id
+      )) ORDER BY o.created_at DESC, o.id
     `,
       )
       .all() as (OrderRow & { trade_status: string; participants: number })[];
@@ -578,9 +637,12 @@ export class MarketStore {
     const rows = this.db
       .prepare(
         `
-      SELECT o.id, o.data, o.status, o.revision, r.trade_id, t.status AS trade_status,
+      SELECT o.id, o.data, o.status, o.revision, t.id AS trade_id, t.status AS trade_status,
         (SELECT COUNT(*) FROM trade_participants p WHERE p.trade_id=t.id) AS participants
-      FROM orders o LEFT JOIN trade_orders r ON r.order_id=o.id LEFT JOIN trades t ON t.id=r.trade_id
+      FROM orders o LEFT JOIN trades t ON t.id=(
+        SELECT r.trade_id FROM trade_orders r JOIN trades linked ON linked.id=r.trade_id
+        WHERE r.order_id=o.id ORDER BY linked.rowid DESC LIMIT 1
+      )
       ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
       ORDER BY o.created_at DESC, o.id DESC LIMIT 51
     `,
@@ -608,19 +670,25 @@ export class MarketStore {
 
   history(ownerId: string, cursor?: string): MarketHistory {
     const { rows, nextCursor } = this.historyRows(cursor, ownerId);
+    const trades = rows.length
+      ? (this.db
+          .prepare(
+            `
+      SELECT DISTINCT t.rowid, t.data FROM trades t JOIN trade_orders r ON r.trade_id=t.id
+      WHERE r.order_id IN (${rows.map(() => '?').join(',')}) ORDER BY t.rowid DESC
+    `,
+          )
+          .all(...rows.map((row) => row.id)) as TradeRow[])
+      : [];
     return {
       myOrders: rows.map((row) => this.order(row)),
-      trades: rows.flatMap((row) => {
-        const trade = row.trade_id ? this.getTrade(row.trade_id, ownerId) : null;
-        return trade
-          ? [
-              {
-                plan: trade.plan,
-                status: trade.status,
-                ...(trade.reason !== undefined ? { reason: trade.reason } : {}),
-              },
-            ]
-          : [];
+      trades: trades.map((row) => {
+        const trade = TradeSnapshotSchema.parse(JSON.parse(row.data));
+        return {
+          plan: trade.plan,
+          status: trade.status,
+          ...(trade.reason !== undefined ? { reason: trade.reason } : {}),
+        };
       }),
       nextCursor,
     };
@@ -644,7 +712,12 @@ export class MarketStore {
     return row ? TradeSnapshotSchema.parse(JSON.parse(row.data)) : null;
   }
 
-  relayTradeMessage(ownerId: string, tradeId: string, raw: unknown): EventEnvelope {
+  relayTradeMessage(
+    ownerId: string,
+    tradeId: string,
+    raw: unknown,
+    now = Date.now(),
+  ): EventEnvelope {
     const message: CoordinationMessage = CoordinationMessageSchema.parse(raw);
     return this.transaction((pending) => {
       const trade = this.getTrade(tradeId, ownerId);
@@ -665,7 +738,7 @@ export class MarketStore {
         return EventEnvelopeSchema.parse(JSON.parse(row.data));
       }
       const updated = TradeSnapshotSchema.parse({
-        ...this.applyMessage(trade, ownerId, message),
+        ...this.applyMessage(trade, ownerId, message, now),
         messages: [...trade.messages, { ownerId, message }],
       });
       this.db
@@ -692,6 +765,7 @@ export class MarketStore {
           'INSERT INTO relay_idempotency (trade_id, owner_id, message_id, digest, sequence) VALUES (?, ?, ?, ?, ?)',
         )
         .run(tradeId, ownerId, message.messageId, digest, event.sequence);
+      if (updated.status === 'CONFIRMED') this.reserveFirstMatch(now, pending);
       return event;
     });
   }

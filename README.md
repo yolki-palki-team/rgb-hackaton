@@ -42,12 +42,24 @@ Success would provide bounded evidence that cyclic matching improves execution f
 
 - Target: direct and three-party atomic swaps on Bitcoin regtest, using BTC and two test RGB assets.
 - Local AI inference, private keys and wallet state stay on the user's device.
-- Fixed order amounts, full execution and explicit approval before signing.
+- Fixed total amounts, full execution by default, optional partial direct fills, and explicit approval before each signature.
 - Public web interface, matching server, local wallet client and packaged macOS shell.
 
 **Status:** Public web, deterministic direct/ring matching, local QVAC, private wallet UI, Electron and the real RGB sidecar are integrated. Fresh service checks on the combined tree confirmed direct and atomic three-party swaps, plus re-spending received RGB after restart. Historical recovery evidence is retained separately. The persistent host launcher now starts the real stack together; UI preparation and recovery no longer disappear between cooperative rounds or when balance reconciliation fails. A user-operated Electron Alice and API-operated Bob also completed a direct swap with both Bitcoin confirmation and RGB acceptance, independently checked against wallet balances and Core. Three-desktop, cloud and multi-computer verification remain separate. Mock cannot sign or report blockchain success.
 
 Separate WDK Bitcoin funding has passed a real regtest transfer and restart check; see [WDK funding](docs/handoffs/wdk-funding.md). This is a separate funding transaction, with explicit approval, and does not replace the native RGB settlement adapter.
+
+### Partial direct fills
+
+Enable **Allow partial fills** in the review form to fill a larger order through separate two-party swaps. For example, an order offering 100 X for at least 1,000,000 sats can exchange 50 X for 500,000 sats with Bob, then the other 50 X for 500,000 sats with Carol. Each fill has its own transaction and approval. The whole order is not atomic: one half can finish while the other remains unmatched. Full execution remains the default; three-party rings still execute in full.
+
+The minimum fill is expressed in the asset you give; the final remainder may be smaller. Integer checks preserve the original minimum exchange rate without rounding against either participant. Only one fill can be active for an order. Confirmed fills update its remaining amount and stay in history across restarts. A rejected or unsuccessful fill stops the remaining order while keeping its confirmed progress visible; publish a new order for that remainder if you want to continue. An uncertain signed transaction stays reserved until reconciliation, so it cannot be reused by another fill.
+
+**The fee limit is a total order budget.** Each fill receives a proportional cap based on its share of the original give amount. Confirmed caps consume this budget even when actual fees are lower; the displayed budget used is not a claim about actual fees paid. Small fills can therefore require a larger total budget, and native minimum-output and funding checks still apply. Incoming BTC cannot fund the fill's fee or satisfy a protected pre-trade balance. Partial execution does not authorize later signatures automatically.
+
+Update both the market backend and the wallet client before using partial fills. Older backends reject the new order terms; the client must not silently republish them as a full-only order.
+
+**Verified on local regtest:** one 100 X order completed as two 50 X / 500,000 sat fills with Bob and Carol, using two different Bitcoin transactions. Both wallets confirmed Bitcoin settlement and RGB acceptance for each fill; exact balances matched the approved previews. Restarting the isolated services between fills preserved the parent order, remainder and history, and the first fill's approval token was rejected for the second. Alice paid 500 sats per fill within the 2,000 sat total budget and retained her protected 7 KEEP. See the [sanitized evidence](scripts/demo/evidence/service-partial-fill-20261017T175857Z-703b6af6.json). Reproduce against local regtest infrastructure with `uv run --locked python scripts/demo/service-partial-smoke.py --execute`; it creates new ignored test wallets and never reuses an existing wallet. This is service-level evidence, not a multi-desktop or load test; QVAC and stage timings were not measured in this run.
 
 The desktop/local wallet now follows the public market's visual layout. Publishing checks the draft in one action; preparation, package validation and post-approval reconciliation run automatically while the app is open. Users still review exact amounts and approve signing separately. Repeated transport failures back off and pause with a retry action; reopening restores local approval/receipt state. The workflow and recovery checks pass. The user reviewed the updated desktop and accepted its appearance on 2026-10-17; no Computer Use was used. A new end-to-end swap through the redesigned UI remains unverified.
 

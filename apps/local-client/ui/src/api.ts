@@ -10,6 +10,7 @@ import {
   WalletStateSchema,
   assetKey,
   formatAmount,
+  orderRemainingGive,
 } from '@rgb-exchange/contracts';
 import type {
   AssetRef,
@@ -493,6 +494,7 @@ export class LocalClient {
       receiveAsset,
       minReceiveAmount: draft.minReceiveAmount,
       maxFeeSats: draft.maxFeeSats,
+      ...(draft.allowPartial ? { partialFill: { minGiveAmount: draft.minGiveAmount } } : {}),
       expiresAt: Date.now() + Number(draft.expiresMinutes) * 60_000,
     };
     return OrderDraftSchema.parse(raw);
@@ -569,7 +571,17 @@ function mapOrder(order: PublicOrder, mine = false): Order {
     receiveAsset: order.receiveAsset.symbol as AssetCode,
     minReceiveAmount: formatAsset(order.receiveAsset, order.minReceiveAmount, false),
     status:
-      order.status === 'OPEN' ? 'Open' : order.status === 'RESERVED' ? 'Reserved' : order.status,
+      order.status === 'OPEN'
+        ? BigInt(order.fillProgress?.filledGiveAmount ?? '0') > 0n
+          ? 'Partially filled'
+          : 'Open'
+        : order.status === 'RESERVED'
+          ? 'Reserved'
+          : order.status,
+    fillSummary: orderFillSummary(order),
+    minimumFill: order.partialFill
+      ? formatAsset(order.giveAsset, order.partialFill.minGiveAmount)
+      : undefined,
     mine,
   };
 }
@@ -582,7 +594,17 @@ function mapDraft(draft: OrderDraft): Draft {
     minReceiveAmount: draft.minReceiveAmount,
     maxFeeSats: draft.maxFeeSats,
     expiresMinutes: String(Math.max(1, Math.ceil((draft.expiresAt - Date.now()) / 60_000))),
+    allowPartial: Boolean(draft.partialFill),
+    minGiveAmount: draft.partialFill?.minGiveAmount ?? '',
   };
+}
+
+export function orderFillSummary(order: PublicOrder): string | undefined {
+  if (!order.partialFill) return undefined;
+  const filled = formatAsset(order.giveAsset, order.fillProgress?.filledGiveAmount ?? '0');
+  const total = formatAsset(order.giveAsset, order.giveAmount);
+  const remaining = formatAsset(order.giveAsset, orderRemainingGive(order).toString());
+  return `Filled ${filled} / ${total} · Remaining ${remaining}`;
 }
 
 function mapTrade(

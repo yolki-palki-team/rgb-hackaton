@@ -78,6 +78,44 @@ test('saved history renders exact terms and failed reasons without claiming comp
   assert.doesNotMatch(html, /confirmed|Completed/);
 });
 
+test('cancelled partial order retains confirmed fills, remaining amounts, and each fill outcome', () => {
+  const partialOrder: PublicOrder = {
+    ...order,
+    partialFill: { minGiveAmount: '25000000' },
+    fillProgress: {
+      filledGiveAmount: '25000000',
+      receivedAmount: '3087',
+      feeBudgetUsedSats: '250',
+      fillCount: 1,
+    },
+  };
+  const confirmedFill: TradeHistory = {
+    ...failedTrade,
+    status: 'CONFIRMED',
+    reason: undefined,
+    plan: {
+      ...failedTrade.plan,
+      tradeId: 'trade-confirmed-fill',
+      legs: [
+        { ...failedTrade.plan.legs[0], amount: '25000000' },
+        { ...failedTrade.plan.legs[1], amount: '3087' },
+      ],
+    },
+  };
+  const html = renderToStaticMarkup(
+    createElement(OrderHistoryRows, {
+      history: { myOrders: [partialOrder], trades: [failedTrade, confirmedFill], nextCursor: null },
+    }),
+  );
+  assert.match(html, /Cancelled/);
+  assert.match(html, /Filled 25,000,000 sats \/ 100,000,000 sats · Remaining 75,000,000 sats/);
+  assert.match(html, /Rejected/);
+  assert.match(html, /BTC and RGB confirmed/);
+  assert.match(html, /trade-confirmed-fill/);
+  assert.match(html, /30\.87 X/);
+  assert.match(html, /fee exceeds the approved limit/);
+});
+
 test('history refresh and older pages retain past orders while updating an existing trade', () => {
   const initial: MarketHistory = {
     myOrders: [order],

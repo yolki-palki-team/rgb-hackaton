@@ -15,6 +15,8 @@ import {
   SettlementPackageSchema,
   ReceiptSchema,
   assertPolicy,
+  isOrderFillValid,
+  orderFillFeeSats,
   assetKey,
   sameAsset,
   type WalletAdapter,
@@ -55,6 +57,13 @@ type SavedApproval = {
   approval: Approval;
 };
 type SigningIntent = { package: SettlementPackage; approval: Approval };
+type LocalFill = {
+  tradeId: string;
+  planDigest: string;
+  giveAmount: string;
+  receiveAmount: string;
+  feeSats: string;
+};
 const unsafeStates = ['SIGNING', 'SIGNED', 'RECONCILING', 'BROADCAST', 'CONFIRMED'];
 const cancelledStates = ['REJECTED', 'CANCELLED', 'EXPIRED', 'UNSUPPORTED'];
 type Operation = {
@@ -263,17 +272,72 @@ export class LocalService {
     for (const ref of trade.plan.orderRefs) {
       const saved = this.store.get<SavedPublication>(`order:${ref.orderId}`);
       if (saved?.order.ownerId === this.ownerId) {
-        if (ref.revision !== saved.order.revision + 1)
-          throw new LocalError('Stale order revision', 409);
         const outgoing = trade.plan.legs.find((l) => l.fromOwnerId === this.ownerId)!;
         const incoming = trade.plan.legs.find((l) => l.toOwnerId === this.ownerId)!;
         if (
           !sameAsset(outgoing.asset, saved.order.giveAsset) ||
-          outgoing.amount !== saved.order.giveAmount ||
-          !sameAsset(incoming.asset, saved.order.receiveAsset) ||
-          BigInt(incoming.amount) < BigInt(saved.order.minReceiveAmount)
+          !sameAsset(incoming.asset, saved.order.receiveAsset)
         )
           throw new LocalError('Plan changes the confirmed order', 409);
+        if (saved.order.partialFill) {
+          if (trade.plan.participants.length !== 2)
+            throw new LocalError('Partial-fill orders require independent direct swaps', 409);
+          const prefix = `fill:${saved.order.id}:`;
+          const key = `${prefix}${trade.plan.tradeId}`;
+          const bound = this.store.get<LocalFill>(key);
+          if (bound) {
+            if (bound.planDigest !== trade.plan.digest)
+              throw new LocalError('The immutable fill plan changed', 409);
+            return saved;
+          }
+          let filled = 0n;
+          let received = 0n;
+          let fees = 0n;
+          const prior = this.store.entries<LocalFill>(prefix);
+          for (const { value: fill } of prior) {
+            const receipt = this.store.get<ReturnType<typeof ReceiptSchema.parse>>(
+              `receipt:${fill.tradeId}`,
+            );
+            if (!receipt || receipt.state !== 'confirmed')
+              throw new LocalError('Reconcile the previous fill before starting another', 409);
+            this.checkReceipt(fill.tradeId, ReceiptSchema.parse(receipt));
+            filled += BigInt(fill.giveAmount);
+            received += BigInt(fill.receiveAmount);
+            fees += BigInt(fill.feeSats);
+          }
+          if (ref.revision !== saved.order.revision + prior.length * 2 + 1)
+            throw new LocalError('Stale order revision', 409);
+          const order: PublicOrder = {
+            ...saved.order,
+            fillProgress: {
+              filledGiveAmount: String(filled),
+              receivedAmount: String(received),
+              feeBudgetUsedSats: String(fees),
+              fillCount: prior.length,
+            },
+          };
+          if (!isOrderFillValid(order, outgoing.amount, incoming.amount))
+            throw new LocalError('Fill exceeds the remaining quantity or confirmed limits', 409);
+          const feeSats = trade.plan.fees.find((fee) => fee.ownerId === this.ownerId)!.feeSats;
+          if (BigInt(feeSats) > BigInt(orderFillFeeSats(order, outgoing.amount)))
+            throw new LocalError('Fill exceeds the remaining cumulative fee budget', 409);
+          // Only this wallet's confirmed receipt unlocks the next independent fill.
+          this.store.set(key, {
+            tradeId: trade.plan.tradeId,
+            planDigest: trade.plan.digest,
+            giveAmount: outgoing.amount,
+            receiveAmount: incoming.amount,
+            feeSats,
+          } satisfies LocalFill);
+        } else {
+          if (ref.revision !== saved.order.revision + 1)
+            throw new LocalError('Stale order revision', 409);
+          if (
+            outgoing.amount !== saved.order.giveAmount ||
+            BigInt(incoming.amount) < BigInt(saved.order.minReceiveAmount)
+          )
+            throw new LocalError('Plan changes the confirmed order', 409);
+        }
         return saved;
       }
     }
@@ -412,16 +476,19 @@ export class LocalService {
       preview.receive.amount !== incoming.amount
     )
       throw new LocalError('Wallet preview changes plan amounts or assets', 409);
-    if (BigInt(preview.feeSats) > BigInt(saved.order.maxFeeSats))
+    const feeLimit = trade.plan.fees.find((fee) => fee.ownerId === this.ownerId)!.feeSats;
+    if (
+      BigInt(preview.feeSats) > BigInt(saved.order.maxFeeSats) ||
+      BigInt(preview.feeSats) > BigInt(feeLimit)
+    )
       throw new LocalError('Final fee exceeds the order limit', 409);
-    const { giveAsset, giveAmount, receiveAsset, minReceiveAmount, expiresAt } = saved.order;
     assertPolicy(
       {
-        giveAsset,
-        giveAmount,
-        receiveAsset,
-        minReceiveAmount,
-        expiresAt,
+        giveAsset: outgoing.asset,
+        giveAmount: outgoing.amount,
+        receiveAsset: incoming.asset,
+        minReceiveAmount: incoming.amount,
+        expiresAt: saved.order.expiresAt,
         maxFeeSats: preview.feeSats,
       },
       saved.policy,
