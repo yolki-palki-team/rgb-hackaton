@@ -1,0 +1,7 @@
+state/
+target/
+native/target/
+native/vendor/
+*.log
+__pycache__/
+.env

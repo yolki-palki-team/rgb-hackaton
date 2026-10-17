@@ -1,0 +1,93 @@
+{
+  "network": "regtest",
+  "scenario": "ring",
+  "mode": "real-local-sdk-extension",
+  "txid": "32aba60bde94c32d5191dee36d8b358059a3d8bbe0a055cf8e3a8c41c863849f",
+  "blockHash": "0744bcb13399af19d977b9c165373b8f499f61a7020bd34ee27186137dbefdd3",
+  "confirmationsAtExport": 1,
+  "transactionCount": 1,
+  "approvalDigest": "55f6c3d60754c7bfe3a24a1044fbe2f79732daa3cc9fe212e5450f018c855fd6",
+  "feeSats": "1000",
+  "contracts": {
+    "X": "rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E",
+    "DUSD": "rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8",
+    "KEEP": "rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs"
+  },
+  "participants": {
+    "alice": {
+      "expectedBtcDeltaSats": "-333",
+      "actualBtcDeltaSats": "-333",
+      "rgb": {
+        "DUSD": {
+          "expectedDelta": "100",
+          "actualDelta": "100"
+        },
+        "X": {
+          "expectedDelta": "-100",
+          "actualDelta": "-100"
+        },
+        "KEEP": {
+          "expectedDelta": "0",
+          "actualDelta": "0",
+          "preservedAmount": "7"
+        }
+      },
+      "chainConfirmed": true,
+      "rgbAccepted": true,
+      "sdkAllocationIndexSynchronized": false
+    },
+    "bob": {
+      "expectedBtcDeltaSats": "99667",
+      "actualBtcDeltaSats": "99667",
+      "rgb": {
+        "DUSD": {
+          "expectedDelta": "-100",
+          "actualDelta": "-100"
+        }
+      },
+      "chainConfirmed": true,
+      "rgbAccepted": true,
+      "sdkAllocationIndexSynchronized": false
+    },
+    "carol": {
+      "expectedBtcDeltaSats": "-100334",
+      "actualBtcDeltaSats": "-100334",
+      "rgb": {
+        "X": {
+          "expectedDelta": "100",
+          "actualDelta": "100"
+        }
+      },
+      "chainConfirmed": true,
+      "rgbAccepted": true,
+      "sdkAllocationIndexSynchronized": false
+    }
+  },
+  "preSignatureRgbValidations": [
+    {
+      "receiver": "carol",
+      "ticker": "X",
+      "contractId": "rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E",
+      "amount": "100",
+      "valid": true,
+      "signed": false
+    },
+    {
+      "receiver": "alice",
+      "ticker": "DUSD",
+      "contractId": "rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8",
+      "amount": "100",
+      "valid": true,
+      "signed": false
+    },
+    {
+      "receiver": "alice",
+      "ticker": "KEEP",
+      "contractId": "rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs",
+      "amount": "7",
+      "valid": true,
+      "signed": false
+    }
+  ],
+  "productionAdapterEnabled": false
+}
