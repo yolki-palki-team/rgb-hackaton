@@ -89,6 +89,20 @@ class RecoveryTests(unittest.TestCase):
                     backend.sign(package,{**approval,"approvedAt":2})
                 self.assertEqual(read(folder/"user-approval.json"),approval)
 
+    def test_read_only_recovery_never_signs_and_requires_original_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend,folder,package,approval=self.backend(tmp)
+            save(folder/"user-approval.json",approval)
+            with patch.object(backend,"call_native",return_value={"signedPsbt":"synthetic-signature"}) as signer:
+                with self.assertRaisesRegex(ValueError,"no durable signature"):backend.recoverSignature(package)
+                signer.assert_not_called()
+                original=backend.sign(package,approval)
+                self.assertEqual(backend.recoverSignature(package),original)
+                signer.assert_called_once()
+                with self.assertRaisesRegex(ValueError,"changed recovery package"):
+                    backend.recoverSignature({**package,"payload":"changed"})
+                self.assertEqual(read(folder/"user-approval.json"),approval)
+
     def test_independent_btc_credit_is_not_rgb_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             backend,folder,package,approval=self.backend(tmp)

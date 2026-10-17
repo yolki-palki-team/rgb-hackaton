@@ -23,8 +23,8 @@ test('invalid model output cannot become an order', () => {
 });
 
 test('echoed goal is not treated as clarification for a complete fixed order', () => {
-  const goal = 'Продать 100 X за минимум 100 DUSD';
+  const goal = 'Sell 100 X for at least 100 DUSD';
   assert.equal(discardEchoedClarification({...valid, clarification: goal}, goal).clarification, null);
   assert.equal(discardEchoedClarification({...valid, giveAmount: null, clarification: goal}, goal).clarification, goal);
-  assert.equal(discardEchoedClarification({...valid, clarification: 'Какой курс?'}, goal).clarification, 'Какой курс?');
+  assert.equal(discardEchoedClarification({...valid, clarification: 'What exchange rate?'}, goal).clarification, 'What exchange rate?');
 });

@@ -1,3 +1,73 @@
+# Recovery fixes — 17 October 2026
+
+This section supersedes the three A recovery gaps documented in the historical
+service-integration sections below. The user authorized changes to local-client,
+market, the optional wallet interface and B's sidecar. UI/desktop code and root
+build manifests remain outside this change.
+
+The pre-fix work was committed first as `857d2bb` on
+`codex/settlement-recovery`. Recovery changes use an editable source snapshot
+based on `8098d1a`; only the changed source/test paths are added to the PR tree.
+The shared checkout, its index and the other developer's worktree stay untouched.
+Before the final commit, main advanced to `49568fa335a29d65bee4788e23dae72874ceaf14`. The recovery patch was
+three-way integrated onto that tree; desktop/web/build files are byte-identical
+to the new main. The service conflict preserves wallet-first health and English
+messages while retaining recovery states. This merge preserves both histories;
+no rebase, amend or force-push is used. Final validation on this integrated tree:
+64 tests (including desktop/web boundaries) and typecheck passed; Python has 17
+passing tests. Native settlement evidence below was produced before integration;
+legacy signature delivery and offline-peer cancellation were also rerun through
+the integrated same-origin API. The harness uses each local service's own origin.
+
+`RGB_SERVICE_SOURCE` selects this source for an existing private runtime config;
+the override is not represented as the unmodified base revision in evidence.
+
+- Approval is persisted in `signing:<tradeId>` before market/sign RPCs. Retry
+  preserves the exact approval, package and signature, including `approvedAt`.
+  `sync` relays the saved signature with the same content-derived message ID.
+- For old clients that deleted their local approval, optional
+  `recoverSignature(package)` reads an already saved backend signature. It checks
+  the complete package, original approval and intent digest, requires a signed
+  journal state, and never invokes signing. It cannot recover an operation for
+  which no durable signature and no local authorization survived.
+- `sync` repeats `finalize` only for an unresolved unconfirmed operation with all
+  participant signatures bound to the original package. A transaction already
+  observed pending or confirmed is reconciled without unnecessary finalization.
+  The market accepts signature recovery in RECONCILING without unlocking orders,
+  rejects conflicting signatures and rejects conflicting broadcast txids.
+- An unsigned peer can still preview/approve the unchanged package while another
+  participant is RECONCILING; full policy, expiry, balance and fee checks remain.
+- Terminal pre-sign cancellation is reconciled on local snapshots and a serialized
+  five-second background check. Offline peers recover on restart. A signing
+  notice, saved authorization, signature or unsafe local operation prevents
+  automatic release. Already committed wallet cancellation is idempotent.
+  Background cleanup never initiates signing or broadcast.
+
+Real regtest recovery evidence:
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| Persisted broadcast never submitted | Original ring tx `eab1d2e8319528f30785c5a8a0a200996b78d53048d23a84ffd7aa258558ecf0` reached Core, all three RGB receipts and market CONFIRMED; original signatures retained | [recovery](../scripts/demo/evidence/service-fixed-broadcast-not-submitted.json) |
+| Legacy lost signature response | Original Alice signature hash `0566762fadf139f42026bd61750e125545f5a6f5d5ffa808132129c15938e205` restored and delivered once without signing; reservations retained while waiting for Bob | [legacy](../scripts/demo/evidence/service-fixed-lost-sign-response-legacy.json) |
+| New lost signature response | Original approval/signature retained across restart; direct tx `e3973222a444f5b2f031e975be1cf39ed1fb54c0d64c6846e23f2a95190f109c` reached both RGB receipts and market CONFIRMED | [settlement](../scripts/demo/evidence/service-recovered-signature-settlement.json) |
+| Re-spend after recovered direct swap | Reverse tx `3d191fbc3bb94aa39a5b64d23ec1b5a08fb48df5fab6c06104ff8677affb60cb` spent the received RGB, both receipts and market CONFIRMED | [repeat](../scripts/demo/evidence/service-recovered-signature-repeat.json) |
+| Pre-sign peer rejection | Alice, Bob and offline/restarted Carol all CANCELLED with zero reserved inputs through service APIs; no test-only backend release | [cancellation](../scripts/demo/evidence/service-fixed-presign-reject.json) |
+
+Validation: 50 contracts/market/local-client tests, 17 Python protocol/journal
+tests and TypeScript `tsc --noEmit` passed. Synthetic tests explicitly use test
+doubles; real settlement evidence is recorded separately above.
+
+The original unsubmitted-broadcast recovery passed before the verification harness
+found the existing miner wallet unloaded after Core restart. The harness loaded
+that existing wallet and resumed the same transaction for confirmation; evidence
+marks that continuation as already known. No chain reset or new signature was used.
+
+`rgb-python-lib` is not used. Python provides the authenticated RPC/coordinator
+and journals; settlement uses the Rust `rgb-lib` dependency pinned at
+`1eaf0024c591e41843eb80cc8834082292668871` (0.3.0-beta.7) with the documented
+local cooperative extension. These are real regtest settlement checks, not
+production/mainnet readiness or a completed desktop flow.
+
 # Service integration — 17 October 2026
 
 This section supersedes integration/recovery limitations below where explicitly

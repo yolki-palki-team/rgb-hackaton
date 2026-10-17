@@ -56,12 +56,14 @@ def request(url, token, body=None, origin=None):
 class Runtime:
     def __init__(self):
         self.config = read(CONFIG)
-        self.source = Path(self.config["source"])
+        self.source = Path(os.environ.get("RGB_SERVICE_SOURCE", self.config["source"]))
+        if os.environ.get("RGB_SERVICE_SOURCE"):
+            self.config["baseSourceRevision"] = self.config.pop("sourceRevision", None)
         self.children = {}
 
     def local(self, person, path, body=None):
         cfg = self.config["profiles"][person]
-        return request(f'http://127.0.0.1:{cfg["localPort"]}/api{path}', cfg["localToken"], body, self.config["origin"])
+        return request(f'http://127.0.0.1:{cfg["localPort"]}/api{path}', cfg["localToken"], body, f'http://127.0.0.1:{cfg["localPort"]}')
 
     def wallet(self, person, method, params=None):
         cfg = self.config["profiles"][person]
@@ -103,7 +105,7 @@ class Runtime:
         self.spawn("local-" + person, self.node("apps/local-client/src/main.ts"), {
             "LOCAL_OWNER_ID": person, "LOCAL_PORT": str(cfg["localPort"]), "LOCAL_HOST": "127.0.0.1",
             "LOCAL_STATE_DIR": str(STATE / "services" / person), "LOCAL_SESSION_TOKEN": cfg["localToken"],
-            "LOCAL_ALLOWED_ORIGINS": self.config["origin"], "MARKET_URL": f'http://127.0.0.1:{self.config["basePort"]}',
+            "LOCAL_ALLOWED_ORIGINS": f'http://127.0.0.1:{cfg["localPort"]}', "MARKET_URL": f'http://127.0.0.1:{self.config["basePort"]}',
             "MARKET_TOKEN": cfg["marketToken"], "WALLET_MODE": "real", "WALLET_RPC_TOKEN": cfg["walletToken"],
             "WALLET_RPC_URL": f'http://127.0.0.1:{cfg["walletPort"]}', "QVAC_DEVICE": "cpu"})
 
@@ -138,4 +140,3 @@ class Runtime:
 
     def close(self):
         for name in list(reversed(self.children)): self.stop(name)
-

@@ -337,6 +337,24 @@ class Backend:
             return {"status":"signed","signature":{"ownerId":self.owner,"packageId":package["packageId"],"psbt":signed}}
         finally: j.db.close()
 
+    def recoverSignature(self, package):
+        """Read an existing signature only; never start signing or change approval."""
+        trade=package["tradeId"]; folder=self.folder(trade)
+        if package!=read(folder/"package.json"): raise ValueError("changed recovery package")
+        approval=read(folder/"user-approval.json")
+        expected={"walletId":self.wallet_id,"ownerId":self.owner,"network":"regtest","tradeId":trade,"planRevision":package["planRevision"],
+                  **{k:package[k] for k in ("packageId","planDigest","unsignedTxDigest","commitmentDigest")}}
+        if any(approval.get(k)!=v for k,v in expected.items()): raise ValueError("saved approval binding mismatch")
+        j=Journal(self.root/"journal.sqlite")
+        try:
+            row=j.snapshot(trade)
+            if not row or row["state"] not in ("SIGNED","RECONCILING","BROADCAST","CONFIRMED") or not row["signature"]:
+                raise ValueError("no durable signature to recover")
+            if row["digest"]!=approval_digest(read(folder/"approval-intent.json")) or row["digest"]!=approval_digest(json.loads(row["intent"])):
+                raise ValueError("saved intent mismatch")
+            return {"status":"signed","signature":{"ownerId":self.owner,"packageId":package["packageId"],"psbt":row["signature"]}}
+        finally: j.db.close()
+
     def finalize(self, package, signatures):
         trade=package["tradeId"]; folder=self.folder(trade); plan=read(folder/"plan.json")
         if package!=read(folder/"package.json"): raise ValueError("changed package")
@@ -413,7 +431,7 @@ class Backend:
         finally: j.db.close()
 
     def handle(self, method, params):
-        if method not in ("capabilities","state","reserve","release","prepare","validate","sign","finalize","sync"):
+        if method not in ("capabilities","state","reserve","release","prepare","validate","sign","recoverSignature","finalize","sync"):
             raise ValueError("unknown operation")
         if "package" in params: params={**params,"package":params["package"]}
         return getattr(self,method)(**params)

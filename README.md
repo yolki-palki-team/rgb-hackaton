@@ -1,17 +1,17 @@
-# RGB P2P Exchange
+# palka
 
-A non-custodial P2P marketplace for BTC and RGB assets, supporting direct swaps between two users and atomic ring swaps between three users.
+A non-custodial A2A marketplace prototype for BTC and RGB assets, designed for direct swaps between two users and atomic ring swaps between three users.
 
 Users describe their goals in plain language. An on-device QVAC assistant turns those goals and private preferences into orders for users to review. A deterministic matching engine finds compatible orders; each wallet validates the proposed exchange and requests approval before signing a shared Bitcoin transaction.
 
-## MVP
+## Scope and status
 
-- Direct and three-party swaps on Bitcoin regtest, using BTC and two test RGB assets.
+- Target: direct and three-party atomic swaps on Bitcoin regtest, using BTC and two test RGB assets.
 - Local AI inference, private keys and wallet state stay on the user's device.
 - Fixed order amounts, full execution and explicit approval before signing.
-- Web interface, matching server and local wallet client.
+- Public web interface, matching server, local wallet client and packaged macOS shell.
 
-**Status:** Developer A's local QVAC, order review, deterministic matching, SQLite market, authenticated event stream and web UI are implemented. Direct and three-party **matching** are tested. Real atomic Bitcoin/RGB settlement still requires developer B's adapter; mock mode cannot sign, broadcast or report blockchain success.
+**Status:** Developer A's local QVAC, order review, deterministic matching, SQLite market, authenticated event stream, public marketplace and separate local wallet UI are implemented. Direct and three-party **matching** are tested. Real atomic Bitcoin/RGB settlement still requires developer B's adapter; mock mode cannot sign, broadcast or report blockchain success.
 
 Hackathon resources and stack guidance are in [materials.md](materials.md).
 
@@ -24,11 +24,19 @@ docker compose up -d --build --wait
 docker compose exec runtime node --import tsx apps/local-client/scripts/docker-pairing.ts
 ```
 
-Open **http://127.0.0.1:5173**. The second command displays the URL and pairing token for each profile A/B/C; enter the chosen pair in the interface. No `.env` setup is needed. Existing host credentials and `node_modules` are excluded from the build and are not mounted into containers.
+Open **http://127.0.0.1:5173/** for the public landing page or **http://127.0.0.1:5173/market** for open orders. By default, the second command displays one private real-mode profile at **http://127.0.0.1:4101/** and its pairing token. Open that profile's URL and enter its token there. The public site never asks for a pairing token. No `.env` setup is needed to see the site, but a working wallet RPC sidecar and its token are required for balances or trading.
 
-`web` serves the production Vite build through Nginx. `runtime` supervises the market and three local clients, each with its own SQLite state and authentication. All published ports bind to `127.0.0.1`; the market remains private inside `runtime`. Pairing/Origin/Host checks remain enabled. This is a local demo with **mock wallets and real QVAC**, not three independent wallet devices. The missing B adapter, Bitcoin/RGB settlement and the retained telephony/Face ID utilities are not started.
+`web` serves the public Vite build through Nginx. It can proxy only `GET /market-api/health` and `GET /market-api/orders`; the proxy strips incoming authentication headers, cookies, request bodies and queries. `runtime` supervises the market and one real-mode local client by default. That client serves its private wallet UI on the same origin as its API. Published ports bind to `127.0.0.1`; the market port is not published and remains available only on the Docker bridge. The Compose file retains loopback mappings for 4102/4103 for the opt-in mock demo, but those profiles are not started by default. Pairing/Origin/Host checks remain enabled. Missing wallet RPC credentials leave the real client visibly unavailable; they do not select a synthetic wallet. The retained telephony/Face ID utilities are not started.
 
-Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. On first startup, one process downloads about 1.06 GB of weights and checks model loading before the three profiles start, avoiding simultaneous downloads into the shared cache. Subsequent startups reuse the cache. Each profile loads the prepared model on its first AI use; its readiness is shown in the UI. Docker runs Linux CPU inference; the native macOS Metal path is available through `npm run dev:mock` instead. The setup is intended for Docker with at least 8 GB of memory; inference speed depends on available CPUs.
+Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. The real-default path does not preload QVAC; first actual AI use downloads about 1.06 GB of public model weights, then loads them locally. Docker runs Linux CPU inference. Model readiness is shown in the local UI. Allow enough disk space and memory for the model; inference speed depends on the machine.
+
+To run the explicit synthetic three-profile demonstration instead:
+
+```sh
+PALKA_DEMO_MODE=true docker compose up -d --build --wait
+```
+
+It starts mock A/B/C on ports 4101–4103 and preloads QVAC once for the shared cache. Mock wallets can match orders but cannot sign or report Bitcoin/RGB settlement. This setting is for demonstration only; omit it to return to the real-default path. The real wallet RPC URL is restricted to loopback, so a Docker deployment needs B's sidecar in the same container/network namespace; Compose does not launch one.
 
 ```sh
 docker compose ps
@@ -37,7 +45,7 @@ docker compose restart runtime
 docker compose down
 ```
 
-`down` stops/removes containers but preserves volumes. Do not add `--volumes` if you need to keep the demo state. To explicitly test local model inference inside the running container: `docker compose exec runtime npm run smoke:qvac`.
+`down` stops/removes containers but preserves volumes. Do not add `--volumes` if you need to keep wallet/demo state. To explicitly test local model inference inside the running container: `docker compose exec runtime npm run smoke:qvac`.
 
 ## Run the local demo
 
@@ -46,13 +54,13 @@ npm ci
 npm run dev:mock
 ```
 
-Open **http://127.0.0.1:5173**. The runner starts the market on port 4100 and local profiles A/B/C on 4101/4102/4103. It prints the path to a private `.state/mock-*/pairing.json` file: enter the profile's local URL and `sessionToken` in the interface. The token stays in browser memory; seed/private keys are never sent to the browser. Each invocation creates separate demo state. Stop the runner with Ctrl+C.
+Open **http://127.0.0.1:5173/** for the landing page or **http://127.0.0.1:5173/market** for the public order book. The runner starts the market on port 4100 and local profiles A/B/C on 4101/4102/4103. It prints the path to a private `.state/mock-*/pairing.json` file. Open the desired profile's local URL and enter its `sessionToken` on that page; the public market cannot access local balances, policy, signing or the pairing token. The token stays in that tab's memory; seed/private keys are never sent to the browser. `npm run dev:mock` builds the local UI before starting. Each invocation creates separate demo state. Stop the runner with Ctrl+C.
 
 `mock` applies to the wallet: its labeled balances are synthetic. The market, SQLite persistence, HTTP/WebSocket authorization and QVAC inference are real. Preparing a mock trade returns `UNSUPPORTED`, without a fake transaction ID. Three profiles on this machine are a demonstration, not three independent devices.
 
 QVAC uses **@qvac/sdk 0.21.1**, **QWEN3_1_7B_INST_Q4**, and a local Node 22.17 runtime installed with the workspace. First use downloads about 1.06 GB of public model weights; subsequent inference is local. No model API key or cloud fallback is used. A failed/ambiguous extraction leaves a manual form. Percentage constraints need particular care: the model can misread them, so invalid interpretations are rejected and all drafts require review.
 
-Example goal: `Продать 100 X за минимум 100 DUSD. Комиссия до 1000 sats. BTC не продавать.` The order form displays **atomic units** (BTC in sats); X and test DUSD have precision 0 in the mock. DUSD is not USDT or a backed dollar.
+Example goal: `Sell 100 X for at least 100 DUSD. Fee up to 1000 sats. Do not sell BTC.` The local order form displays **atomic units** (BTC in sats); X and test DUSD have precision 0 in the mock. DUSD is not USDT or a backed dollar.
 
 For the ring, confirm these three independent orders, allowing BTC sale only for C:
 
@@ -64,11 +72,25 @@ For the ring, confirm these three independent orders, allowing BTC sale only for
 
 Confirming an order authorizes matching only. Signing has a separate final wallet-validated preview and approval. Real mode retains reservations after a signing attempt or an uncertain broadcast; expiry is not permission to reuse the funds.
 
+## Desktop wallet client (macOS)
+
+```sh
+npm ci
+npm run dev:desktop
+# Or build a distributable macOS app:
+npm run package:desktop
+```
+
+The macOS package is written to `.dist/desktop/palka-darwin-arm64/palka.app`. A packaged launch loaded the local UI and the six-method `window.palkaWallet` bridge; real mode without B's RPC showed an unavailable wallet. The app keeps the market token, wallet RPC token and local API bearer in Electron's main process. Signing requires a fresh wallet preview and a native approval dialog showing amounts and fee. A `palka://offer/order-<UUID>` argument delivered to an already running second instance selected the offer for review and did not act on the trade. The macOS scheme is declared in the app bundle; delivery through LaunchServices `open` remains unverified. The public marketplace has no access to this bridge.
+
+The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. Configure a market token that the market recognizes and B's loopback wallet RPC URL/token there; the file is reused across restarts. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, and `PALKA_PUBLIC_MARKET_URL` can override those values for a run. The current repository does not provide B's sidecar. Until it exists and reports the required capabilities, the client shows an unavailable wallet and cannot trade. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
+
 ## Layout and integration
 
-- `apps/web`: React/Vite interface.
+- `apps/web`: public React/Vite landing page and read-only market.
 - `apps/market`: HTTP/WebSocket coordination, deterministic matcher and SQLite.
-- `apps/local-client`: loopback API, QVAC, private policies, approval state and wallet RPC client.
+- `apps/local-client`: local wallet UI and same-origin loopback API, QVAC, private policies, approval state and wallet RPC client.
+- `apps/desktop`: Electron main/preload bridge, local service launcher and macOS package script.
 - `packages/contracts`: protocol v1 runtime schemas, exact BigInt quantities and synthetic JSON fixtures.
 - `tools/telephony`, `tools/faceid`: retained earlier utilities, not used by the exchange or its local AI flow.
 
@@ -76,7 +98,7 @@ The old Expo `front/` directory was removed at the user's request. Root `node_mo
 
 See [A handoff](docs/handoffs/a.md) for the complete adapter boundary and ports, [QVAC evidence](docs/handoffs/qvac-evidence.md) for actual inference checks, and [.env.example](.env.example) for local configuration names. The application does not automatically load the existing root `.env`. Never put private wallet state or pairing tokens in Git.
 
-To connect B, start its loopback sidecar and configure a local profile with `WALLET_MODE=real`, `WALLET_RPC_URL` and `WALLET_RPC_TOKEN`. Its declared capabilities must support the requested direct/ring swap. A's HTTP bridge is implemented and protocol-tested against a test double; a real B sidecar, its RGB codec and actual on-chain receipts are still missing. Unsupported rings are never replaced with sequential transfers.
+To connect B, start its loopback sidecar and configure a local profile with `WALLET_RPC_URL` and `WALLET_RPC_TOKEN`; real mode is already the default. Its declared capabilities must support the requested direct/ring swap. A's HTTP bridge is implemented and protocol-tested against a test double; a real B sidecar, its RGB codec and actual on-chain receipts are still missing. Unsupported rings are never replaced with sequential transfers.
 
 ## Checks
 
@@ -87,6 +109,6 @@ npm run build
 npm run smoke:qvac
 ```
 
-Tests cover exact amounts/limits, direct/ring/no-match, ownership, revisions, expiration, double reservation, event replay/access, local Origin/pairing, rejected AI JSON, stale final previews and recovery after uncertain signature delivery. The QVAC smoke performs actual local inference and prints only synthetic test output and runtime diagnostics. Wallet test doubles prove boundary behavior, not atomic RGB settlement.
+`npm run build` builds both the public and local UIs. Tests cover exact amounts/limits, direct/ring/no-match, ownership, revisions, expiration, double reservation, event replay/access, local Origin/pairing, rejected AI JSON, stale final previews and recovery after uncertain signature delivery. The QVAC smoke performs actual local inference and prints only synthetic test output and runtime diagnostics. Wallet test doubles prove boundary behavior, not atomic RGB settlement.
 
 The root documentation, initial ideas and retained utilities predate the exchange implementation. A's workspace code was created during this development session on 17 October 2026; no Git history rewrite or deployment was performed.

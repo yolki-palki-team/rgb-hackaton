@@ -1,3 +1,39 @@
+# A/B recovery update — 17 October 2026
+
+The user authorized fixing the three reproduced A recovery problems. Current work
+is on `codex/settlement-recovery`; `857d2bb` preserves the complete pre-fix state.
+See the new first section of [settlement.md](../settlement.md) for evidence and
+remaining limitations; older handoff claims below are historical.
+
+Changed ownership/interface surface: local-client service/main/server/wallet and
+service tests; market store and tests; optional
+`WalletAdapter.recoverSignature(package)` returning `SignatureResult`. B implements
+this as a read-only lookup of an existing signed journal record, never a signing
+operation. Deploy updated local-client and wallet sidecar together for legacy
+signature recovery; adapters without the optional method can still recover new
+operations using the preserved original approval. No root manifest, lockfile,
+web or desktop changes are included.
+
+The previously stranded unsubmitted ring transaction is CONFIRMED on all three
+wallets with unchanged signatures. The old lost-response Alice signature has
+been restored and relayed once without creating an approval; that legacy trade
+still awaits Bob and retains its reservations. A new pre-sign rejection frees
+all three wallets, including an offline/restarted Carol. Wallet release is now
+idempotent after committed cancellation.
+
+A fresh lost-sign-response direct swap completed as
+`e3973222a444f5b2f031e975be1cf39ed1fb54c0d64c6846e23f2a95190f109c`,
+then spent received RGB in reverse tx
+`3d191fbc3bb94aa39a5b64d23ec1b5a08fb48df5fab6c06104ff8677affb60cb`.
+Both have exact balance deltas, real RGB acceptance and market CONFIRMED.
+After three-way integration with main `49568fa`, 64 TypeScript tests,
+17 Python tests and typecheck passed. New desktop/web/build files are preserved;
+local service health and same-origin behavior from main remain intact.
+
+Signing/finalization recovery is an explicit local `sync` action. Only unsigned
+terminal-cancellation cleanup runs automatically. Never release signed reserves
+or create a replacement trade to hide an unresolved signature.
+
 # B service integration handoff — 17 October 2026
 
 Real service integration now passes direct and three-party atomic ring, plus

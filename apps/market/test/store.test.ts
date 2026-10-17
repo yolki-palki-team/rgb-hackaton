@@ -205,3 +205,23 @@ test('confirmed wallet reports cannot override a different broadcast txid', () =
   assert.equal(store.getTrade(id, 'a')?.status, 'RECONCILING');
   assert.deepEqual(['a', 'b'].map((orderId) => store.getOrder(orderId)?.status), ['RESERVED', 'RESERVED']);
 }));
+
+
+test('signature recovery in RECONCILING keeps reservations and rejects changed signatures/package',()=>withStore(store=>{
+  store.createOrder('a',order('a','a',btc,'100000',dusd,'100'),now);
+  const trade=store.createOrder('b',order('b','b',dusd,'100',btc,'100000'),now).trade!;
+  signingTrade(store,trade);
+  const id=trade.plan.tradeId;
+  store.relayTradeMessage('a',id,{messageId:'uncertain',revision:0,type:'reject',payload:{signatureMayExist:true}});
+  const payload={packageId:'package-1',unsignedTxDigest:'0'.repeat(64),commitmentDigest:'1'.repeat(64),signature:'test-only'};
+  const message={messageId:'recovered',revision:0,type:'signature',payload};
+  const first=store.relayTradeMessage('a',id,message);
+  assert.equal(store.relayTradeMessage('a',id,message).sequence,first.sequence);
+  assert.equal(store.getTrade(id,'a')!.status,'RECONCILING');
+  assert.throws(()=>store.relayTradeMessage('a',id,{...message,messageId:'conflict',payload:{...payload,signature:'changed'}}),/SIGNATURE_CONFLICT/);
+  assert.throws(()=>store.relayTradeMessage('b',id,{...message,messageId:'wrong-package',payload:{...payload,packageId:'other'}}),/SIGNATURE_PACKAGE_MISMATCH/);
+  assert.equal(store.getOrder('a')!.status,'RESERVED');
+  const receipt={...confirmedReceipt(id),state:'pending',chainConfirmed:false,rgbAccepted:false};
+  store.relayTradeMessage('a',id,{messageId:'broadcast-one',revision:0,type:'broadcast',payload:receipt});
+  assert.throws(()=>store.relayTradeMessage('b',id,{messageId:'broadcast-conflict',revision:0,type:'broadcast',payload:{...receipt,txid:'b'.repeat(64)}}),/BROADCAST_TXID_CONFLICT/);
+}));

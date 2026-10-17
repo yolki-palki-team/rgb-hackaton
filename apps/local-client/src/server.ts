@@ -2,9 +2,24 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { LocalError, LocalService } from './service.ts';
+import { serveLocalUi } from './ui.ts';
 
-type ServerOptions = {token:string;allowedOrigins:string[]};
+type ServerOptions = {token:string;allowedOrigins?:string[];uiDirectory?:string};
 const BODY_LIMIT = 128 * 1024;
+const LOCAL_CSP="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+function localOrigin(request:IncomingMessage):string {
+  const host=request.headers.host ?? '';
+  const match=/^(localhost|127\.0\.0\.1):([0-9]{1,5})$/.exec(host);
+  if (!match || Number(match[2])!==request.socket.localPort) throw new LocalError('Invalid Host',403);
+  return `http://${host}`;
+}
+function verifyOrigin(request:IncomingMessage, self:string, allowedOrigins?:string[]):void {
+  const origin=request.headers.origin;
+  const site=request.headers['sec-fetch-site'];
+  if (origin && (origin!==self || (allowedOrigins && !allowedOrigins.includes(origin)))) throw new LocalError('Origin is not paired',403);
+  if (site && site!=='same-origin') throw new LocalError('Cross-origin request denied',403);
+  // Native clients have no Fetch Metadata; their bearer token and validated Host provide the fallback.
+}
 async function body(request:IncomingMessage):Promise<unknown> {
   let length=0;
   const chunks:Buffer[]=[];
@@ -25,12 +40,21 @@ export function createLocalServer(service:LocalService,options:ServerOptions) {
   const expected=Buffer.from(`Bearer ${options.token}`);
   return createServer(async(request,response)=>{
     try {
-      const host=(request.headers.host ?? '').split(':')[0];
-      if (!['127.0.0.1','localhost'].includes(host)) throw new LocalError('Invalid Host',403);
+      const self=localOrigin(request);
+      response.setHeader('Content-Security-Policy',LOCAL_CSP);
+      response.setHeader('Referrer-Policy','no-referrer');
+      response.setHeader('Cross-Origin-Opener-Policy','same-origin');
+      response.setHeader('X-Content-Type-Options','nosniff');
+      const rawPath=(request.url ?? '/').split('?')[0];
+      if (request.method==='GET' && !rawPath.startsWith('/api/') && !rawPath.startsWith('/api') && options.uiDirectory) {
+        if (await serveLocalUi(response,request.url ?? '/',options.uiDirectory)) return;
+      }
+      verifyOrigin(request,self,options.allowedOrigins);
       const origin=request.headers.origin;
-      if (!origin || !options.allowedOrigins.includes(origin)) throw new LocalError('Origin is not paired',403);
-      response.setHeader('Access-Control-Allow-Origin',origin);
-      response.setHeader('Vary','Origin');
+      if (origin) {
+        response.setHeader('Access-Control-Allow-Origin',origin);
+        response.setHeader('Vary','Origin');
+      }
       if (request.method==='OPTIONS') {
         response.writeHead(204,{'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type','Access-Control-Max-Age':'600'});
         response.end(); return;
@@ -42,7 +66,7 @@ export function createLocalServer(service:LocalService,options:ServerOptions) {
         if (path==='/api/health') return json(response,200,await service.health());
         if (path==='/api/state') return json(response,200,await service.state());
         if (path==='/api/policy') return json(response,200,await service.policy());
-        if (path==='/api/snapshot') return json(response,200,await service.market.snapshot());
+        if (path==='/api/snapshot') return json(response,200,await service.exclusive(()=>service.snapshot()));
         const trade=/^\/api\/trades\/([a-zA-Z0-9:._-]+)$/.exec(path);
         if (trade) return json(response,200,await service.trade(trade[1]));
       }
@@ -72,7 +96,7 @@ export function createLocalServer(service:LocalService,options:ServerOptions) {
       }
       throw new LocalError('Not found',404);
     } catch(error) {
-      if (error instanceof z.ZodError) return json(response,400,{error:'Некорректные данные: проверьте суммы, активы и обязательные поля',code:'INVALID_INPUT'});
+      if (error instanceof z.ZodError) return json(response,400,{error:'Invalid input: check amounts, assets, and required fields',code:'INVALID_INPUT'});
       if (error instanceof LocalError) return json(response,error.status,{error:error.message,code:error.code});
       // No prompt, balances, model output or credentials in error logs.
       return json(response,400,{error:error instanceof Error ? error.message : 'Local operation failed',code:'LOCAL_ERROR'});

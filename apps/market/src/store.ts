@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { CoordinationMessageSchema, EventEnvelopeSchema, MarketSnapshotSchema, PROTOCOL_VERSION, PublicOrderSchema, ReceiptSchema, SettlementPackageSchema, TradePlanSchema, TradeSnapshotSchema, type CoordinationMessage, type EventEnvelope, type MarketSnapshot, type PublicOrder, type TradePlan, type TradeSnapshot } from '@rgb-exchange/contracts';
-import { planDigest } from '@rgb-exchange/contracts/digest';
+import { digestValue, planDigest } from '@rgb-exchange/contracts/digest';
 import { findMatch } from './matcher.ts';
 
 type OrderRow = { data: string; status: PublicOrder['status']; revision: number };
@@ -105,17 +105,23 @@ export class MarketStore {
       return { ...trade, status: 'AWAITING_APPROVAL', settlementPackage: pkg };
     }
     if (message.type === 'signature') {
-      if (!trade.settlementPackage || !['AWAITING_APPROVAL', 'SIGNING'].includes(status)) throw new MarketError('INVALID_TRADE_STAGE', 409);
+      if (!trade.settlementPackage || !['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING', 'BROADCAST'].includes(status)) throw new MarketError('INVALID_TRADE_STAGE', 409);
       if (!message.payload || typeof message.payload !== 'object' || Array.isArray(message.payload)) throw new MarketError('INVALID_SIGNATURE_NOTICE', 400);
       const payload = message.payload as Record<string, unknown>;
       if (payload.packageId !== trade.settlementPackage.packageId || payload.unsignedTxDigest !== trade.settlementPackage.unsignedTxDigest || payload.commitmentDigest !== trade.settlementPackage.commitmentDigest) throw new MarketError('SIGNATURE_PACKAGE_MISMATCH', 409);
-      return { ...trade, status: 'SIGNING' };
+      if (payload.signature === undefined && payload.signatureMayExist !== true) throw new MarketError('INVALID_SIGNATURE_NOTICE', 400);
+      const previous = trade.messages.filter(item => item.ownerId === ownerId && item.message.type === 'signature')
+        .map(item => item.message.payload as Record<string, unknown>).find(item => item.signature !== undefined);
+      if (previous && payload.signature !== undefined && digestValue(previous.signature) !== digestValue(payload.signature)) throw new MarketError('SIGNATURE_CONFLICT', 409);
+      return { ...trade, status: status === 'AWAITING_APPROVAL' ? 'SIGNING' : status };
     }
     if (message.type === 'broadcast') {
-      if (!['SIGNING', 'READY_TO_BROADCAST', 'RECONCILING'].includes(status)) throw new MarketError('INVALID_TRADE_STAGE', 409);
+      if (!['SIGNING', 'READY_TO_BROADCAST', 'RECONCILING', 'BROADCAST'].includes(status)) throw new MarketError('INVALID_TRADE_STAGE', 409);
       const receipt = ReceiptSchema.parse(message.payload);
       if (receipt.mode !== 'real' || receipt.tradeId !== trade.plan.tradeId || receipt.network !== trade.plan.network || !receipt.txid) throw new MarketError('INVALID_BROADCAST_RECEIPT', 400);
-      return { ...trade, status: 'BROADCAST' };
+      const prior = trade.messages.filter(item => item.message.type === 'broadcast').map(item => ReceiptSchema.parse(item.message.payload));
+      if (prior.some(item => item.txid !== receipt.txid)) throw new MarketError('BROADCAST_TXID_CONFLICT', 409);
+      return { ...trade, status: receipt.state === 'reconciling' ? 'RECONCILING' : 'BROADCAST' };
     }
     if (message.type === 'receipt') {
       const receipt = ReceiptSchema.parse(message.payload);

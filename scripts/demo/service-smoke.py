@@ -87,6 +87,8 @@ def settle(runtime,trade_id,scenario,reverse=False,evidence_name=None):
     tx = rpc("getrawtransaction", txid, True)
     assert tx["txid"] == txid
     if not tx.get("confirmations", 0):
+        if "regtest-miner" not in rpc("listwallets"):
+            rpc("loadwallet", "regtest-miner")
         miner = rpc("-rpcwallet=regtest-miner", "getnewaddress")
         rpc("generatetoaddress", 1, miner)
     receipts = {}
