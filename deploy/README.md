@@ -139,7 +139,7 @@ Each participant opens their own tunnel using their authorized SSH access.
 This connects desktop to market, but does not provide remote Bitcoin RPC transport.
 Direct access without a tunnel requires a separate HTTPS market origin and WSS
 `/events`, preserving Authorization. The public Nginx proxy exposes only read-only
-`/market-api/health` and `/market-api/orders`; it deliberately excludes private
+`/market-api/health`, `/market-api/orders` and `/market-api/activity`; it deliberately excludes private
 routes. TLS, DNS, general API rate limits, and automatic backups are not configured
 in this initial HTTP profile.
 

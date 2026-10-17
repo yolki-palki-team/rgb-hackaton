@@ -6,6 +6,8 @@ import {
   MarketSnapshotSchema,
   PROTOCOL_VERSION,
   PublicOrderSchema,
+  PublicMarketOrderSchema,
+  type PublicMarketOrder,
   ReceiptSchema,
   SettlementPackageSchema,
   TradePlanSchema,
@@ -506,6 +508,36 @@ export class MarketStore {
         )
         .all(now) as OrderRow[]
     ).map((row) => this.order(row));
+  }
+
+  publicActivity(now = Date.now()): { orders: PublicMarketOrder[] } {
+    const orders: PublicMarketOrder[] = this.listOpen(now).map((order) => ({
+      order,
+      execution: null,
+    }));
+    // Keep all active executions and the latest 50 finished trades, so completion remains visible.
+    const rows = this.db
+      .prepare(
+        `
+      SELECT o.data, o.status, o.revision, t.status AS trade_status,
+        (SELECT COUNT(*) FROM trade_participants p WHERE p.trade_id=t.id) AS participants
+      FROM orders o JOIN trade_orders r ON r.order_id=o.id JOIN trades t ON t.id=r.trade_id
+      WHERE o.status='RESERVED' OR t.id IN (
+        SELECT id FROM trades WHERE status IN ('CONFIRMED','REJECTED','CANCELLED','EXPIRED','UNSUPPORTED')
+        ORDER BY rowid DESC LIMIT 50
+      ) ORDER BY o.created_at DESC, o.id
+    `,
+      )
+      .all() as (OrderRow & { trade_status: string; participants: number })[];
+    for (const row of rows) {
+      orders.push(
+        PublicMarketOrderSchema.parse({
+          order: this.order(row),
+          execution: { status: row.trade_status, participants: row.participants },
+        }),
+      );
+    }
+    return { orders };
   }
 
   getOrder(id: string): PublicOrder | null {

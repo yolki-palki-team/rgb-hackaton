@@ -14,7 +14,7 @@ export default defineConfig({
           const path = new URL(request.url ?? '/', 'http://localhost').pathname;
           response.setHeader('Content-Type', 'application/json');
           response.setHeader('Cache-Control', 'no-store');
-          if (!['/health', '/orders'].includes(path)) {
+          if (!['/health', '/orders', '/activity'].includes(path)) {
             response.writeHead(404);
             response.end('{"error":"Not found"}');
             return;

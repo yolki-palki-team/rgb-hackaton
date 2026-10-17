@@ -278,6 +278,25 @@ export const TradeStatusSchema = z.enum([
   'UNSUPPORTED',
 ]);
 export type TradeStatus = z.infer<typeof TradeStatusSchema>;
+
+// Public progress deliberately excludes plans, messages, packages and wallet reports.
+export const PublicMarketOrderSchema = z
+  .object({
+    order: PublicOrderSchema,
+    execution: z
+      .object({
+        status: TradeStatusSchema,
+        participants: z.union([z.literal(2), z.literal(3)]),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type PublicMarketOrder = z.infer<typeof PublicMarketOrderSchema>;
+export const PublicMarketActivitySchema = z
+  .object({ orders: z.array(PublicMarketOrderSchema) })
+  .strict();
+
 export const CoordinationMessageSchema = z
   .object({
     messageId: IdSchema,

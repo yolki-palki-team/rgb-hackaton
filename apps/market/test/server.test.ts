@@ -71,6 +71,13 @@ test('HTTP auth and WebSocket resume keep private plans participant-only', async
     assert.equal(matched.status, 201);
     const body = (await matched.json()) as { trade: { plan: { tradeId: string } } };
     assert.ok(body.trade.plan.tradeId);
+    const activityResponse = await fetch(`${base}/activity`);
+    assert.equal(activityResponse.status, 200);
+    const activity = (await activityResponse.json()) as { orders: { execution: unknown }[] };
+    assert.equal(activity.orders.length, 2);
+    assert.deepEqual(activity.orders[0].execution, { status: 'RESERVED', participants: 2 });
+    assert.equal(JSON.stringify(activity).includes('plan'), false);
+    assert.equal((await fetch(`${base}/trades/${body.trade.plan.tradeId}`)).status, 401);
     const denied = await fetch(`${base}/trades/${body.trade.plan.tradeId}`, {
       headers: { authorization: 'Bearer token-c' },
     });

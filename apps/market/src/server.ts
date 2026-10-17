@@ -97,6 +97,8 @@ export function createMarketServer(
         return json(response, 200, { ok: true, protocolVersion: 1, mode: 'coordination-only' });
       if (request.method === 'GET' && path === '/orders')
         return json(response, 200, { orders: store.listOpen() });
+      if (request.method === 'GET' && path === '/activity')
+        return json(response, 200, store.publicActivity());
       if (request.method === 'POST' && path === '/orders') {
         const owner = authenticate(request, owners, store);
         return json(response, 201, store.createOrder(owner, await readJson(request)));

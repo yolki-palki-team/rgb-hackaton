@@ -1,5 +1,9 @@
-import { PROTOCOL_VERSION, PublicOrderSchema } from '@rgb-exchange/contracts';
-import type { PublicOrder } from '@rgb-exchange/contracts';
+import {
+  PROTOCOL_VERSION,
+  PublicOrderSchema,
+  PublicMarketActivitySchema,
+} from '@rgb-exchange/contracts';
+import type { PublicOrder, PublicMarketOrder } from '@rgb-exchange/contracts';
 import { z } from 'zod';
 
 const PublicOrdersResponse = z.object({ orders: z.array(PublicOrderSchema) }).strict();
@@ -11,7 +15,9 @@ const PublicHealthResponse = z
   })
   .strict();
 
-async function getPublic(path: '/market-api/orders' | '/market-api/health'): Promise<unknown> {
+async function getPublic(
+  path: '/market-api/orders' | '/market-api/health' | '/market-api/activity',
+): Promise<unknown> {
   const response = await fetch(path, {
     method: 'GET',
     credentials: 'omit',
@@ -33,4 +39,15 @@ export async function getPublicOrders(): Promise<PublicOrder[]> {
 export async function getPublicHealth(): Promise<boolean> {
   PublicHealthResponse.parse(await getPublic('/market-api/health'));
   return true;
+}
+
+export async function getPublicActivity(): Promise<PublicMarketOrder[]> {
+  const { orders } = PublicMarketActivitySchema.parse(await getPublic('/market-api/activity'));
+  const now = Date.now();
+  return orders
+    .filter(
+      ({ order, execution }) =>
+        execution !== null || (order.status === 'OPEN' && order.expiresAt > now),
+    )
+    .sort((a, b) => b.order.createdAt - a.order.createdAt);
 }

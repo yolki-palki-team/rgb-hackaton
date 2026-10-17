@@ -1,9 +1,9 @@
-import type { AssetRef, PublicOrder } from '@rgb-exchange/contracts';
+import type { AssetRef, PublicMarketOrder, TradeStatus } from '@rgb-exchange/contracts';
 
 export type MarketState =
-  | { kind: 'loading'; orders: PublicOrder[] }
-  | { kind: 'ready'; orders: PublicOrder[]; updatedAt: number }
-  | { kind: 'error'; orders: PublicOrder[]; message: string };
+  | { kind: 'loading'; orders: PublicMarketOrder[] }
+  | { kind: 'ready'; orders: PublicMarketOrder[]; updatedAt: number }
+  | { kind: 'error'; orders: PublicMarketOrder[]; message: string };
 
 export function formatAssetAmount(asset: AssetRef, atomic: string): string {
   const precision = asset.precision;
@@ -32,4 +32,28 @@ export function desktopOfferUrl(id: string): string | null {
   return /^order-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
     ? `palka://offer/${id}`
     : null;
+}
+
+export const executionLabels: Record<TradeStatus, string> = {
+  RESERVED: 'Match found',
+  PREPARING: 'Preparing swap',
+  AWAITING_APPROVAL: 'Awaiting approval',
+  SIGNING: 'Collecting signatures',
+  READY_TO_BROADCAST: 'Ready to broadcast',
+  BROADCAST: 'Awaiting confirmation',
+  RECONCILING: 'Checking settlement',
+  CONFIRMED: 'Completed',
+  REJECTED: 'Declined',
+  CANCELLED: 'Cancelled',
+  EXPIRED: 'Expired',
+  UNSUPPORTED: 'Unsupported',
+};
+
+export function executionStep(status: TradeStatus): number | null {
+  if (status === 'RESERVED' || status === 'PREPARING') return 0;
+  if (status === 'AWAITING_APPROVAL') return 1;
+  if (status === 'SIGNING' || status === 'READY_TO_BROADCAST') return 2;
+  if (status === 'BROADCAST') return 3;
+  if (status === 'CONFIRMED') return 4;
+  return null;
 }

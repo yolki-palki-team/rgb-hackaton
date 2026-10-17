@@ -13,7 +13,7 @@ services:
       WALLET_RPC_URL: ${WALLET_RPC_URL:-http://127.0.0.1:4201}
       WALLET_RPC_TOKEN: ${WALLET_RPC_TOKEN:-}
     # Local wallet interfaces bind to host loopback. The market is reachable
-    # only inside Docker; web proxies only its two unauthenticated GET routes.
+    # only inside Docker; web proxies only its three unauthenticated GET routes.
     ports:
       - '127.0.0.1:4101:4101'
       - '127.0.0.1:4102:4102'

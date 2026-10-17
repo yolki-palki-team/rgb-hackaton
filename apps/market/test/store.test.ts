@@ -600,3 +600,88 @@ test('signature recovery in RECONCILING keeps reservations and rejects changed s
       /BROADCAST_TXID_CONFLICT/,
     );
   }));
+
+test('public activity retains direct orders through settlement without exposing private trade material', () =>
+  withStore((store) => {
+    store.createOrder('a', order('public-a', 'a', x, '100', dusd, '100'), now);
+    assert.equal(store.publicActivity(now).orders[0].execution, null);
+    const { trade } = store.createOrder('b', order('public-b', 'b', dusd, '100', x, '100'), now);
+    assert.ok(trade);
+    const id = trade.plan.tradeId;
+    const check = (status: string) => {
+      const entries = store.publicActivity(now + 2 * 86400000).orders;
+      assert.equal(
+        entries.length,
+        2,
+        'reserved or finished orders remain visible after order expiry',
+      );
+      for (const entry of entries) {
+        assert.deepEqual(Object.keys(entry).sort(), ['execution', 'order']);
+        assert.deepEqual(entry.execution, { status, participants: 2 });
+      }
+      const serialized = JSON.stringify(entries);
+      for (const secret of [
+        'private-prepare-proof',
+        'private-rejection-reason',
+        'settlementPackage',
+        'messages',
+        'unsignedTxDigest',
+        'signatureMayExist',
+      ]) {
+        assert.equal(serialized.includes(secret), false);
+      }
+    };
+    check('RESERVED');
+    store.relayTradeMessage('a', id, {
+      messageId: 'prepare',
+      revision: 0,
+      type: 'prepare',
+      payload: { proof: 'private-prepare-proof' },
+    });
+    check('PREPARING');
+    signingTrade(store, trade);
+    check('SIGNING');
+    store.relayTradeMessage('a', id, {
+      messageId: 'receipt-a',
+      revision: 0,
+      type: 'receipt',
+      payload: confirmedReceipt(id),
+    });
+    check('SIGNING');
+    store.relayTradeMessage('b', id, {
+      messageId: 'receipt-b',
+      revision: 0,
+      type: 'receipt',
+      payload: confirmedReceipt(id),
+    });
+    check('CONFIRMED');
+    assert.equal(
+      store.publicActivity(now).orders.every((entry) => entry.order.status === 'FILLED'),
+      true,
+    );
+  }));
+
+test('public activity exposes ring progress and declined outcomes but no private rejection reason', () =>
+  withStore((store) => {
+    store.createOrder('a', order('ring-a', 'a', x, '100', dusd, '100'), now);
+    store.createOrder('b', order('ring-b', 'b', dusd, '100', btc, '100000'), now);
+    const { trade } = store.createOrder('c', order('ring-c', 'c', btc, '100000', x, '100'), now);
+    assert.ok(trade);
+    assert.equal(store.publicActivity(now).orders.length, 3);
+    assert.equal(
+      store.publicActivity(now).orders.every((entry) => entry.execution?.participants === 3),
+      true,
+    );
+    store.relayTradeMessage('c', trade.plan.tradeId, {
+      messageId: 'reject',
+      revision: 0,
+      type: 'reject',
+      payload: { reason: 'private-rejection-reason' },
+    });
+    const activity = store.publicActivity(now);
+    assert.equal(
+      activity.orders.every((entry) => entry.execution?.status === 'REJECTED'),
+      true,
+    );
+    assert.equal(JSON.stringify(activity).includes('private-rejection-reason'), false);
+  }));

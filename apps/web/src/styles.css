@@ -515,3 +515,69 @@ a {
     transition: none;
   }
 }
+
+.market-views {
+  display: flex;
+  gap: 6px;
+  margin: 24px 0 16px;
+}
+.market-views button {
+  padding: 10px 18px;
+  border: 1px solid #333;
+  border-radius: 999px;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+}
+.market-views button[aria-pressed='true'] {
+  color: #080808;
+  background: #eee;
+  border-color: #eee;
+}
+.market-views span {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.order-execution {
+  border-top: 1px solid #333;
+  padding-top: 18px;
+  margin-top: 20px;
+}
+.execution-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.execution-heading span,
+.execution-note,
+.order-execution small {
+  color: #aaa;
+  font-size: 12px;
+}
+.execution-steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 20px 0 8px;
+}
+.execution-steps li {
+  border-top: 2px solid #333;
+  padding-top: 8px;
+  color: #999;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.execution-steps li.current {
+  border-color: #eee;
+  color: #eee;
+}
+.execution-steps li.complete {
+  border-color: #999;
+  color: #ccc;
+}
+.execution-note {
+  margin: 0 0 16px;
+}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getPublicHealth, getPublicOrders } from '../api';
-import { formatAssetAmount } from '../model';
+import { getPublicHealth, getPublicOrders, getPublicActivity } from '../api';
+import { formatAssetAmount, executionLabels, executionStep } from '../model';
 import type { AssetRef, PublicOrder } from '@rgb-exchange/contracts';
 
 const btc: AssetRef = { kind: 'btc', network: 'regtest', symbol: 'BTC', precision: 8 };
@@ -74,6 +74,61 @@ test('health is read-only and amounts preserve asset precision', async () => {
     assert.equal(requested, '/market-api/health');
     assert.equal(formatAssetAmount(btc, '100000000'), '1');
     assert.equal(formatAssetAmount(rgb, '12345'), '123.45');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('public activity keeps executing and completed orders after expiry, filters expired waiting orders, and rejects private fields', async () => {
+  const original = globalThis.fetch;
+  const now = Date.now();
+  const order: PublicOrder = {
+    id: 'public-order',
+    ownerId: 'owner',
+    revision: 1,
+    network: 'regtest',
+    giveAsset: btc,
+    giveAmount: '100',
+    receiveAsset: rgb,
+    minReceiveAmount: '100',
+    maxFeeSats: '1000',
+    createdAt: now - 10000,
+    expiresAt: now - 1,
+    status: 'RESERVED',
+  };
+  const entries = [
+    { order: { ...order, id: 'waiting', status: 'OPEN', expiresAt: now + 60000 }, execution: null },
+    { order: { ...order, id: 'expired', status: 'OPEN' }, execution: null },
+    { order, execution: { status: 'PREPARING', participants: 3 } },
+    {
+      order: { ...order, id: 'finished', status: 'FILLED' },
+      execution: { status: 'CONFIRMED', participants: 2 },
+    },
+  ];
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, '/market-api/activity');
+    assert.equal(init?.credentials, 'omit');
+    assert.equal(init?.headers, undefined);
+    return Response.json({ orders: entries });
+  };
+  try {
+    assert.deepEqual(
+      (await getPublicActivity()).map((entry) => entry.order.id),
+      ['waiting', 'public-order', 'finished'],
+    );
+    assert.equal(executionStep('PREPARING'), 0);
+    assert.equal(executionStep('AWAITING_APPROVAL'), 1);
+    assert.equal(executionStep('SIGNING'), 2);
+    assert.equal(executionStep('BROADCAST'), 3);
+    assert.equal(executionStep('CONFIRMED'), 4);
+    assert.equal(executionStep('RECONCILING'), null);
+    assert.equal(executionStep('REJECTED'), null);
+    assert.equal(executionLabels.CONFIRMED, 'Completed');
+    globalThis.fetch = async () =>
+      Response.json({ orders: [{ ...entries[2], messages: ['private'] }] });
+    await assert.rejects(getPublicActivity());
+    globalThis.fetch = async () => new Response('', { status: 503 });
+    await assert.rejects(getPublicActivity(), /HTTP 503/);
   } finally {
     globalThis.fetch = original;
   }

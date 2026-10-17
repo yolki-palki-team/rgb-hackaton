@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { assetKey, type PublicOrder } from '@rgb-exchange/contracts';
+import { assetKey, type PublicMarketOrder } from '@rgb-exchange/contracts';
 import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
-import { getPublicOrders } from './api';
-import { assetIdentity, formatAsset, shortId, type MarketState } from './model';
+import { getPublicActivity } from './api';
+import {
+  assetIdentity,
+  formatAsset,
+  shortId,
+  executionLabels,
+  executionStep,
+  type MarketState,
+} from './model';
 
 const marketPath = '/market';
 
@@ -17,13 +24,15 @@ function Landing() {
   );
 }
 
-function OrderCard({ order }: { order: PublicOrder }) {
+function OrderCard({ entry }: { entry: PublicMarketOrder }) {
+  const { order, execution } = entry;
+  const step = execution ? executionStep(execution.status) : null;
   return (
     <article className="order-card">
       <div className="order-card-top">
         <span className="order-network">{order.network.toUpperCase()}</span>
         <span className="order-open">
-          <span /> Open
+          <span /> {execution ? 'Execution' : 'Waiting'}
         </span>
       </div>
       <div className="order-pair">
@@ -45,6 +54,28 @@ function OrderCard({ order }: { order: PublicOrder }) {
           <small>{assetIdentity(order.receiveAsset)}</small>
         </div>
       </div>
+      {execution && (
+        <div className="order-execution">
+          <div className="execution-heading">
+            <strong>{executionLabels[execution.status]}</strong>
+            <span>{execution.participants === 3 ? '3-party ring' : 'Direct swap'}</span>
+          </div>
+          {step !== null && (
+            <ol className="execution-steps" aria-label="Swap progress">
+              {['Prepare', 'Approval', 'Signatures', 'Confirmation'].map((label, index) => (
+                <li
+                  key={label}
+                  className={index < step ? 'complete' : index === step ? 'current' : ''}
+                  aria-current={index === step ? 'step' : undefined}
+                >
+                  {label}
+                </li>
+              ))}
+            </ol>
+          )}
+          {execution.status === 'CONFIRMED' && <small>Confirmed by all participant wallets.</small>}
+        </div>
+      )}
       <div className="order-card-bottom">
         <span>Order {shortId(order.id)}</span>
       </div>
@@ -54,6 +85,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
 
 function Market() {
   const [state, setState] = useState<MarketState>({ kind: 'loading', orders: [] });
+  const [view, setView] = useState<'waiting' | 'execution'>('waiting');
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [retry, setRetry] = useState(0);
 
@@ -64,7 +96,7 @@ function Market() {
       if (pending) return;
       pending = true;
       try {
-        const orders = await getPublicOrders();
+        const orders = await getPublicActivity();
         if (active) setState({ kind: 'ready', orders, updatedAt: Date.now() });
       } catch (error) {
         if (active)
@@ -83,7 +115,7 @@ function Market() {
     void load();
     const timer = window.setInterval(() => {
       if (!document.hidden) void load();
-    }, 15_000);
+    }, 5_000);
     const onVisible = () => {
       if (!document.hidden) void load();
     };
@@ -100,17 +132,22 @@ function Market() {
       [
         ...new Map(
           state.orders
-            .flatMap((order) => [order.giveAsset, order.receiveAsset])
+            .flatMap(({ order }) => [order.giveAsset, order.receiveAsset])
             .map((asset) => [assetKey(asset), asset] as const),
         ).entries(),
       ].sort((a, b) => a[1].symbol.localeCompare(b[1].symbol)),
     [state.orders],
   );
+  const waitingCount = state.orders.filter((entry) => entry.execution === null).length;
+  const executionCount = state.orders.length - waitingCount;
+  const viewOrders = state.orders.filter((entry) =>
+    view === 'waiting' ? entry.execution === null : entry.execution !== null,
+  );
   const visibleOrders =
     assetFilter === 'all'
-      ? state.orders
-      : state.orders.filter(
-          (order) =>
+      ? viewOrders
+      : viewOrders.filter(
+          ({ order }) =>
             assetKey(order.giveAsset) === assetFilter ||
             assetKey(order.receiveAsset) === assetFilter,
         );
@@ -137,6 +174,22 @@ function Market() {
               aria-label="Refresh orders"
             >
               <span aria-hidden="true">↻</span> Refresh
+            </button>
+          </div>
+          <div className="market-views" role="group" aria-label="Order state">
+            <button
+              type="button"
+              aria-pressed={view === 'waiting'}
+              onClick={() => setView('waiting')}
+            >
+              Waiting <span>{waitingCount}</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === 'execution'}
+              onClick={() => setView('execution')}
+            >
+              Execution <span>{executionCount}</span>
             </button>
           </div>
           <div className="filter-row" role="group" aria-label="Filter by asset">
@@ -185,15 +238,15 @@ function Market() {
               </button>
             </div>
           )}
-          {state.kind === 'ready' && state.orders.length === 0 && (
+          {state.kind === 'ready' && viewOrders.length === 0 && (
             <div className="market-message" role="status">
               <span className="message-symbol" aria-hidden="true">
                 ◌
               </span>
-              <h3>No open orders yet</h3>
+              <h3>{view === 'waiting' ? 'No waiting orders' : 'No executions yet'}</h3>
             </div>
           )}
-          {state.kind === 'ready' && state.orders.length > 0 && visibleOrders.length === 0 && (
+          {state.kind === 'ready' && viewOrders.length > 0 && visibleOrders.length === 0 && (
             <div className="market-message" role="status">
               <h3>No orders for this asset</h3>
               <p>Choose another asset or show all orders.</p>
@@ -206,10 +259,15 @@ function Market() {
               </button>
             </div>
           )}
+          {state.kind === 'ready' && view === 'execution' && viewOrders.length > 0 && (
+            <p className="execution-note">
+              Live wallet-reported progress · Updates every 5 seconds
+            </p>
+          )}
           {state.kind === 'ready' && visibleOrders.length > 0 && (
             <div className="order-list">
-              {visibleOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+              {visibleOrders.map((entry) => (
+                <OrderCard key={entry.order.id} entry={entry} />
               ))}
             </div>
           )}
