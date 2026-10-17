@@ -1,6 +1,7 @@
 # Project instructions
 
 - Read `README.md` and `materials.md` before making changes.
+- Write all repository text in English, including documentation, comments, user-facing messages, examples, and commit messages.
 - Support both direct two-party swaps and three-party atomic ring swaps. Sequential transfers are not an atomic swap.
 - Run QVAC locally. Keep keys and private policies local; use deterministic code for amounts, matching and signing checks.
 - Require user approval before mainnet signing. Development transfers on regtest, testnet, signet and signetcustom are authorized without repeated user confirmation; still validate amounts, recipients, fees and immutable signing intent. Never commit secrets or wallet state.

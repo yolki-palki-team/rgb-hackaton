@@ -17,7 +17,7 @@ Separate WDK Bitcoin funding has passed a real regtest transfer and restart chec
 
 The desktop/local wallet now follows the public market's visual layout. Publishing checks the draft in one action; preparation, package validation and post-approval reconciliation run automatically while the app is open. Users still review exact amounts and approve signing separately. Repeated transport failures back off and pause with a retry action; reopening restores local approval/receipt state. The workflow and recovery checks pass. The user reviewed the updated desktop and accepted its appearance on 2026-10-17; no Computer Use was used. A new end-to-end swap through the redesigned UI remains unverified.
 
-Start with the practical [usage and deployment guide](docs/usage.md) (Russian): first setup, restart without wallet reinitialization, pairing, direct/ring orders, approval, recovery, and the concrete remaining work for two/three computers. See [current integration evidence](docs/integration.md) and [historical settlement evidence](docs/settlement.md).
+Start with the practical [usage and deployment guide](docs/usage.md): first setup, restart without wallet reinitialization, pairing, direct/ring orders, approval, recovery, and the concrete remaining work for two/three computers. See [current integration evidence](docs/integration.md) and [historical settlement evidence](docs/settlement.md).
 
 For an **already initialized and configured** real profile set:
 

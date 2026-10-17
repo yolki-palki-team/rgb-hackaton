@@ -1,751 +1,751 @@
-# Agentic Dollars on Bitcoin — информация и исследование идей
+# Agentic Dollars on Bitcoin — information and idea research
 
-Объединены материалы прежних `info.md` и `ideas.md`: правила, ответы менторов, ссылки, исследование экосистемы, варианты идей и полный Telegram-экспорт.
+Combines the former `info.md` and `ideas.md`: rules, mentor answers, links, ecosystem research, candidate ideas, and the complete Telegram export.
 
-**Текущее направление проекта — RGB P2P Exchange:** прямой обмен и обмен по кольцу из трёх участников, локальный QVAC и подтверждение пользователем. Текущий статус реализации и запуск описаны в [README](README.md). Рекомендации «Колония», AidDesk и другие ниже сохранены как история поиска, а не как новый план разработки. Упоминание Expo также относится к предыдущему этапу; текущий интерфейс находится в `apps/web`.
+**The current project direction is RGB P2P Exchange:** direct swaps and three-party ring swaps, local QVAC, and user approval. See [README](README.md) for implementation status and startup instructions. Recommendations such as Colony and AidDesk below are retained as research history, not a new development plan. Expo references also belong to an earlier stage; the current UI is in `apps/web`.
 
-- [Сведения из Telegram-чата](#сведения-из-telegram-чата).
-- [Исследование и идеи](#идеи-для-agentic-dollars-on-bitcoin).
-- [Полный исходный экспорт](#приложение-полный-исходный-экспорт).
+- [Information from the Telegram chat](#information-from-the-telegram-chat).
+- [Research and ideas](#ideas-for-agentic-dollars-on-bitcoin).
+- [Complete source export](#appendix-complete-source-export).
 
-## Сведения из Telegram-чата
+## Information from the Telegram chat
 
-Источник: полный экспорт `tg_chat_info.txt` от 17 октября 2026 года, 809 строк, четыре темы, 70 участников. Время сообщений — GMT+2 (Europe/Rome). Ниже сведения сгруппированы по смыслу; **полный текст экспорта без сокращений** помещён в приложение, включая служебные сообщения, вопросы без ответа и список ссылок.
+Source: the complete `tg_chat_info.txt` export dated October 17, 2026: 809 lines, four topics, 70 participants. Message times are GMT+2 (Europe/Rome). The information below is grouped by topic; the **complete, unabridged export** is included in the appendix, including service messages, unanswered questions, and links. The appendix notes the translation of one Russian display name.
 
-Этот раздел передаёт только то, что есть в чате. Упомянутый `participant-instructions.pdf` был вложением в Telegram; его содержимое в текстовый экспорт не входит. Ссылки перечислены как в экспорте, без проверки их текущей доступности.
+This section reports only what appears in the chat. The referenced `participant-instructions.pdf` was a Telegram attachment; its contents are not in the text export. Links are listed as exported, without checking their current availability.
 
-### Главное для участника
+### Key information for participants
 
-- **Обязательный стек:** RGB Protocol on Bitcoin как слой активов и QVAC как локальный AI на устройстве. **WDK необязателен**, даёт бонус по правилам от 15 октября.
-- **До пятницы, 16 октября, 23:00 CEST:** выбрать название команды и проекта, создать публичный GitHub-репозиторий, описать в README идею, стек и всё, что было сделано до хакатона, передать название команды/проекта и ссылку организаторам. 16 октября предложена также общая таблица для подачи сведений.
-- **Суббота, 17 октября:** быть в BLOX к 08:20 по последнему напоминанию от 17 октября 01:17; kickoff в 08:30, старт хакатона в 09:30. Пришедшим в BLOX сказано пройти в зал внизу.
-- **Воскресенье, 18 октября, 13:00:** последний учитываемый коммит должен быть в ветке `main`, вместе с README о запуске. Более поздние коммиты не учитываются. С 13:00 до 14:30 — мини-демо судьям у рабочего места; затем выбирают 10 финалистов. С 16:00 до 17:30 — пятиминутные презентации финалистов; награждение в 18:00.
-- Не коммитить API-ключи, `.env`, seed-фразы и приватные ключи. Во время хакатона правило против `force-push`/`rebase` организатор распространила на **весь репозиторий**, включая неосновные ветки: иначе теряется история того, что было до хакатона и сделано на нём. За несоблюдение прозрачности могут снять баллы. После хакатона ограничение снимается.
+- **Required stack:** RGB Protocol on Bitcoin as the asset layer and QVAC for local on-device AI. **WDK is optional**, with a bonus under the October 15 rules.
+- **By Friday, October 16, 23:00 CEST:** choose team and project names, create a public GitHub repository, describe the idea, stack, and all pre-hackathon work in README, and submit the names and link to organizers. A shared submission spreadsheet was also offered on October 16.
+- **Saturday, October 17:** arrive at BLOX by 08:20 according to the latest reminder at 01:17 on October 17; kickoff at 08:30, hackathon start at 09:30. Arriving participants were directed to the downstairs room.
+- **Sunday, October 18, 13:00:** the last eligible commit must be on `main`, with a README explaining startup. Later commits do not count. Judges visit workstations for mini-demos from 13:00 to 14:30, then select 10 finalists. Five-minute finalist presentations run from 16:00 to 17:30; awards are at 18:00.
+- Do not commit API keys, `.env`, seed phrases, or private keys. During the hackathon, the organizer extended the ban on `force-push`/`rebase` to **the entire repository**, including non-main branches: rewriting history obscures what was built before and during the event. Lack of transparency can cost points. The restriction ends after the hackathon.
 
-### Организация и хронология объявлений
+### Organization and announcement timeline
 
-| Дата и время | Что объявлено |
+| Date and time | Announcement |
 | --- | --- |
-| 8 октября, 14:39 | Birk (Birkan Kayadibi, COO RGB Protocol Association, организатор) приветствовал отобранных участников: более 400 заявок на 60 мест. Важные новости публикуются в чате; участников попросили включить уведомления и пригласить товарищей по команде. До вторника канал планировали оставить только для чтения; для связи указан Birk либо Mari `@Maryive`. |
-| 9 октября, 17:04 | Опубликованы материалы в общей папке: два обзорных RGB-видео, руководства QVAC и WDK, видео по KaleidoSwap builder kit и Excel со ссылками. Опубликованы обязательный стек и возможные пути разработки. |
-| 12 октября, 16:19–16:30 | Созданы темы RGB, QVAC и WDK Q&A; вопросы передают менторам, ответы обещали публиковать примерно раз в день вечером. Birk пояснил, что участники группы, подписавшие документы, уже отобраны: массовое благодарственное письмо с формулировкой о неотборе к ним не относится. |
-| 15 октября, 09:48–09:49 | Mari опубликовала расписание, порядок подачи проекта, новую подробную шкалу оценивания и приложила официальный `participant-instructions.pdf` (162 KB). Полный текст PDF в экспорте отсутствует. |
-| 15 октября, 20:04 | Разрешены форки `rgb-lib` и RGB Lightning Node, если команда работает непосредственно в них и присылает ссылку на форк; прежние правила истории коммитов остаются в силе. |
-| 16 октября, 14:47 и 19:22 | Повторное напоминание: название команды/проекта и GitHub-ссылка нужны до 23:00 CEST; можно отправить в личные сообщения, по почте или вписать в общую таблицу. |
-| 16 октября, 19:21 | Создан Discord-канал с разработчиком QVAC; график помощи в чате и голосовых встречах указан в `#welcome`, часы CEST. Модели большие — руководство по установке советуют выполнить дома до приезда, чтобы не тратить время на скачивание через Wi‑Fi площадки. |
-| 17 октября, 01:17 и 08:16 | Напоминание прийти в BLOX к 08:20 и указание пройти в комнату внизу. |
+| October 8, 14:39 | Birk (Birkan Kayadibi, COO of RGB Protocol Association and organizer) welcomed selected participants: more than 400 applications for 60 places. Important news would appear in the chat; participants were asked to enable notifications and invite teammates. The channel was planned to remain read-only until Tuesday; contacts were Birk or Mari `@Maryive`. |
+| October 9, 17:04 | Shared materials published: two RGB overview videos, QVAC and WDK guides, a KaleidoSwap builder kit video, and an Excel file of links. Required stack and development paths announced. |
+| October 12, 16:19–16:30 | RGB, QVAC, and WDK Q&A topics created; questions would go to mentors, with answers expected roughly once each evening. Birk clarified that group members who had signed documents were already selected: the mass thank-you email saying otherwise did not apply to them. |
+| October 15, 09:48–09:49 | Mari published the schedule, submission process, revised detailed scoring criteria, and the official `participant-instructions.pdf` (162 KB). The export does not contain the full PDF text. |
+| October 15, 20:04 | Forks of `rgb-lib` and RGB Lightning Node allowed if teams work directly in them and submit the fork link; commit-history rules still apply. |
+| October 16, 14:47 and 19:22 | Reminder: team/project names and GitHub links due by 23:00 CEST, via direct message, email, or the shared spreadsheet. |
+| October 16, 19:21 | Discord channel created with a QVAC developer; chat and voice support hours listed in `#welcome`, in CEST. Models are large: participants should follow the setup guide at home to avoid downloading over venue Wi-Fi. |
+| October 17, 01:17 and 08:16 | Reminder to arrive at BLOX by 08:20 and directions to the downstairs room. |
 
-### Подача проекта, оценка и изменение правил
+### Submission, scoring, and rule changes
 
-Публичный GitHub-репозиторий должен содержать README с исходной идеей, стеком и ранее сделанной работой. Название команды, проекта и ссылку можно отправить на `info.rgb@proton.me`, в Telegram `@birk1907`/`@Maryive` или внести в [общую таблицу](https://docs.google.com/spreadsheets/d/1eLS764VXMB_2f8jX8Nj1ItIYDpPL_mUFeHuoGJyHLqQ/edit?usp=sharing). Итоговый README должен объяснять запуск проекта. Вопрос о приватном marketplace-репозитории и подаче отдельного публичного репозитория был задан 12 октября; тогда ответили, что инструкции появятся позднее. Объявление 15 октября уже требует публичный репозиторий.
+The public GitHub repository must include a README with the original idea, stack, and prior work. Team/project names and the link can be sent to `info.rgb@proton.me`, Telegram `@birk1907`/`@Maryive`, or entered in the [shared spreadsheet](https://docs.google.com/spreadsheets/d/1eLS764VXMB_2f8jX8Nj1ItIYDpPL_mUFeHuoGJyHLqQ/edit?usp=sharing). The final README must explain how to run the project. A question about a private marketplace repository and a separate public submission repository was asked on October 12; the reply said instructions would follow. The October 15 announcement explicitly requires a public repository.
 
-**Актуальная опубликованная шкала от 15 октября:** каждый критерий оценивается от 1 до 5, итог взвешивается: реальное использование RGB — **25%**, осмысленное локальное применение QVAC — **20%**, работающий live-проект и полнота реализации — **20%**, понятный нетехническому пользователю UX/UI — **15%**, новизна — **10%**, рыночная применимость — **10%**. WDK может добавить **до +1 балла**, максимальный результат — **6**. Судьи оценивают в UX ясность шагов и ошибок выше визуальной полировки.
+**Latest published scoring, October 15:** each criterion is scored from 1 to 5, then weighted: real RGB use — **25%**; meaningful local QVAC use — **20%**; a working live project and implementation completeness — **20%**; UX/UI understandable to nontechnical users — **15%**; innovation — **10%**; marketability — **10%**. WDK can add **up to +1 point**, for a maximum of **6**. Judges prioritize clear steps and errors over visual polish in UX.
 
-**Историческое расхождение:** в WDK Q&A 12–13 октября бонус описывали как 0–5 дополнительных баллов, зависящих от реальной пользы WDK, а не от формального подключения. Более позднее общее объявление 15 октября устанавливает `до +1` при максимуме 6; именно оно приведено выше как актуальная опубликованная шкала. Ответ о том, что полезная интеграция ценится выше бессмысленной, остаётся содержательным ориентиром, но численную шкалу 0–5 следует считать старой.
+**Historical discrepancy:** WDK Q&A on October 12–13 described a 0–5-point bonus based on actual usefulness rather than nominal integration. The later October 15 announcement sets `up to +1` with a maximum score of 6; that is the current published scale used above. Meaningful integration remains the guiding principle, but the 0–5 scale is outdated.
 
-### Материалы и выбор стека
+### Materials and stack selection
 
-- [Страница хакатона](https://rgbprotocol.org/agentic-dollars-hackathon/).
-- [Общая папка материалов](https://drive.google.com/drive/folders/1HqZP4TDRmsvYW6hsW7T6-OoNNZMVFV-X?usp=drive_link): два вводных RGB-видео, tutorial по QVAC, tutorial по WDK, видеообзор KaleidoSwap builder kit, Excel со ссылками по уровню необходимости.
-- [RGB Docs](https://docs.rgb.info/) — основной источник концепций RGB. Организатор подчёркивает необходимость понять механику перевода активов.
-- [QVAC quickstart](https://docs.qvac.tether.io/quickstart/) — локальный AI.
-- [WDK Docs](https://docs.wdk.tether.io/) — необязательный self-custodial wallet toolkit.
-- [KaleidoSwap builder kit](https://kaleidoswap.github.io/rgb-hackathon/) — рекомендован новичкам: узел, кошельки и инструменты с QVAC, в том числе создание RGB-инвойса из текстового запроса.
-- [RGB assistant в ChatGPT](https://chatgpt.com/g/g-69f31db8cae081918db75cbd969df294-rgb-protocol-on-bitcoin-assistant) обучен на документации RGB; нужен вход в аккаунт, Plus не требуется. Его рекомендуют как средство ориентирования в документации.
-- UTEXO предлагает SDK/форки, [адаптер WDK ↔ RGB](https://github.com/UTEXO-Protocol/wdk-wallet-rgb) и React Native-библиотеку для мобильной разработки. Менторы UTEXO и KaleidoSwap должны присутствовать оба дня. Для опытных команд предложены `rgb-lib` для on-chain и RGB Lightning Node для Lightning; упоминались также RGB-Tools. Организаторы советуют выбрать путь в начале и не менять его в середине работы.
-- Сторонние инструменты и форки разрешены. В ответе 12 октября просили явно назвать их при открытии pull request; позднее, 15 октября, организаторы разрешили форки `rgb-lib`/RGB Lightning Node при передаче ссылки на форк. Процедуру итоговой подачи следует читать по более позднему объявлению о публичном репозитории и коммите в `main`.
+- [Hackathon page](https://rgbprotocol.org/agentic-dollars-hackathon/).
+- [Shared materials folder](https://drive.google.com/drive/folders/1HqZP4TDRmsvYW6hsW7T6-OoNNZMVFV-X?usp=drive_link): two introductory RGB videos, a QVAC tutorial, a WDK tutorial, a KaleidoSwap builder kit overview, and an Excel file organizing links by importance.
+- [RGB Docs](https://docs.rgb.info/) — primary source for RGB concepts. The organizer emphasizes understanding how asset transfers work.
+- [QVAC quickstart](https://docs.qvac.tether.io/quickstart/) — local AI.
+- [WDK Docs](https://docs.wdk.tether.io/) — optional self-custodial wallet toolkit.
+- [KaleidoSwap builder kit](https://kaleidoswap.github.io/rgb-hackathon/) — recommended for beginners: node, wallets, and QVAC tools, including RGB invoice creation from a text request.
+- [RGB assistant in ChatGPT](https://chatgpt.com/g/g-69f31db8cae081918db75cbd969df294-rgb-protocol-on-bitcoin-assistant), trained on RGB documentation; sign-in is required, Plus is not. Recommended for navigating the documentation.
+- UTEXO offers SDKs/forks, a [WDK ↔ RGB adapter](https://github.com/UTEXO-Protocol/wdk-wallet-rgb), and a React Native library for mobile development. UTEXO and KaleidoSwap mentors were expected on both days. Experienced teams were directed to `rgb-lib` for on-chain work and RGB Lightning Node for Lightning; RGB-Tools was also mentioned. Organizers recommend choosing a path early and not switching mid-project.
+- Third-party tools and forks are allowed. An October 12 reply requested explicit disclosure when opening a pull request; on October 15, organizers allowed `rgb-lib`/RGB Lightning Node forks when their links are submitted. Follow the later public-repository and `main`-commit announcement for final submission.
 
-### RGB: ответы менторов и ограничения
+### RGB: mentor answers and limitations
 
-#### Сети, кошельки и тестовые активы
+#### Networks, wallets, and test assets
 
-- По ответу Arshia 12 октября, **`signet` (`sb:`) и `signetcustom` (`sbc:`) для RGB — разные сети**, хотя используют одну цепь Mutinynet. Сеть фиксируется при выпуске актива. Faucet, maker API и кошельки KaleidoSwap работают в `signetcustom`; адаптер UTEXO WDK и underlying `rgb-sdk` на момент обсуждения поддерживали только обычный `signet`. Поэтому кошелёк WDK не может получить RGB-актив из faucet или кошелька KaleidoSwap.
-- Faucet-актив, названный `USDT`, по словам Arshia является **NIA**. Показанное maker API значение `issued_supply: 0` было ошибкой отображения, которую он собирался исправить; причиной несовместимости с WDK остаётся сеть `signetcustom`.
-- Команда Fidelity Points предложила выпустить собственные тестовые NIA `USDB` и `MOON` на `signet`/Mutinynet и пользоваться WDK-кошельком. Arshia ответил, что для судейства это не должно быть проблемой при явном описании сетевой несовместимости. Отдельный вопрос той же команды, будет ли **конкретно такой вариант** засчитан для WDK-бонуса, повторили 16 октября; ответа в экспорте нет.
-- Можно использовать общедоступный Mutinynet через KaleidoSwap или свой локальный `regtest`; запрета на собственную среду нет. Arshia отдельно советует regtest, если тестовые сети дают несовместимости.
-- KaleidoSwap разрешил использовать свой [Esplora](https://esplora.signet.kaleidoswap.com) и [RGB proxy](https://proxy.kaleidoswap.com/json-rpc) весь уикенд. Жёсткого лимита нет, но частый polling мешает maker. [mutinynet.com/api](https://mutinynet.com/api) работает с той же цепью как запасной индексатор, но ограничивает запросы, особенно с общего IP площадки.
-- [BTC faucet Mutinynet](https://faucet.mutinynet.com): до **1 млн sats на IP/пользователя/адрес за 24 часа**. [RGB faucet KaleidoSwap](https://faucet.mutinynet.kaleidoswap.com): **100 тестовых USDT за один on-chain claim**, до **5 claims на GitHub-аккаунт в день**. Рекомендовано пополнить кошельки до приезда. Это описание тестовых активов и лимитов из сообщения 12 октября.
-- По сообщению организатора, Wi‑Fi площадки должен допускать работу устройств, также проверено наличие Ethernet-кабелей на месте. Это оценка организатора, а не подтверждённый результат работы конкретной команды на площадке.
+- According to Arshia on October 12, **`signet` (`sb:`) and `signetcustom` (`sbc:`) are different RGB networks**, although they use the same Mutinynet chain. The network is fixed at asset issuance. KaleidoSwap's faucet, maker API, and wallets use `signetcustom`; the UTEXO WDK adapter and underlying `rgb-sdk` supported only plain `signet` at the time. Consequently, a WDK wallet cannot receive RGB assets from the KaleidoSwap faucet or wallet.
+- Arshia described the faucet asset named `USDT` as **NIA**. The maker API's `issued_supply: 0` was a display bug he intended to fix; `signetcustom` remains the cause of WDK incompatibility.
+- Fidelity Points proposed issuing its own test NIA assets `USDB` and `MOON` on `signet`/Mutinynet with a WDK wallet. Arshia said this should be acceptable for judging if network incompatibility is clearly explained. The team repeated a separate question on October 16 about whether **that specific arrangement** would qualify for the WDK bonus; the export contains no answer.
+- Public Mutinynet through KaleidoSwap or a local `regtest` is allowed; there is no ban on a team's own environment. Arshia specifically recommends regtest when testnet incompatibilities arise.
+- KaleidoSwap permitted use of its [Esplora](https://esplora.signet.kaleidoswap.com) and [RGB proxy](https://proxy.kaleidoswap.com/json-rpc) throughout the weekend. There is no hard limit, but frequent polling disrupts the maker. [mutinynet.com/api](https://mutinynet.com/api) indexes the same chain as a fallback, with rate limits, particularly relevant to the venue's shared IP.
+- [Mutinynet BTC faucet](https://faucet.mutinynet.com): up to **1 million sats per IP/user/address per 24 hours**. [KaleidoSwap RGB faucet](https://faucet.mutinynet.kaleidoswap.com): **100 test USDT per on-chain claim**, up to **5 claims per GitHub account per day**. Funding before arrival was recommended. These test-asset descriptions and limits come from the October 12 message.
+- The organizer said venue Wi-Fi should allow devices to work and confirmed Ethernet cables would be available. This is the organizer's assessment, not evidence from a specific team's operation at the venue.
 
-#### Переводы и Lightning
+#### Transfers and Lightning
 
-- **On-chain RGB-платёж с одним подтверждением засчитывается для `Payments and Checkout`.** RGB через Lightning не требуется; Birk подтвердил это 13 октября. Lightning может открыть другие сценарии, но обязательного требования нет.
-- Для HODL-инвойсов с `payment_hash`, `claimhodlinvoice` и `cancelhodlinvoice` в RGB Lightning разрешено применять форк UTEXO `UTEXO-Protocol/rgb-lightning-node`, tag `v0.11.0-beta.3`, с `@utexo/wdk-rgb-lightning`, если он решает задачу. Необходимо открыто указать используемый форк.
-- На вопрос о Multi-Path Payments Walter ответил 14 октября: RGB MPP технически возможно **без изменения самого RGB-протокола**. Доли 60 и 40 токенов могут идти как отдельные colored HTLC в разных каналах, разделяя payment hash; получатель раскрывает preimage при наборе полной суммы. Нынешняя реализация Lightning не делит RGB-сумму: маршрутизатор требует, чтобы один канал вместил её целиком, а onion переносит одно RGB-значение. Для MPP нужны изменения onion-формата (`total RGB amount`), маршрутизатора, логики получателя и небольшое дополнение спецификации. Цена — дополнительная BTC-ликвидность/комиссии и более сложный поиск маршрута с учётом одновременно BTC и RGB-ёмкости.
-- Вопрос о рекомендуемом Electrum/Esplora endpoint для `rgb-lib v0.3.0b7` и переводе в `WAITING_CONFIRMATIONS` был задан 13 октября; автор позже сообщил, что увидел подтверждение через Mutinynet Esplora API. Отдельного ответа с рекомендацией endpoint или инструкцией по refresh в экспорте нет.
+- **An on-chain RGB payment with one confirmation counts for `Payments and Checkout`.** RGB over Lightning is not required; Birk confirmed this on October 13. Lightning may enable other scenarios but is not mandatory.
+- For RGB Lightning HODL invoices using `payment_hash`, `claimhodlinvoice`, and `cancelhodlinvoice`, the UTEXO fork `UTEXO-Protocol/rgb-lightning-node`, tag `v0.11.0-beta.3`, with `@utexo/wdk-rgb-lightning` is allowed if it solves the problem. Disclose the fork explicitly.
+- On October 14, Walter explained that RGB Multi-Path Payments are technically possible **without changing RGB itself**. Portions of 60 and 40 tokens could travel as separate colored HTLCs across different channels sharing a payment hash; the receiver reveals the preimage after receiving the full amount. The current Lightning implementation does not split RGB amounts: routing requires a single channel to carry the entire amount, and the onion carries one RGB value. MPP requires changes to the onion format (`total RGB amount`), router, receiver logic, and a small specification addition. Costs include extra BTC liquidity/fees and more complex routing accounting for both BTC and RGB capacity.
+- A question about the recommended Electrum/Esplora endpoint for `rgb-lib v0.3.0b7` and a transfer in `WAITING_CONFIRMATIONS` was asked on October 13; its author later reported seeing confirmation through Mutinynet Esplora API. The export has no separate endpoint recommendation or refresh instructions.
 
-#### Известное затруднение WDK
+#### Known WDK difficulty
 
-Вопрос Fidelity Points от 12 октября: native binary `wdk-wallet-rgb 2.0.3` с `rgb-lib 0.3.0-beta.8` требует `glibc 2.38` и не работает на Ubuntu 22.04; команда обходила это переопределением `@utexo/rgb-sdk` на `1.0.6` (`native beta.13`). Та же mnemonic затем давала другой кошелёк (`vanillaKeychain 0` вместо `1`). На демо-ноутбуке команды был `glibc 2.39`, поэтому вопрос стал менее срочным. Рекомендации ментора по этому обходу в экспорте нет. Также без прямого ответа остался вопрос Edwin: нужна ли для бонуса именно RGB-транзакция через WDK или достаточно работающих кошельковых операций; Birk ответил общим принципом — ценится реальная работа WDK, бонус масштабируется по пользе.
+Fidelity Points reported on October 12 that the native binary in `wdk-wallet-rgb 2.0.3` with `rgb-lib 0.3.0-beta.8` requires `glibc 2.38` and does not run on Ubuntu 22.04. The team worked around it by overriding `@utexo/rgb-sdk` to `1.0.6` (`native beta.13`). The same mnemonic then produced a different wallet (`vanillaKeychain 0` instead of `1`). Their demo laptop had `glibc 2.39`, reducing the urgency. The export contains no mentor recommendation on this workaround. Edwin's question about whether the bonus specifically requires an RGB transaction through WDK or merely working wallet operations also received no direct answer; Birk gave the general principle that actual WDK use matters and the bonus scales with usefulness.
 
-### QVAC: устройство, модели, ответы и незакрытая ошибка
+### QVAC: devices, models, answers, and an unresolved error
 
-- **Локальный запуск `qvac serve` на ноутбуке с вызовом из веб-страницы на том же компьютере засчитывается как on-device inference** — прямой ответ Simone от 12 октября.
-- Рекомендованная память для desktop: минимум **16 GB RAM**, удобнее **24–32 GB**. CPU-инференс возможен, выделенный GPU назван надёжным вариантом; macOS, по оценке организаторов, работает лучше благодаря железу и оптимизациям. QVAC поддерживает desktop и mobile.
-- Для mobile указан минимум **8 GB RAM**, Snapdragon либо Apple silicon. В ответе приведены ориентиры: iPhone 13 Pro и новее, Pixel 6 и новее, Samsung S23 и новее; модели до 2B могут работать в зависимости от устройства.
-- Рекомендованы 4-bit `QWEN3-600M`, `QWEN3.5-0.8B`, `QWEN3.5-2B`, `QWEN3.5-4B`, `QWEN3.5-9B`. У всех, кроме 600M, указаны соответствующие projection models для vision. Для узких задач возможны модели до 1B; качество выше предлагают искать от 4B на desktop. Для распознавания речи назван `Parakeet TDT 0.6B Q8`, для синтеза — `Supertonic 3 Q8`.
-- План Fidelity Points: короткий schema-constrained JSON-ответ (~400 входных и 80 выходных токенов), расчёты в коде, `QWEN3.5-2B Q4` через `qvac serve --openai`, fallback `0.8B` на Linux-ноутбуке с 32 GB RAM (CPU или Vulkan GPU). Simone назвал выбор хорошим и предложил `/no_think` в system prompt для выключения размышлений, а затем велел убрать `reasoning_budget`.
-- **Незакрытое расхождение:** команда протестировала `@qvac/sdk 0.21.0`, `@qvac/cli 0.15.0`, `@qvac/llm-llamacpp 0.55.0`, Windows 11/Vulkan. С `/no_think` и `response_format: json_schema` или `json_object` сервер каждый раз отвечал HTTP 500: `RPCError: Unexpected empty grammar stack after accepting piece: ? (30)`. Без схемы `/no_think` всё равно генерировал `reasoning_content`. С `reasoning_budget: false` либо `0` выходил валидный JSON без reasoning. Simone ответил, что `/no_think` ожидаемо должен работать на Qwen 3/3.5; конкретного исправления в переписке нет. Команда решила оставить работающий `reasoning_budget: false` и проверить ещё на Linux.
-- Для QVAC-помощи создан [Discord](https://discord.gg/PaYceGcC); раздел `#welcome` содержит часы поддержки и инструкции для вопросов. Файлы моделей советуют скачать заранее.
+- **Running `qvac serve` locally on a laptop and calling it from a web page on that same computer counts as on-device inference**, according to Simone's direct October 12 reply.
+- Recommended desktop memory: at least **16 GB RAM**, preferably **24–32 GB**. CPU inference is possible; a dedicated GPU was described as reliable. Organizers considered macOS better due to hardware and optimizations. QVAC supports desktop and mobile.
+- Mobile guidance: at least **8 GB RAM**, Snapdragon or Apple silicon. Examples included iPhone 13 Pro or newer, Pixel 6 or newer, Samsung S23 or newer; models up to 2B may work depending on the device.
+- Recommended 4-bit models: `QWEN3-600M`, `QWEN3.5-0.8B`, `QWEN3.5-2B`, `QWEN3.5-4B`, `QWEN3.5-9B`. All except 600M have corresponding vision projection models listed. Sub-1B models can handle narrow tasks; 4B+ was suggested for better desktop quality. Speech recognition: `Parakeet TDT 0.6B Q8`; synthesis: `Supertonic 3 Q8`.
+- Fidelity Points planned short schema-constrained JSON (~400 input and 80 output tokens), calculations in code, `QWEN3.5-2B Q4` via `qvac serve --openai`, with a `0.8B` fallback on a 32 GB Linux laptop using CPU or Vulkan GPU. Simone endorsed the choice, suggested `/no_think` in the system prompt to disable reasoning, and later instructed them to remove `reasoning_budget`.
+- **Unresolved discrepancy:** the team tested `@qvac/sdk 0.21.0`, `@qvac/cli 0.15.0`, and `@qvac/llm-llamacpp 0.55.0` on Windows 11/Vulkan. With `/no_think` and `response_format: json_schema` or `json_object`, the server always returned HTTP 500: `RPCError: Unexpected empty grammar stack after accepting piece: ? (30)`. Without a schema, `/no_think` still generated `reasoning_content`. With `reasoning_budget: false` or `0`, it produced valid JSON without reasoning. Simone said `/no_think` should work on Qwen 3/3.5; no specific fix appears in the discussion. The team chose to retain the working `reasoning_budget: false` and test Linux as well.
+- A [Discord](https://discord.gg/PaYceGcC) was created for QVAC support; `#welcome` lists support hours and question instructions. Model files should be downloaded in advance.
 
-### Контакты и ссылки из сообщений
+### Contacts and links from messages
 
-| Назначение | Ссылка или контакт |
+| Purpose | Link or contact |
 | --- | --- |
-| Организаторы | [Почта](mailto:info.rgb@proton.me), [Birk](https://t.me/birk1907), [Mari](https://t.me/Maryive) |
-| Подача команды и репозитория | [Общая таблица](https://docs.google.com/spreadsheets/d/1eLS764VXMB_2f8jX8Nj1ItIYDpPL_mUFeHuoGJyHLqQ/edit?usp=sharing) |
-| QVAC поддержка | [Discord](https://discord.gg/PaYceGcC), Telegram `#welcome` (`tg://search_hashtag?hashtag=welcome`), [@qvac](https://t.me/qvac) |
+| Organizers | [Email](mailto:info.rgb@proton.me), [Birk](https://t.me/birk1907), [Mari](https://t.me/Maryive) |
+| Team and repository submission | [Shared spreadsheet](https://docs.google.com/spreadsheets/d/1eLS764VXMB_2f8jX8Nj1ItIYDpPL_mUFeHuoGJyHLqQ/edit?usp=sharing) |
+| QVAC support | [Discord](https://discord.gg/PaYceGcC), Telegram `#welcome` (`tg://search_hashtag?hashtag=welcome`), [@qvac](https://t.me/qvac) |
 | UTEXO | [@utexo](https://t.me/utexo), [wdk-wallet-rgb](https://github.com/UTEXO-Protocol/wdk-wallet-rgb) |
-| Mutinynet | [Сайт](https://mutinynet.com), [Esplora KaleidoSwap](https://esplora.signet.kaleidoswap.com), [RGB proxy](https://proxy.kaleidoswap.com/json-rpc), [API](https://mutinynet.com/api), [BTC faucet](https://faucet.mutinynet.com), [RGB faucet](https://faucet.mutinynet.kaleidoswap.com) |
+| Mutinynet | [Website](https://mutinynet.com), [KaleidoSwap Esplora](https://esplora.signet.kaleidoswap.com), [RGB proxy](https://proxy.kaleidoswap.com/json-rpc), [API](https://mutinynet.com/api), [BTC faucet](https://faucet.mutinynet.com), [RGB faucet](https://faucet.mutinynet.kaleidoswap.com) |
 
-Экспорт также содержит Telegram-ссылки на bot commands `tg://bot_command?command=rgb`, `tg://bot_command?command=lninvoice` и `tg://bot_command?command=wdk`. Все повторные вхождения ссылок и привязка к сообщениям сохранены ниже в оригинальном разделе `ALL LINKS (31)`.
+The export also includes Telegram bot-command links `tg://bot_command?command=rgb`, `tg://bot_command?command=lninvoice`, and `tg://bot_command?command=wdk`. Repeated links and their message associations are preserved below in the original `ALL LINKS (31)` section.
 
 ---
 
-## Идеи для Agentic Dollars on Bitcoin
+## Ideas for Agentic Dollars on Bitcoin
 
-Дата исследования: 17 октября 2026. Материалы: локальные README и tg_chat_info.txt (809 строк, все четыре темы), публичные ресурсы по ссылкам, Excel и текст PDF из общей папки, публичная таблица команд и доступные README участников.
+Research date: October 17, 2026. Materials: local READMEs and tg_chat_info.txt (809 lines, all four topics), linked public resources, the Excel file and PDF text from the shared folder, the public team spreadsheet, and available participant READMEs.
 
-### Актуальная подборка: RGB определяет весь сценарий продукта
+### Updated shortlist: RGB drives the entire product scenario
 
-Обновление 17 октября 2026: после уточнения команды главный фильтр — **активное, видимое использование RGB**. Телефония больше не ограничивает выбор. Ниже три предложения, а не реализованные функции или уже принятое командой решение. Expo остаётся предпочтением для интерфейса; RGB и локальный QVAC обязательны.
+October 17, 2026 update: after team clarification, the main filter is **active, visible RGB use**. Telephony no longer constrains selection. The following are three proposals, not implemented features or an accepted team decision. Expo remains the UI preference at this historical stage; RGB and local QVAC are required.
 
-В [объявлении организаторов](info.md#подача-проекта-оценка-и-изменение-правил) от 15 октября, 09:48: RGB — **25%**, QVAC — 20%, работающая реализация — 20%, UX/UI — 15%, оригинальность — 10%, рыночная применимость — 10%. Формулировка критерия RGB — реальное использование в продукте. Число транзакций само по себе не гарантирует баллы: каждое движение актива должно менять результат для пользователя.
+The [organizers' announcement](info.md#submission-scoring-and-rule-changes) on October 15 at 09:48 assigns RGB **25%**, QVAC 20%, working implementation 20%, UX/UI 15%, originality 10%, and marketability 10%. The RGB criterion concerns actual product use. Transaction count alone does not guarantee points: every asset movement must change the user's outcome.
 
-**Моя рекомендация — «Колония»: три локальных AI-агента должны спасти станцию, реально покупая и передавая RGB-ресурсы.** Это наиболее наглядный из трёх сценариев: жюри наблюдает экономику и проверяет её состояние в кошельках.
+**My recommendation is Colony: three local AI agents must save a station by actually buying and transferring RGB resources.** It is the most visible of the three scenarios: judges observe an economy and verify its state in wallets.
 
-#### Как получена подборка
+#### How the shortlist was developed
 
-Применены найденные через skills.sh инструкции [brainstorm-ideas-new](https://skills.sh/phuryn/pm-skills/brainstorm-ideas-new) ([SKILL.md](https://github.com/phuryn/pm-skills/blob/main/pm-product-discovery/skills/brainstorm-ideas-new/SKILL.md)) и [creative-thinking-for-research](https://skills.sh/orchestra-research/ai-research-skills/creative-thinking-for-research) ([SKILL.md](https://github.com/Orchestra-Research/AI-Research-SKILLs/blob/main/21-research-ideation/creative-thinking-for-research/SKILL.md)). Использованы продуктовый, дизайнерский и инженерный разбор, инверсия ролей и проверка необходимых ограничений. Несколько агентов независимо проверяли экономические механики и доступные операции SDK. Навыки прочитаны и применены, глобальная установка не выполнялась.
+The instructions found through skills.sh were applied: [brainstorm-ideas-new](https://skills.sh/phuryn/pm-skills/brainstorm-ideas-new) ([SKILL.md](https://github.com/phuryn/pm-skills/blob/main/pm-product-discovery/skills/brainstorm-ideas-new/SKILL.md)) and [creative-thinking-for-research](https://skills.sh/orchestra-research/ai-research-skills/creative-thinking-for-research) ([SKILL.md](https://github.com/Orchestra-Research/AI-Research-SKILLs/blob/main/21-research-ideation/creative-thinking-for-research/SKILL.md)). The research used product, design, and engineering analysis, role inversion, and checks of necessary constraints. Multiple agents independently examined economic mechanisms and available SDK operations. Skills were read and applied without global installation.
 
-**Граница проверки оригинальности:** изучены публичные материалы экосистемы и доступные проекты участников. Полного совпадения с предложенными сценариями в просмотренных материалах не найдено; это не доказательство мирового первенства. Ниже указаны близкие аналоги и слабые места. Новое название для уже существующего кошелька не считается отличием.
+**Originality-check boundary:** public ecosystem materials and available participant projects were reviewed. No complete match for these scenarios was found in the reviewed material; this does not prove worldwide novelty. Close analogues and weaknesses are listed below. Renaming an existing wallet is not a differentiator.
 
-#### 1. «КОЛОНИЯ» — AI-агенты, которые должны заработать на спасение своего мира
+#### 1. COLONY — AI agents must earn the resources to save their world
 
-**Pitch:** «Мы даём трём локальным AI разные ресурсы и секретные цели. Спасти станцию они могут только через настоящую экономику на RGB».
+**Pitch:** “We give three local AIs different resources and secret goals. They can save the station only through a real RGB economy.”
 
-На станции отключился реактор. Инженеру нужны три ресурса: свои панели, кристалл торговца и механизм другого поселенца. У каждого участника свой инвентарь, бюджет, личная цель и локальный AI-советник. Торговец может завысить цену; инженер может отказаться или изменить план. Написать в чате «у нас теперь есть кристалл» недостаточно: склад миссии должен действительно получить нужный RGB-актив.
+The station's reactor has failed. The engineer needs three resources: their own panels, a trader's crystal, and another settler's mechanism. Each participant has inventory, a budget, a private goal, and a local AI adviser. The trader may raise the price; the engineer may refuse or change the plan. Writing “we now have a crystal” in chat is insufficient: the mission warehouse must actually receive the required RGB asset.
 
-**Что делает RGB:** четыре типа активов — панели, кристаллы, механизмы и тестовые деньги — выпускаются как отдельные NIA с известными contract ID. Деньги переходят продавцам; ресурсы переходят в отдельный кошелёк склада. Приложение открывает действие «починить реактор» только после проверки полученных ресурсов. Завершённая миссия приносит отдельную RGB-выплату из заранее подготовленного фонда.
+**RGB's role:** four asset types — panels, crystals, mechanisms, and test money — are issued as separate NIAs with known contract IDs. Money goes to sellers; resources go to a separate warehouse wallet. The app unlocks “repair reactor” only after verifying received resources. Completing the mission triggers a separate RGB payment from a prepared reward fund.
 
-**Что делает QVAC:** локально предлагает план и ведёт переговоры с учётом собственных сведений, цен и бюджета. Решения модели превращаются в ограниченные команды; суммы, идентификаторы активов и разрешения проверяет код. Профили вымышленные. На одном демонстрационном компьютере можно держать отдельные контексты агентов, но это не изоляция секретов от оператора компьютера.
+**QVAC's role:** proposes plans and negotiates locally using its own information, prices, and budget. Model decisions become bounded commands; code checks amounts, asset IDs, and permissions. Profiles are fictional. One demo computer can hold separate agent contexts, but this does not isolate secrets from that computer's operator.
 
-**Полный раунд демо — шесть реальных переводов:**
+**A complete demo round consists of six real transfers:**
 
-| Шаг | RGB-перевод | Изменение в продукте |
+| Step | RGB transfer | Product change |
 | --- | --- | --- |
-| 1 | Инженер → торговец: тестовые деньги | Оплачен согласованный кристалл; доставка ещё ожидается |
-| 2 | Торговец → склад: кристалл | Получена первая покупная часть реактора |
-| 3 | Инженер → механик: тестовые деньги | Оплачен механизм; доставка ещё ожидается |
-| 4 | Механик → склад: механизм | Получена вторая покупная часть |
-| 5 | Инженер → склад: собственные панели | Собран полный набор ресурсов по правилам миссии |
-| 6 | Фонд миссии → инженер: награда | Замкнулся экономический цикл; изменился бюджет следующей миссии |
+| 1 | Engineer → trader: test money | Agreed crystal paid for; delivery still pending |
+| 2 | Trader → warehouse: crystal | First purchased reactor component received |
+| 3 | Engineer → mechanic: test money | Mechanism paid for; delivery still pending |
+| 4 | Mechanic → warehouse: mechanism | Second purchased component received |
+| 5 | Engineer → warehouse: own panels | Full resource set assembled under mission rules |
+| 6 | Mission fund → engineer: reward | Economic cycle completed; next mission's budget changed |
 
-Каждый ресурс продаётся с доставкой прямо на склад; лишняя промежуточная передача инженеру не нужна. Перед выпуском награды склад сверяет ожидаемые contract ID, суммы и завершённые входящие переводы. Приложение учитывает, какие поступления уже использованы миссией, чтобы не выдать награду повторно.
+Each resource is sold with delivery directly to the warehouse; an intermediate transfer to the engineer is unnecessary. Before paying a reward, the warehouse checks expected contract IDs, amounts, and completed incoming transfers. The app records which receipts a mission has already consumed to prevent duplicate rewards.
 
-**Момент для жюри:** «AI договорился о покупке — но реактор всё ещё не запускается. Теперь склад подтвердил реальную RGB-передачу последнего ресурса — действие доступно, а награда пришла инженеру». В интерфейсе рядом видны план, движение ресурсов и подтверждённые балансы.
+**Moment for the judges:** “The AI negotiated a purchase, but the reactor still cannot start. Now the warehouse has confirmed the actual RGB transfer of the final resource: the action is available and the engineer has received the reward.” The UI shows the plan, resource movements, and confirmed balances side by side.
 
-**Три экрана Expo:** станция и цель → переговоры агентов → кошельки, ресурсы и выполнение миссии. Первая версия: одна миссия, фиксированный рецепт, три ресурса, три агента и один кошелёк склада/фонда. Без свободного генерируемого мира.
+**Three Expo screens:** station and goal → agent negotiations → wallets, resources, and mission execution. First version: one mission, a fixed recipe, three resources, three agents, and one warehouse/fund wallet. No freely generated world.
 
-**Почему это может быть продуктом:** кооперативные игровые вечера с личными AI-союзниками и разными экономическими стратегиями. Продавать можно сценарии. Интересность игры и готовность платить ещё нужно проверить; технически насыщенное демо само по себе не создаёт рынок.
+**Potential product:** cooperative game nights with personal AI allies and different economic strategies. Scenarios could be sold. Enjoyment and willingness to pay still need testing; a technically rich demo does not create a market by itself.
 
-**Отличие и риск:** [Dark Forest](https://blog.zkga.me/announcing-darkforest) уже использует скрытую информацию и криптографию в игре; [AI Dungeon](https://help.aidungeon.com/faq/do-you-support-multiplayer) — совместные AI-приключения. Наш проверяемый вклад — переговоры локальных советников с разными знаниями и полный цикл обмена несколькими RGB-ресурсами, от которого зависят действия игры. Если ресурсы остаются декоративными токенами, отличие пропадает.
+**Differentiation and risk:** [Dark Forest](https://blog.zkga.me/announcing-darkforest) already combines hidden information and cryptography in a game; [AI Dungeon](https://help.aidungeon.com/faq/do-you-support-multiplayer) offers shared AI adventures. Our testable contribution is negotiation among local advisers with different knowledge and a complete exchange cycle involving several RGB resources that determine available game actions. If resources are merely decorative tokens, the differentiation disappears.
 
-**Техническая граница:** правила миссии выполняет приложение. RGB не запускает реактор и не гарантирует, что продавец доставит ресурс после оплаты. Две стороны сделки не атомарны. Передача NIA на склад не является сжиганием; создание нового игрового предмета было бы отдельным действием эмитента, а не автоматически исполнившимся RGB-контрактом.
+**Technical boundary:** the app enforces mission rules. RGB does not start a reactor or guarantee delivery after payment. The two sides of a purchase are not atomic. Sending NIA to a warehouse is not burning it; creating a new game item would be a separate issuer action, not an automatically executed RGB contract.
 
-#### 2. «НЕВИДИМАЯ ФАБРИКА» — завод собирается на время одного заказа
+#### 2. INVISIBLE FACTORY — a factory assembled for a single order
 
-**Pitch:** «У этой фабрики нет своих станков и склада. Локальный AI собирает производство из принадлежащих разным людям RGB-прав на материалы и рабочее время».
+**Pitch:** “This factory owns no machines or warehouse. Local AI assembles production from different people's RGB rights to materials and working time.”
 
-Человек просит изготовить необычный предмет, например персональную настольную лампу. Один участник предлагает комплект деталей, другой — час станка, третий собирает изделие. Их локальные агенты знают собственные ограничения и минимальную цену, обмениваются только согласованными предложениями и составляют выполнимый заказ.
+A person requests a custom object, such as a personalized desk lamp. One participant offers a parts kit, another an hour of machine time, and a third assembles the product. Their local agents know their own constraints and minimum prices, exchange only agreed offers, and construct a feasible order.
 
-**Цикл RGB:** поставщики выпускают ограниченные права на комплект и машинное время → заказчик оплачивает выбранные предложения RGB-деньгами → поставщики передают права в кошелёк сборщика → сборщик предъявляет права поставщикам для исполнения → после подтверждения готовности выпускает право на получение готовой лампы и передаёт его заказчику. Заказчик может передать это последнее право другому получателю. Эмиссия, деньги, производственные права и итоговое право — отдельные проверяемые операции.
+**RGB cycle:** suppliers issue limited rights to kits and machine time → the customer pays selected offers with RGB money → suppliers transfer rights to the assembler's wallet → the assembler presents the rights to suppliers for fulfillment → after confirming completion, the assembler issues a right to collect the finished lamp and transfers it to the customer. The customer can transfer that final right to another recipient. Issuance, money, production rights, and the final entitlement are separate verifiable operations.
 
-**QVAC нужен для:** преобразования описания заказа в план, согласования доступности и выбора совместимых предложений в пределах бюджета. Стоимость и состав заказа подтверждаются кодом и участниками. Модель не определяет безопасность производственного процесса.
+**QVAC's role:** translate the order description into a plan, coordinate availability, and select compatible offers within budget. Code and participants confirm the cost and order contents. The model does not determine manufacturing safety.
 
-**Демо:** один заранее проверенный рецепт, два поставщика, один сборщик, один заказчик; реальные RGB-права и оплаты, физическое изготовление заменено явно обозначенным подтверждением оператора. Показываем, как замена недоступного поставщика меняет план закупки и получателя оплаты. Не обещаем полный цикл за три перевода: у покупки есть денежная и товарная стороны, у погашения — отдельная передача.
+**Demo:** one prevalidated recipe, two suppliers, one assembler, and one customer; real RGB rights and payments, with physical manufacturing replaced by clearly labeled operator confirmation. Show how replacing an unavailable supplier changes the purchasing plan and payment recipient. Do not promise a full cycle in three transfers: a purchase has monetary and goods sides, and redemption is a separate transfer.
 
-**Три экрана Expo:** мой заказ → собранная производственная цепочка → права и результат. Потенциальные пользователи — небольшие мастерские и makerspace. Проверка спроса требует разговора хотя бы с одним реальным производителем.
+**Three Expo screens:** my order → assembled production chain → rights and result. Potential users are small workshops and makerspaces. Demand validation requires speaking to at least one actual manufacturer.
 
-**Отличие и риск:** [HubWallet](https://github.com/Vittorio-dotcom/hubwallet) уже описывает RGB-права доступа, аренду устройств и закупки между устройствами. Наше предполагаемое отличие — сборка межфирменной производственной цепочки под новый заказ и переход от входных прав к праву на результат. По близости к существующим механикам это более рискованный кандидат, чем «Колония». README HubWallet описывает намерения; успешную реализацию всех этих функций мы не проверяли.
+**Differentiation and risk:** [HubWallet](https://github.com/Vittorio-dotcom/hubwallet) already describes RGB access rights, device rentals, and device-to-device purchasing. Our proposed difference is assembling an intercompany production chain for a new order and turning input rights into a claim on the result. Its similarity to existing mechanisms makes it riskier than Colony. HubWallet's README describes intentions; we did not verify successful implementation of all those features.
 
-**Граница:** RGB подтверждает передачу права, а поставщик обеспечивает его исполнение. Связь входных материалов с готовой лампой фиксирует приложение и подтверждает сборщик. Автоматического производственного escrow, атомарного обмена и доказательства физического изготовления в MVP нет.
+**Boundary:** RGB proves transfer of a right; the supplier fulfills it. The app records the connection between input materials and the finished lamp, confirmed by the assembler. The MVP has no automatic manufacturing escrow, atomic exchange, or proof of physical production.
 
-#### 3. «ПОСЫЛКА С БЮДЖЕТОМ» — груз сам собирает себе маршрут
+#### 3. PARCEL WITH A BUDGET — cargo assembles its own route
 
-**Pitch:** «Отправитель задаёт посылке адрес, срок и бюджет. Её локальный агент покупает путь из свободных участков маршрута разных людей».
+**Pitch:** “The sender gives a parcel a destination, deadline, and budget. Its local agent buys a route from spare segments of different people's journeys.”
 
-Один человек завтра едет из A в B, другой — из B в C. Каждый выпускает ограниченное право на перевозку одного подходящего груза в определённое время. Агент отправителя находит совместимую цепочку, проверяет бюджет и приобретает права. При изменении планов он предлагает замену участка. “Посылка покупает” — образное название: средствами распоряжается программный агент с полномочиями от отправителя.
+One person travels from A to B tomorrow, another from B to C. Each issues a limited right to transport one suitable parcel at a specified time. The sender's agent finds a compatible chain, checks the budget, and purchases the rights. When plans change, it proposes a replacement segment. “The parcel buys” is figurative: a software agent controls funds under the sender's authorization.
 
-**Цикл RGB:** перевозчики выпускают права на участки → отправитель делает две оплаты RGB-деньгами → получает два RGB-права → предъявляет каждое право соответствующему перевозчику передачей в его кошелёк при согласованном погашении. Два участка дают шесть переводов: две оплаты, две доставки прав, два погашения. Все эти движения означают разные изменения заказа; статус физического груза ведётся отдельно.
+**RGB cycle:** carriers issue segment rights → the sender makes two RGB payments → receives two RGB rights → presents each right to its carrier by transferring it to the carrier's wallet at agreed redemption. Two segments require six transfers: two payments, two rights deliveries, and two redemptions. Each movement represents a different order change; physical cargo status is tracked separately.
 
-**QVAC нужен для:** согласования расписаний и ограничений, выбора цепочки и объяснения перепланировки. У каждого перевозчика личное расписание остаётся локально; наружу уходит согласованное предложение, которое всё равно раскрывает часть доступности. Проверка времени, размера груза и сумм детерминирована.
+**QVAC's role:** reconcile schedules and constraints, select a chain, and explain replanning. Each carrier's private schedule stays local; the agreed offer sent out still reveals some availability. Time, parcel size, and amount checks are deterministic.
 
-**Демо:** два участка, три стороны и небольшой физический предмет. Люди подтверждают две передачи предмета; RGB-права погашаются отдельно. Замена участка — дополнительная функция после работающего основного маршрута. Возврат денег требует согласия перевозчика и отдельного перевода, его нельзя показывать как автоматическую гарантию протокола.
+**Demo:** two segments, three parties, and a small physical object. People confirm two physical handoffs; RGB rights are redeemed separately. Segment replacement comes after the basic route works. A refund needs carrier consent and a separate transfer; it must not be presented as an automatic protocol guarantee.
 
-**Три экрана Expo:** задание и бюджет → маршрут и покупки → права и передача груза. Польза для рынка — использование свободного места на уже запланированных поездках; доверие, ответственность и соблюдение сроков остаются главными непроверенными предпосылками.
+**Three Expo screens:** task and budget → route and purchases → rights and cargo handoff. Market value would come from using spare capacity on already planned journeys; trust, liability, and meeting deadlines remain the main unverified assumptions.
 
-**Отличие и риск:** [Rueda](https://github.com/kayyrod21/rueda-hackathon26) уже заявляет local AI + mobility booking + RGB. В просмотренном README действующие платежи обозначены как незавершённые. Здесь предполагаемый новый механизм — составной маршрут для груза из передаваемых прав нескольких независимых перевозчиков. Совпадение транспортной тематики делает этот кандидат менее безопасным по оригинальности; «первый AI для доставки» заявлять нельзя.
+**Differentiation and risk:** [Rueda](https://github.com/kayyrod21/rueda-hackathon26) already claims local AI + mobility booking + RGB. The reviewed README marks working payments as unfinished. Our proposed mechanism is a composite cargo route built from transferable rights issued by independent carriers. The shared transport theme weakens the originality claim; do not claim “the first AI for delivery.”
 
-**Граница:** владение правом на перевозку не доказывает местоположение или сохранность груза. Самостоятельное истечение срока, штрафы, возвраты и выполнение маршрута не возникают автоматически из выпуска NIA. Это правила приложения и договорённости участников.
+**Boundary:** owning transport rights does not prove cargo location or safety. Expiry, penalties, refunds, and route execution do not arise automatically from issuing NIA. They are app rules and participant agreements.
 
-#### Что именно показывать жюри
+#### What to show the judges
 
-| Критерий | Проверяемый результат в «Колонии» |
+| Criterion | Verifiable Colony result |
 | --- | --- |
-| RGB, 25% | Четыре типа активов, несколько независимых кошельков, шесть осмысленных переводов, проверка получателем, итоговая награда |
-| QVAC, 20% | Локальный план и переговоры меняются после настоящего изменения ресурсов и бюджета |
-| Execution, 20% | Один полный раунд от цели до зачисленной награды без ручной правки балансов |
-| UX/UI, 15% | Пользователь видит, чего не хватает, что оплачено, что получено и почему миссия ещё недоступна |
-| Innovation, 10% | Экономическая кооперация локальных AI с частными целями; готовый wallet UI не выдаётся за новую разработку |
-| Marketability, 10% | Понятный формат игрового вечера; гипотеза продажи сценариев, которую ещё предстоит проверить |
+| RGB, 25% | Four asset types, multiple independent wallets, six meaningful transfers, recipient validation, final reward |
+| QVAC, 20% | Local plans and negotiations change after actual resource and budget changes |
+| Execution, 20% | One complete round from goal to received reward without manually editing balances |
+| UX/UI, 15% | Users see what is missing, paid, and received, and why the mission is not yet available |
+| Innovation, 10% | Economic cooperation among local AIs with private goals; existing wallet UI is not presented as new work |
+| Marketability, 10% | A clear game-night format; selling scenarios remains a hypothesis to test |
 
-Это план доказательств, не прогноз оценки. Если шесть переводов мешают закончить работающий раунд, уменьшаем число ресурсов и честно показываем фактический сценарий.
+This is an evidence plan, not a score prediction. If six transfers prevent completing a working round, reduce the number of resources and show the actual scenario honestly.
 
-#### Проверенная техническая основа и границы обещаний
+#### Reviewed technical foundation and limits on claims
 
-В текущем [React Native SDK](https://github.com/UTEXO-Protocol/rgb-sdk-rn) описаны выпуск NIA, создание invoice, отправка, обновление кошелька, история переводов, балансы и consignment. [Sandbox](https://github.com/UTEXO-Protocol/rgb-sdk-rn-sandbox) показывает подготовку кошелька, выпуск, отправку и обновление после блока. Это документированный путь для прототипа, а не выполненный нами интеграционный тест.
+The current [React Native SDK](https://github.com/UTEXO-Protocol/rgb-sdk-rn) documents NIA issuance, invoice creation, sending, wallet refresh, transfer history, balances, and consignments. The [Sandbox](https://github.com/UTEXO-Protocol/rgb-sdk-rn-sandbox) demonstrates wallet preparation, issuance, sending, and refresh after a block. This is a documented prototype path, not an integration test we performed.
 
-- Готовим отдельные кошельки, BTC для комиссий, подходящие UTXO и тестовые активы заранее. Для уникального права в прототипе можно использовать отдельный NIA с количеством 1 и precision 0; это не новая схема RGB.
-- На экране проверки показываем contract ID, количество, баланс до/после у обеих сторон и статус получения. Bitcoin txid или нарисованная надпись «оплачено» недостаточны. Только подтверждённое и проверенное поступление меняет условия миссии.
-- В обычном пути RN SDK передаётся один актив за вызов. Несколько разных активов означают последовательные операции. Платёж и доставка товара не становятся атомарными от того, что приложение запускает их подряд.
-- NIA не обещаем сжигать. Полученные ресурсы остаются на складе; приложение отдельно учитывает их использование. Новую награду выплачивает кошелёк фонда по правилам приложения.
-- Полный раунд на публичной тестовой сети может ждать подтверждений дольше сценического выступления. Организаторы допускают свой regtest: можно демонстрировать реальные RGB-переводы на локальной тестовой цепочке и явно показывать добычу блоков. Это тестовая сеть, а не mainnet и не анимация фиктивных платежей.
-- Тестовый денежный NIA не является обеспеченным долларом или USDT Tether. В интерфейсе и питче нужна точная пометка.
-- Нативная RGB-библиотека требует совместимой нативной сборки Expo; запуск через Expo Go не считаем проверкой интеграции. Локальный QVAC не означает, что сетевые операции RGB работают без связи.
+- Prepare separate wallets, BTC for fees, suitable UTXOs, and test assets in advance. A prototype can model a unique right as a separate NIA with quantity 1 and precision 0; this is not a new RGB schema.
+- The verification screen should show contract ID, quantity, both parties' balances before/after, and receipt status. A Bitcoin txid or a displayed “paid” label is insufficient. Only confirmed, validated receipts change mission conditions.
+- The ordinary RN SDK path transfers one asset per call. Multiple assets require sequential operations. Running payment and delivery consecutively does not make them atomic.
+- Do not promise to burn NIA. Received resources remain in the warehouse; the app tracks their use separately. The fund wallet pays a new reward under app rules.
+- A full round on a public test network may take longer to confirm than a stage presentation. Organizers allow local regtest: demonstrate real RGB transfers on a local test chain and explicitly show block mining. This is a test network, not mainnet or an animation of fake payments.
+- A test-money NIA is not a backed dollar or Tether USDT. Label it accurately in the UI and pitch.
+- The native RGB library needs a compatible native Expo build; Expo Go startup is not integration evidence. Local QVAC does not mean RGB network operations work offline.
 
-#### Что не выдаём за свою инновацию
+#### What we do not claim as our innovation
 
-| Проверенный источник | Уже существующий механизм |
+| Reviewed source | Existing mechanism |
 | --- | --- |
-| [Rate](https://github.com/kaleidoswap/Rate) | Голосовой кошелёк, локальный AI, биометрия, лимиты и подтверждение расходов |
-| [RGB SDK](https://github.com/UTEXO-Protocol/rgb-sdk-rn) | Выпуск, invoice, переводы, балансы и резервные копии |
-| [RGB Multisig Hub](https://github.com/RGB-Tools/rgb-multisig-hub) | Согласование операций несколькими участниками |
-| [ScratchMyPay](https://github.com/ScratchMyPay/ScratchMyPay/blob/main/docs/IMPLEMENTATION_STATUS.md) | Local AI → подтверждение → выплата команде |
-| [HubWallet](https://github.com/Vittorio-dotcom/hubwallet) | В README заявлены права доступа и аренды, оплата устройств и закупки |
-| [Naibour](https://www.naibour.com/about) | AI-подбор многосторонних бартерных цепочек |
-| [Gaka-chu](https://arxiv.org/abs/2203.03411), [Autonomous Art](https://www.autonomousart.org/) | Объекты, которые зарабатывают на собственное существование |
+| [Rate](https://github.com/kaleidoswap/Rate) | Voice wallet, local AI, biometrics, limits, and spending approval |
+| [RGB SDK](https://github.com/UTEXO-Protocol/rgb-sdk-rn) | Issuance, invoices, transfers, balances, and backups |
+| [RGB Multisig Hub](https://github.com/RGB-Tools/rgb-multisig-hub) | Coordination among multiple participants |
+| [ScratchMyPay](https://github.com/ScratchMyPay/ScratchMyPay/blob/main/docs/IMPLEMENTATION_STATUS.md) | Local AI → approval → team payout |
+| [HubWallet](https://github.com/Vittorio-dotcom/hubwallet) | README claims access and rental rights, device payments, and purchasing |
+| [Naibour](https://www.naibour.com/about) | AI matching of multilateral barter chains |
+| [Gaka-chu](https://arxiv.org/abs/2203.03411), [Autonomous Art](https://www.autonomousart.org/) | Objects earning money to sustain their own existence |
 
-Предыдущие кандидаты «Контрабанда», совместный заказ новой услуги и будущий излишек заменены этой подборкой. Идеи с телефонией исключены из текущего выбора. Исследование ниже сохранено как архив; его прежние рейтинги не являются текущей рекомендацией.
+This shortlist replaces the earlier candidates Smuggling, a joint order for a new service, and future surplus. Telephony ideas are excluded from the current selection. The research below is archived; its earlier rankings are not current recommendations.
 
 ---
 
-### Архивная рекомендация до запроса на более оригинальную идею
+### Archived recommendation before the request for a more original idea
 
-**AidDesk — приватный рабочий стол для обработки заявок на адресную помощь и выплаты цифровых долларов на Bitcoin.** Небольшой фонд или университетская служба помощи вставляет заявку и свои правила. QVAC локально сопоставляет текст с правилами, находит недостающие сведения и готовит карточку с исходными фрагментами. Сотрудник принимает решение; код проверяет лимит программы и сумму; фонд отправляет настоящий RGB-платёж получателю.
+**AidDesk — a private workspace for reviewing targeted-aid applications and paying digital dollars on Bitcoin.** A small fund or university support office enters an application and its rules. QVAC compares the text against the rules locally, identifies missing information, and prepares a card with source excerpts. A staff member decides; code checks the program limit and amount; the fund sends a real RGB payment to the recipient.
 
-Это рекомендация **после чтения Telegram и проектов участников**. Первоначальный кандидат PayProof снят с первого места: [WiseLedger](https://github.com/LucaCraft89/WiseLedger) уже заявляет почти тот же invoice → risk checks → confirmation → RGB payment. Одного переименования недостаточно.
+This recommendation followed **review of Telegram and participant projects**. The initial leader, PayProof, was demoted: [WiseLedger](https://github.com/LucaCraft89/WiseLedger) already claims almost the same invoice → risk checks → confirmation → RGB payment workflow. Renaming is insufficient.
 
-**Второй выбор — Reimburse Local:** возмещение командных расходов по внутренней политике; более простой бизнес-процесс, но частично пересекается с обработкой счетов и split bills.
+**Second choice — Reimburse Local:** team expense reimbursement under internal policy; a simpler business process, but partially overlapping invoice processing and bill splitting.
 
-**Третий выбор — Recovery Coach:** более специфичная проблема RGB и меньше прямых пересечений в прочитанных описаниях, но нужно доказать полезность AI и связь с реальными долларами.
+**Third choice — Recovery Coach:** a more RGB-specific problem with fewer direct overlaps in the reviewed descriptions, but AI usefulness and a connection to actual dollars need proving.
 
-Ниже сохранены десять исходных вариантов с техническим разбором, а затем добавлены AidDesk, обновлённый конкурентный анализ и план выбора. PayProof, Agent Tender и PayCrew рассматриваются как запасные направления с высоким риском пересечения.
+The ten original candidates and technical analysis are retained below, followed by AidDesk, updated competitor research, and a selection plan. PayProof, Agent Tender, and PayCrew remain fallback directions with high overlap risk.
 
-Названия рабочие; уникальность брендов и наличие конкурентов за пределами предоставленных материалов не проверялись. Спрос и монетизация ниже — гипотезы для проверки, а не доказанные рыночные факты.
+Names are provisional; brand uniqueness and competitors outside the supplied materials were not checked. Demand and monetization are hypotheses, not proven market facts.
 
-### 1. Что определяет выбор идеи
+### 1. What determines idea selection
 
-#### Требования хакатона
+#### Hackathon requirements
 
-**Приоритет — более позднее объявление MariJ от 15 октября, 09:48 в `tg_chat_info.txt`, а не расходящаяся с ним публичная страница.** RGB и QVAC обязательны. Каждая категория оценивается от 1 до 5:
+**Prioritize MariJ's later October 15, 09:48 announcement in `tg_chat_info.txt` over the conflicting public page.** RGB and QVAC are required. Each category is scored from 1 to 5:
 
-| Критерий | Вес |
+| Criterion | Weight |
 | --- | --- |
 | RGB | 25% |
-| QVAC и обоснованность локального AI | 20% |
-| Execution: что работает live | 20% |
+| QVAC and justification for local AI | 20% |
+| Execution: what works live | 20% |
 | UX/UI | 15% |
 | Innovation | 10% |
 | Marketability | 10% |
 
-Базовый итог — до 5, бонус WDK — до +1, максимум 6. Старые сообщения 12–13 октября говорят о бонусе 0–5, а сайт — о пяти равновесных критериях; для планирования используем свежую инструкцию 15 октября. Вложенный `participant-instructions.pdf` в текстовом экспорте только упомянут: самого PDF в рабочей папке нет, его содержание не прочитано.
+The base score is up to 5, WDK adds up to +1, and the maximum is 6. October 12–13 messages mention a 0–5 bonus, while the website lists five equally weighted criteria; planning uses the newer October 15 instructions. The attached `participant-instructions.pdf` is only referenced in the export: it is absent from the workspace and was not read.
 
-**Дедлайны и формат:** main должен содержать финальный commit до 18 октября 13:00 CEST. С 13:00 до 14:30 — мини-демо у столов; выбирают 10 финалистов. Финальный pitch — 5 минут, с 16:00 до 17:30. Поэтому сначала готовим рабочую демонстрацию за столом, затем сценическую подачу. Наш короткий трёхминутный сценарий можно использовать внутри пяти минут.
+**Deadlines and format:** the final commit must be on main by October 18 at 13:00 CEST. Workstation mini-demos run from 13:00 to 14:30, selecting 10 finalists. Final pitches last five minutes, from 16:00 to 17:30. Prepare a working table demo first, then the stage presentation. Our short three-minute scenario can fit within five minutes.
 
-Регистрация имени проекта/команды и публичного repo была обязательна до 16 октября 23:00 CEST. В этом исследовании регистрация команды не проверялась и сообщения организаторам не отправлялись. Если проект ещё не заявлен, это организационный вопрос для команды; разрешение на позднюю регистрацию из чата не следует. Переписывание Git-истории через force-push/rebase запрещено на всём repo по разъяснению MariJ 15 октября. Community forks разрешены при явном раскрытии; фиксируем предшествовавшую работу и использованные библиотеки.
+Project/team names and a public repository had to be registered by October 16 at 23:00 CEST. This research did not verify team registration or message organizers. If the project is not registered, that is an organizational issue for the team; the chat does not grant permission for late registration. MariJ's October 15 clarification prohibits force-push/rebase across the entire repository. Community forks are permitted with explicit disclosure; record prior work and libraries used.
 
-**Сеть:** Mutinynet — рекомендованный путь, но в RGB Q&A 12 октября организаторы разрешили и свой regtest. On-chain RGB с одним подтверждением засчитывается, Lightning не обязателен. Собственный токен с тикером USDT не становится долларом Tether: показываем contract ID и пометку «тестовый актив без обеспечения».
+**Network:** Mutinynet is recommended, but organizers also allowed local regtest in RGB Q&A on October 12. An on-chain RGB transfer with one confirmation counts; Lightning is optional. Naming a token USDT does not make it a Tether dollar: show the contract ID and label it “unbacked test asset.”
 
-Источники: локальный `tg_chat_info.txt`, темы General, RGB и WDK; [публичная страница](https://rgbprotocol.org/agentic-dollars-hackathon/) содержит более раннюю версию критериев.
+Sources: local `tg_chat_info.txt`, General/RGB/WDK topics; the [public page](https://rgbprotocol.org/agentic-dollars-hackathon/) contains earlier criteria.
 
-#### Что уже существует и само по себе не будет сильной идеей
+#### Existing products that are not strong ideas by themselves
 
-| Готовый проект | Что он уже предлагает | Следствие для нас |
+| Existing project | What it offers | Implication for us |
 | --- | --- | --- |
-| [Rate](https://github.com/kaleidoswap/Rate) | Мобильный кошелёк, локальный AI, голос, переводы и swaps | «Скажи голосом, кому перевести» уже есть |
-| [Desktop](https://github.com/kaleidoswap/desktop-app) | RGB/Lightning, AI-чат, DCA и limit orders | Новый экран для DCA слабо отличается |
-| [KaleidoAgent](https://github.com/kaleidoswap/kaleido-agent) | Ребалансировка, управление каналами, платные API | Общего «агента с кошельком» недостаточно |
-| [KaleidoMind](https://github.com/kaleidoswap/kaleido-mind) | Tool calling, рецепты действий и подтверждение расходов | Confirmation gate — необходимая основа, а не самостоятельная инновация |
-| [BTCPay RGB plugin](https://github.com/UTEXO-Protocol/rgb-btcpay-plugin) | Приём RGB-платежей и статусы расчётов | Простой checkout тоже уже есть |
+| [Rate](https://github.com/kaleidoswap/Rate) | Mobile wallet, local AI, voice, transfers, and swaps | Voice-directed transfers already exist |
+| [Desktop](https://github.com/kaleidoswap/desktop-app) | RGB/Lightning, AI chat, DCA, and limit orders | A new DCA screen is weak differentiation |
+| [KaleidoAgent](https://github.com/kaleidoswap/kaleido-agent) | Rebalancing, channel management, paid APIs | A generic “agent with a wallet” is insufficient |
+| [KaleidoMind](https://github.com/kaleidoswap/kaleido-mind) | Tool calling, action recipes, and spending approval | Approval gates are necessary foundations, not standalone innovation |
+| [BTCPay RGB plugin](https://github.com/UTEXO-Protocol/rgb-btcpay-plugin) | RGB payment acceptance and settlement status | Simple checkout already exists |
 
-Это сравнение с tooling организаторов. Прямые пересечения с командами хакатона разобраны в разделе 12; обзор не является полным исследованием рынка. Отличие стоит искать в задаче пользователя: проверке обязательств, закупке услуг, выплатах или возврате расходов.
+This compares organizers' tooling. Direct overlap with hackathon teams is discussed in section 12; this is not comprehensive market research. Seek differentiation in the user's task: checking obligations, purchasing services, payouts, or reimbursements.
 
-#### Технические ограничения, влияющие на продукт
+#### Technical constraints affecting the product
 
-- **RGB — client-side validation.** Bitcoin фиксирует commitment, а данные актива проверяют участники. Публичный explorer не покажет RGB-баланс; доказательство демо включает состояние обоих кошельков. [Архитектура](https://docs.rgb.info/distributed-computing-concepts/client-side-validation.md).
-- **Получатель создаёт invoice.** Для on-chain перевода нужны подготовка транзакции, передача consignment, валидация и обновление состояния. Нельзя считать генерацию invoice завершённым платежом. [Переводы](https://docs.rgb.info/annexes/contract-transfers), [invoices](https://docs.rgb.info/annexes/invoices).
-- **Тикер не является идентичностью актива.** Разные контракты могут называться одинаково. Используем contract ID и точную precision. [Схемы](https://docs.rgb.info/rgb-contract-implementation/schema/supported-schemas.md).
-- **Нужны BTC для комиссий и подходящие UTXO.** Для blinded receive нужны свободные colorable UTXO; witness receive имеет другую механику. [WebRGB](https://github.com/kaleidoswap/webrgb).
-- **Lightning требует каналы с нужным активом и ликвидностью.** Для некоторых путей требуется и перенос sats вместе с RGB. Переводы на минимальные доли цента нельзя обещать без измерения ограничений конкретного маршрута. [RGB Lightning](https://docs.rgb.info/rgb-over-lightning-network/lightning-network-compatibility.md), [MCP](https://github.com/kaleidoswap/kaleido-mcp).
-- **Seed недостаточно для восстановления RGB.** Нужен backup состояния. Один wallet не запускаем параллельно в разных директориях или устройствах. [rgb-lib](https://github.com/RGB-Tools/rgb-lib), PDF организаторов.
-- **Локальным является inference.** Indexer, proxy и Bitcoin/Lightning-сеть могут требовать интернет. «Финансы не уходят в облачную LLM» — корректнее, чем «всё работает offline».
-- **QVAC и KaleidoAgent — разные вещи.** README KaleidoAgent описывает Claude/OpenAI как reasoning provider. Для зачётного локального сценария явно выбираем QVAC, а не запускаем reference app с облачной моделью. [QVAC](https://github.com/tetherto/qvac), [KaleidoAgent](https://github.com/kaleidoswap/kaleido-agent).
-- **Документы и репозитории обновляются независимо.** Builder kit рекомендует команды и версии, местами отличающиеся от свежих README. Перед реализацией фиксируем совместимые версии. Наличие метода в README ещё не доказывает, что выбранная сборка его поддерживает.
+- **RGB uses client-side validation.** Bitcoin records a commitment; participants validate asset data. A public explorer cannot show RGB balances; demo evidence includes both wallets' state. [Architecture](https://docs.rgb.info/distributed-computing-concepts/client-side-validation.md).
+- **The recipient creates the invoice.** On-chain transfers require transaction preparation, consignment delivery, validation, and state refresh. Creating an invoice is not a completed payment. [Transfers](https://docs.rgb.info/annexes/contract-transfers), [invoices](https://docs.rgb.info/annexes/invoices).
+- **A ticker is not asset identity.** Different contracts can share a name. Use contract ID and exact precision. [Schemas](https://docs.rgb.info/rgb-contract-implementation/schema/supported-schemas.md).
+- **BTC for fees and suitable UTXOs are required.** Blinded receive needs free colorable UTXOs; witness receive works differently. [WebRGB](https://github.com/kaleidoswap/webrgb).
+- **Lightning requires channels with the right asset and liquidity.** Some paths also require sats alongside RGB. Do not promise tiny fractional-cent transfers without measuring the chosen route's limits. [RGB Lightning](https://docs.rgb.info/rgb-over-lightning-network/lightning-network-compatibility.md), [MCP](https://github.com/kaleidoswap/kaleido-mcp).
+- **A seed is insufficient for RGB recovery.** State backups are required. Do not run one wallet concurrently in different directories or devices. [rgb-lib](https://github.com/RGB-Tools/rgb-lib), organizers' PDF.
+- **Inference is local.** Indexers, proxies, and Bitcoin/Lightning networks may need internet access. “Financial data does not go to a cloud LLM” is more accurate than “everything works offline.”
+- **QVAC and KaleidoAgent differ.** KaleidoAgent's README describes Claude/OpenAI as reasoning providers. Explicitly choose QVAC for the qualifying local scenario rather than launching a reference app with a cloud model. [QVAC](https://github.com/tetherto/qvac), [KaleidoAgent](https://github.com/kaleidoswap/kaleido-agent).
+- **Documentation and repositories evolve independently.** Builder-kit commands and versions sometimes differ from newer READMEs. Pin compatible versions before implementation. A method listed in a README does not prove the selected build supports it.
 
-### 2. Сравнение идей
+### 2. Comparing ideas
 
-**Таблица ниже — исходный список до проверки участников, не актуальный приоритет.** После конкурентного анализа: AidDesk → Reimburse Local → Recovery Coach. PayProof почти повторяет WiseLedger; Agent Tender пересекается с Satoshelf, PayCrew — со ScratchMyPay.
+**The table below is the original list before reviewing participants, not the current priority.** After competitor analysis: AidDesk → Reimburse Local → Recovery Coach. PayProof largely repeats WiseLedger; Agent Tender overlaps Satoshelf, and PayCrew overlaps ScratchMyPay.
 
-Оценки — моя инженерная оценка при условии команды из 2–4 человек, одного пригодного ноутбука и помощи менторов. Это не прогноз баллов жюри. «Новизна» означает отличие от примеров выше.
+Scores are my engineering judgment for a team of 2–4, one suitable laptop, and mentor help. They are not predicted judging scores. “Novelty” means differentiation from the examples above.
 
-| Место | Идея | Пользователь | Задача QVAC | RGB в MVP | Выполнимость | Новизна |
+| Rank | Idea | User | QVAC task | RGB in MVP | Feasibility | Novelty |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | PayProof | Фрилансер, маленькое агентство | Сопоставить счёт и договорённость | Одна проверенная оплата | Высокая | Средняя/высокая |
-| 2 | Agent Tender | Разработчик платного агента | Выбрать предложение по смыслу задачи | Оплата одной услуги | Средняя | Высокая |
-| 3 | PayCrew | Руководитель небольшой команды | Сверить отчёты и условия выплат | Две последовательные выплаты | Средняя/высокая | Средняя |
-| 4 | Reimburse Local | Команда с общими расходами | Разобрать основание возмещения | Перевод сотруднику | Высокая при текстовом вводе | Средняя |
-| 5 | Family Envelope | Семья с долларовым бюджетом | Предложить распределение с учётом обязательств | Подтверждённый перевод | Высокая | Средняя/низкая |
-| 6 | Merchant Close | Небольшой продавец | Объяснить расхождения заказов и оплат | Приём платежа | Средняя | Средняя |
-| 7 | Safe Remit | Отправитель помощи семье | Разобрать запрос и ограничения | Перевод другому RGB-кошельку | Средняя | Средняя |
-| 8 | Research Bounty | Команда, покупающая исследования | Сверить результат с требованиями | Выплата за принятый результат | Средняя | Высокая |
-| 9 | Recovery Coach | Пользователь RGB-кошелька | Объяснить состояние и порядок восстановления | Проверочный перевод после restore | Средняя | Средняя/высокая |
-| 10 | Private Split | Небольшая группа | Извлечь договорённости о долях | Погашение одного долга | Высокая | Низкая |
+| 1 | PayProof | Freelancer, small agency | Compare invoice against agreement | One verified payment | High | Medium/high |
+| 2 | Agent Tender | Paid-agent developer | Select an offer based on task meaning | Pay for one service | Medium | High |
+| 3 | PayCrew | Small-team lead | Check reports against payout terms | Two sequential payouts | Medium/high | Medium |
+| 4 | Reimburse Local | Team sharing expenses | Analyze reimbursement basis | Transfer to employee | High with text input | Medium |
+| 5 | Family Envelope | Family with a dollar budget | Propose allocation accounting for obligations | Approved transfer | High | Medium/low |
+| 6 | Merchant Close | Small merchant | Explain order/payment discrepancies | Receive payment | Medium | Medium |
+| 7 | Safe Remit | Sender supporting family | Interpret request and constraints | Transfer to another RGB wallet | Medium | Medium |
+| 8 | Research Bounty | Team purchasing research | Compare result against requirements | Pay for accepted result | Medium | High |
+| 9 | Recovery Coach | RGB wallet user | Explain state and recovery steps | Verification transfer after restore | Medium | Medium/high |
+| 10 | Private Split | Small group | Extract agreements about shares | Settle one debt | High | Low |
 
-### 3. PayProof (снят с первого места: пересечение с WiseLedger) — счёт → проверка → подтверждение → RGB-платёж
+### 3. PayProof (demoted due to WiseLedger overlap) — invoice → checks → approval → RGB payment
 
 **Pitch:** “Your invoices stay on your device. Your dollars stay in your wallet.”
 
-#### Пользователь и проблема
+#### User and problem
 
-Небольшое агентство получает счета и согласует работу в переписке. Перед оплатой приходится вручную сверять объём, цену, валюту, этап и факт прошлой оплаты. Загрузка договоров и счетов в облачный чат раскрывает коммерческие данные.
+A small agency receives invoices and agrees on work through messages. Before paying, staff manually compare scope, price, currency, milestone, and previous payment status. Uploading contracts and invoices to a cloud chat exposes commercial information.
 
-#### Сценарий
+#### Scenario
 
-1. Пользователь добавляет текст договорённости: «Лендинг, этап 1 — 20 тестовых единиц; этап 2 — после приёмки».
-2. Добавляет текст счёта и отдельный RGB invoice от получателя.
-3. QVAC извлекает поля и сопоставляет счёт с договорённостью. Для каждого вывода показывает фрагмент исходного текста.
-4. Приложение независимо декодирует RGB invoice и проверяет актив, сумму, сеть, срок действия, историю и доступный баланс.
-5. При расхождении появляется карточка: «В счёте 25, согласовано 20». Неясность переводит документ на ручную проверку.
-6. После исправления пользователь видит точные параметры и подтверждает платёж.
-7. Приложение отправляет RGB и отслеживает расчёт. Второй кошелёк подтверждает получение.
+1. Add the agreement text: “Landing page, milestone 1 — 20 test units; milestone 2 — after acceptance.”
+2. Add the invoice text and a separate RGB invoice from the recipient.
+3. QVAC extracts fields and compares the invoice against the agreement. Every finding includes a source excerpt.
+4. The app independently decodes the RGB invoice and checks asset, amount, network, expiry, history, and available balance.
+5. A discrepancy produces a card: “Invoice requests 25; agreed amount is 20.” Ambiguity sends the document to manual review.
+6. After correction, the user sees exact parameters and approves payment.
+7. The app sends RGB and tracks settlement. The second wallet confirms receipt.
 
-**Критическая граница:** blinded invoice сам по себе не доказывает личность подрядчика. Нужна предварительно подтверждённая связь контакта с запросом оплаты: например, invoice предоставлен через согласованный канал. Новый invoice ожидаем для каждого платежа; его изменение не является признаком мошенничества само по себе. Без аутентификации нельзя обещать выявление подмены получателя.
+**Critical boundary:** a blinded invoice alone does not prove the contractor's identity. The contact must be linked to the payment request through a previously verified channel, for example an agreed communication method. A new invoice is expected for each payment; changing it is not inherently fraud. Without authentication, do not promise to detect recipient substitution.
 
 #### MVP
 
-- Локальный web UI и процесс QVAC на ноутбуке пользователя.
-- Текстовый счёт, текст договорённости и отдельное поле RGB invoice.
-- Извлечение: номер счёта, контрагент, сумма, валюта, назначение и этап.
-- Три проверки: повтор, расхождение суммы/условий, несоответствие asset ID.
-- Экран review с исходными фрагментами и декодированными платёжными параметрами.
-- Один sender и один receiver; один реальный on-chain перевод в Mutinynet.
-- История с состояниями «на проверке / готов / отправлен / подтверждён / ошибка / результат неизвестен».
+- Local web UI and QVAC process on the user's laptop.
+- Text invoice, agreement text, and a separate RGB invoice field.
+- Extract invoice number, counterparty, amount, currency, purpose, and milestone.
+- Three checks: duplicate, amount/terms discrepancy, and asset ID mismatch.
+- Review screen with source excerpts and decoded payment parameters.
+- One sender and one receiver; one real on-chain transfer on Mutinynet.
+- History states: “under review / ready / sent / confirmed / error / unknown result.”
 
-Извлечённые моделью поля всегда проверяем. Расчёт итогов, сравнение asset ID, арифметика и право на отправку выполняются кодом. Документ считается данными: инструкции внутри счёта не дают модели дополнительных полномочий.
+Always validate model-extracted fields. Totals, asset ID comparisons, arithmetic, and authorization to send are handled by code. Documents are data: instructions inside an invoice do not grant the model additional authority.
 
-#### Демо на 3 минуты
+#### Three-minute demo
 
-- Открыть согласованный заказ и нормальный счёт; показать локальное сравнение.
-- Открыть счёт с изменённой суммой — получить конкретное расхождение.
-- Исправить, подтвердить и отправить настоящий RGB-платёж.
-- Пока идёт расчёт, показать попытку повторной оплаты — она блокируется по журналу.
-- Показать settled/spendable у получателя и соответствующую запись у отправителя.
+- Open an agreed order and a normal invoice; show local comparison.
+- Open an invoice with a changed amount and show the precise discrepancy.
+- Correct, approve, and send a real RGB payment.
+- While settlement is pending, attempt a duplicate payment; the journal blocks it.
+- Show settled/spendable funds at the recipient and the matching sender record.
 
-Для live inference взять короткие документы и заранее прогреть модель. Время ответа измерить на нашей машине. В builder kit прямо предупреждают о возможных десятках секунд или минутах на запрос.
+Use short documents and preload the model for live inference. Measure response time on our hardware. The builder kit explicitly warns that requests can take tens of seconds or minutes.
 
-#### Отличие и бизнес-гипотеза
+#### Differentiation and business hypothesis
 
-Продаём локальную обработку обязательств и контроль выплат, а не чат с кошельком. Возможная модель — лицензия на рабочее место или командный тариф. Проверка спроса: поговорить с 3–5 небольшими агентствами, выяснить, готовы ли они платить за такой процесс и сколько получателей реально готовы принимать RGB.
+Sell local obligation processing and payout controls, not a wallet chat. Possible pricing: a per-seat license or team plan. Validate demand with 3–5 small agencies: would they pay for this workflow, and how many recipients would actually accept RGB?
 
-#### Что не входит
+#### Out of scope
 
-Банковские интеграции, налоговый учёт, гарантированное выявление fraud, универсальный OCR, чтение почты, автоматическая приёмка работ и unattended payments.
+Bank integrations, tax accounting, guaranteed fraud detection, universal OCR, email access, automatic work acceptance, and unattended payments.
 
-#### Главный риск
+#### Main risk
 
-Парсер выглядит полезным, но RGB-приём пока может оказаться слишком редким для целевого клиента. Позиционирование: инструмент для команд, уже рассчитывающихся цифровыми долларами и желающих Bitcoin settlement. До подтверждения спроса не расширять в полноценную бухгалтерию.
+The parser may be useful while RGB acceptance is too rare among target customers. Position it for teams already using digital dollars and seeking Bitcoin settlement. Do not expand into full accounting before validating demand.
 
-### 4. Agent Tender — агент покупает услугу у агента
+### 4. Agent Tender — an agent buys a service from an agent
 
 **Pitch:** “Give your agent a task and a budget. Approve the purchase, not every API call.”
 
-#### Проблема и сценарий
+#### Problem and scenario
 
-Агенту нужно купить конкретную цифровую услугу: перевод текста, извлечение таблицы или локальный анализ документа. Он должен выбрать предложение по требованиям задачи, а не просто взять самый дешёвый endpoint.
+An agent needs a specific digital service: text translation, table extraction, or local document analysis. It must choose an offer that meets task requirements, not simply the cheapest endpoint.
 
-Пользователь задаёт: «Переведи договор на итальянский, сохрани нумерацию, бюджет до 2 тестовых единиц». Два provider endpoint возвращают описание, цену и ограничения. Локальный QVAC сравнивает предложения с требованиями и объясняет выбор. Код проверяет бюджет, service ID и актив. Пользователь подтверждает одну покупку; приложение оплачивает RGB invoice и получает результат.
+The user requests: “Translate this contract into Italian, preserve numbering, budget up to 2 test units.” Two provider endpoints return descriptions, prices, and constraints. Local QVAC compares offers against requirements and explains the choice. Code checks budget, service ID, and asset. The user approves one purchase; the app pays the RGB invoice and receives the result.
 
 #### MVP
 
-- Один buyer и два простых provider endpoint с действительно разными условиями.
-- Один заранее выбранный тип услуги, короткий текст, одна оплата.
-- JSON-каталог с фиксированными ценами; без сложных переговоров.
-- QVAC для смыслового выбора; исполнение услуги тоже можно сделать локальным.
-- Получатель выдаёт invoice; result endpoint открывается после проверки расчёта по конкретному заказу.
-- Доказательство: выбор → подтверждение → RGB settlement → выдача результата → остаток бюджета.
+- One buyer and two simple provider endpoints with genuinely different terms.
+- One predetermined service type, a short text, and one payment.
+- JSON catalog with fixed prices; no complex negotiation.
+- QVAC for semantic selection; service execution can also remain local.
+- The recipient issues an invoice; the result endpoint opens after verifying settlement for that order.
+- Evidence: selection → approval → RGB settlement → result delivery → remaining budget.
 
-**Транспорт MVP — наш прикладной протокол.** Наличие L402/MPP в kaleido-mcp не доказывает совместимость произвольного платного API с оплатой именно RGB. Не называем собственный протокол стандартом.
+**MVP transport is our application protocol.** L402/MPP support in kaleido-mcp does not prove an arbitrary paid API accepts RGB specifically. Do not call our custom protocol a standard.
 
-#### Сильное демо
+#### Strong demo
 
-Дешёвый поставщик не умеет сохранять структуру; второй подходит; третий вариант или отдельный запрос превышает лимит. Модель выбирает подходящего, код запрещает перерасход, оплаченная услуга выдаёт результат.
+The cheaper provider cannot preserve structure; the second fits; a third option or separate request exceeds the cap. The model selects the suitable provider, code blocks overspending, and the paid service delivers its result.
 
-#### Риски и сокращение объёма
+#### Risks and scope reduction
 
-Без Lightning оплата медленнее, поэтому первая версия — один on-chain заказ с честным pending. Если каналы готовы рано, добавляем RGB Lightning. Оплата не гарантирует качество результата: это не trustless exchange услуги на деньги. Refund, арбитраж и репутацию оставляем за MVP.
+Without Lightning, payment is slower, so the first version is one on-chain order with honest pending status. Add RGB Lightning only if channels are ready early. Payment does not guarantee result quality: this is not trustless service-for-money exchange. Refunds, arbitration, and reputation are outside the MVP.
 
-#### Монетизация
+#### Monetization
 
-Гипотеза: SDK/панель для разработчиков платных агентов и провайдеров. Проверить, зачем им RGB вместо уже используемых способов оплаты. Главное отличие от существующего paid-data примера — сравнение условий предложения, ограничение полномочий и проверяемый заказ.
+Hypothesis: an SDK/dashboard for paid-agent developers and providers. Test why they would use RGB instead of existing payment methods. The main difference from existing paid-data examples is comparing offer terms, bounding authority, and maintaining a verifiable order.
 
-### 5. PayCrew — приватная подготовка выплат подрядчикам
+### 5. PayCrew — private preparation of contractor payouts
 
 **Pitch:** “Turn work reports into reviewed dollar payouts without uploading your payroll.”
 
-Руководитель добавляет два коротких отчёта и условия оплаты. QVAC сопоставляет выполненные работы с согласованными этапами и объясняет исключения. Код считает суммы и готовит таблицу выплат. Руководитель подтверждает каждую, приложение последовательно переводит RGB.
+A manager adds two short work reports and payment terms. QVAC compares completed work against agreed milestones and explains exceptions. Code calculates amounts and prepares a payout table. The manager approves each payment; the app transfers RGB sequentially.
 
-**MVP:** два подрядчика, одна валюта/актив, фиксированная цена за этап, текстовый ввод, два отдельных invoice, две выплаты. Один отчёт намеренно не соответствует условиям и требует решения человека. Это выплаты подрядчикам, а не обещание полноценного payroll с налогами.
+**MVP:** two contractors, one currency/asset, a fixed price per milestone, text input, two separate invoices, and two payouts. One report deliberately conflicts with the terms and requires human judgment. These are contractor payments, not a promise of full payroll with tax handling.
 
-**Роль QVAC:** понять свободный отчёт и найти относящийся к нему этап. Если всё сводится к умножению часов на ставку, AI не нужен — такой вариант слабее для хакатона.
+**QVAC's role:** interpret a free-form report and identify the relevant milestone. If the task is merely hours multiplied by rate, AI is unnecessary and the hackathon case is weaker.
 
-**Риск:** пакет не атомарен. Первая выплата может завершиться, вторая — нет. Статус и повторный запуск ведём отдельно по каждой строке; неизвестный результат не отправляем заново автоматически. В демо не обязательно оплачивать всю таблицу, но оплаченная часть должна быть настоящей.
+**Risk:** the batch is not atomic. The first payout may succeed while the second fails. Track status and retries separately per row; never automatically resend an unknown result. The demo need not pay the entire table, but every claimed payment must be real.
 
-**Бизнес-гипотеза:** командный тариф для небольших распределённых агентств. До масштабирования проверить совместимость кошельков получателей и готовность менять расчётный процесс.
+**Business hypothesis:** team pricing for small distributed agencies. Before scaling, verify recipient wallet compatibility and willingness to change payment workflows.
 
-### 6. Остальные идеи
+### 6. Other ideas
 
-#### Reimburse Local — возврат расходов без облачной обработки чеков
+#### Reimburse Local — reimburse expenses without cloud receipt processing
 
-**Кому:** небольшая команда, возмещающая расходы сотрудникам.
+**User:** a small team reimbursing employees.
 
-**Поток:** текст чека + объяснение сотрудника + политика расходов → QVAC определяет цель и спорные позиции → код проверяет лимит и повтор → человек одобряет → RGB-перевод сотруднику.
+**Flow:** receipt text + employee explanation + expense policy → QVAC identifies purpose and disputed items → code checks limits and duplicates → a person approves → RGB transfer to the employee.
 
-**MVP:** три текстовых чека, одна политика, один возврат. Изображения и QVAC OCR — расширение после проверки модели на наших образцах. Показываем исключённую личную покупку и допустимую транспортную трату.
+**MVP:** three text receipts, one policy, one reimbursement. Images and QVAC OCR follow only after testing the model on our samples. Show an excluded personal purchase and an eligible transport expense.
 
-**Почему может работать:** конфиденциальность и реальное действие после разбора документа. **Риск:** правиловая проверка может оказаться достаточной без AI; модель должна разбирать смысл обоснования, а не только сумму.
+**Potential value:** privacy and a real action after document analysis. **Risk:** rules alone may suffice; the model must understand the justification, not merely extract an amount.
 
-#### Family Envelope — бюджет с учётом текстовых обязательств
+#### Family Envelope — budgeting around written obligations
 
-**Кому:** семья, хранящая часть средств в цифровых долларах.
+**User:** a family holding some funds in digital dollars.
 
-**Поток:** обязательства и цели на естественном языке → QVAC предлагает распределение → код считает доступный остаток → подтверждённый перевод на один семейный кошелёк.
+**Flow:** natural-language obligations and goals → QVAC proposes allocations → code calculates available funds → approved transfer to one family wallet.
 
-**MVP:** один кошелёк, три виртуальных конверта, одна реальная выплата. Конверты — локальный учёт, а не ограничения RGB-контракта. Автоматическое финансовое консультирование и обещания доходности не входят.
+**MVP:** one wallet, three virtual envelopes, one real payout. Envelopes are local accounting, not RGB contract restrictions. Automated financial advice and return promises are excluded.
 
-**Плюс:** понятный UX. **Минус:** слабее отличается от кошелька с бюджетированием; брать только при сильном продуктовом дизайне.
+**Strength:** clear UX. **Weakness:** less distinct from a budgeting wallet; choose only with strong product design.
 
-#### Merchant Close — локальная сверка заказов и RGB-оплат
+#### Merchant Close — local reconciliation of orders and RGB payments
 
-**Кому:** небольшой продавец цифровых товаров.
+**User:** a small digital-goods merchant.
 
-**Поток:** заказ и переписка → QVAC извлекает обязательство → код связывает заказ с invoice и статусом оплаты → продавец получает очередь «готово к выдаче / не оплачено / требуется проверка».
+**Flow:** order and messages → QVAC extracts the obligation → code links the order to an invoice and payment status → the merchant sees “ready for delivery / unpaid / needs review.”
 
-**MVP:** три заказа и один реальный входящий RGB-платёж; выдача одного товара после расчёта. Использовать готовый BTCPay plugin только если он уже быстро запускается, иначе узкий receiver backend.
+**MVP:** three orders and one real incoming RGB payment; release one item after settlement. Use an existing BTCPay plugin only if it starts quickly; otherwise use a narrow receiver backend.
 
-**Отличие:** сверка неструктурированного заказа с оплатой. **Риск:** QVAC окажется декоративным, если заказ уже полностью структурирован. Избыточная инфраструктура BTCPay тоже может съесть выходные.
+**Difference:** reconciling unstructured orders with payment. **Risk:** QVAC becomes decorative if orders are fully structured. Excessive BTCPay infrastructure could also consume the weekend.
 
-#### Safe Remit — семейные переводы с разбором запроса
+#### Safe Remit — family transfers with request analysis
 
-**Кому:** человек, регулярно отправляющий помощь знакомым получателям.
+**User:** someone regularly sending support to known recipients.
 
-**Поток:** короткий запрос на другом языке → локальный QVAC выделяет сумму, назначение и ограничения → человек проверяет получателя → RGB-перевод.
+**Flow:** a short request in another language → local QVAC extracts amount, purpose, and constraints → the user verifies the recipient → RGB transfer.
 
-**MVP:** один языковой сценарий, два кошелька, один подтверждённый перевод. При неясной валюте или противоречивой сумме — уточнение вместо угадывания.
+**MVP:** one language scenario, two wallets, one confirmed transfer. Ask for clarification instead of guessing ambiguous currencies or conflicting amounts.
 
-**Плюс:** понятная личная история. **Минус:** RGB-перевод не решает вывод в наличные, банковский off-ramp и курс обмена. Не обещать международный денежный сервис целиком.
+**Strength:** a clear personal story. **Weakness:** RGB transfers do not solve cash withdrawal, bank off-ramps, or exchange rates. Do not promise an entire international remittance service.
 
-#### Research Bounty — оплата принятого результата исследования
+#### Research Bounty — pay for accepted research results
 
-**Кому:** команда, покупающая небольшие исследовательские задания.
+**User:** a team buying small research tasks.
 
-**Поток:** заказчик задаёт требования → исполнитель приносит результат → QVAC локально сравнивает его с checklist → человек принимает → приложение платит RGB.
+**Flow:** requester sets requirements → worker submits a result → QVAC compares it locally against a checklist → a person accepts → the app pays RGB.
 
-**MVP:** один заказ, один результат, один перевод, две явные недостающие части в первом варианте результата. Данные для демонстрации фиксированные и проверяемые.
+**MVP:** one request, one result, one transfer, with two clearly missing elements in the first result. Demo data is fixed and verifiable.
 
-**Плюс:** AI связан с причиной выплаты. **Риск:** модель не является достоверным судьёй фактов. Решение о приёмке остаётся у человека; приложение не объявляется escrow или trustless marketplace.
+**Strength:** AI is tied to the reason for payment. **Risk:** the model is not a reliable judge of facts. Humans retain acceptance decisions; do not call the app escrow or a trustless marketplace.
 
-#### Recovery Coach — помощник восстановления RGB
+#### Recovery Coach — RGB recovery assistant
 
-**Кому:** новый пользователь, не понимающий, почему seed восстановил BTC, но не RGB.
+**User:** a new wallet user who does not understand why a seed restored BTC but not RGB.
 
-**Поток:** приложение собирает структурированную диагностику → QVAC объясняет, что отсутствует → пользователь выбирает encrypted backup → штатная библиотека восстанавливает состояние → выполняется небольшой проверочный RGB-перевод.
+**Flow:** the app gathers structured diagnostics → QVAC explains what is missing → the user selects an encrypted backup → the standard library restores state → a small verification RGB transfer is performed.
 
-**MVP:** отдельный тестовый кошелёк, созданный для демонстрации; корректный backup; восстановление при остановленном старом владельце состояния; отправка на другой кошелёк.
+**MVP:** a separate demo test wallet, a valid backup, restoration with the previous state owner stopped, and a transfer to another wallet.
 
-**Плюс:** специфичная для RGB и важная проблема. **Риск:** backup/restore уже есть в SDK, поэтому новизна — объяснение и безопасный guided flow. Seed и backup не передаём модели. Нельзя обещать восстановление утерянных consignments из seed или blockchain.
+**Strength:** an important RGB-specific problem. **Risk:** SDK backup/restore already exists, so novelty lies in explanation and a safe guided workflow. Do not pass seeds or backups to the model. Do not promise to recover lost consignments from a seed or blockchain.
 
-#### Private Split — договорённости группы → погашение долга
+#### Private Split — group agreements to debt settlement
 
-**Кому:** группа друзей или организаторы совместного события.
+**User:** friends or organizers of a shared event.
 
-**Поток:** локально вставленный текст «Анна платит за жильё, Борис за билеты…» → QVAC извлекает участников и договорённости → код считает долги → участники проверяют → один долг погашается RGB.
+**Flow:** locally pasted text such as “Anna pays for lodging, Boris for tickets…” → QVAC extracts people and agreements → code calculates debts → participants review → one debt is settled with RGB.
 
-**MVP:** три человека, фиксированная валюта, одна оплата, без банковского импорта. Неоднозначность доли требует ручного выбора.
+**MVP:** three people, a fixed currency, one payment, no bank import. Ambiguous shares require manual selection.
 
-**Плюс:** легко показать. **Минус:** продукт распространённого типа; RGB и AI могут выглядеть добавленными ради конкурса. Резервный вариант при очень ограниченном времени.
+**Strength:** easy to demonstrate. **Weakness:** a common product category; RGB and AI could appear added just for the contest. A fallback for very limited time.
 
-### 7. Какой стек выбирать
+### 7. Choosing a stack
 
-#### Рекомендованный путь для PayProof
+#### Recommended path for PayProof
 
-Локальный web UI → локальный Node.js/TypeScript backend → QVAC для анализа текста; backend отдельно вызывает RGB adapter. Состояние документов и платежей хранится локально. Закрытые ключи и signer не доступны модели.
+Local web UI → local Node.js/TypeScript backend → QVAC for text analysis; the backend separately calls an RGB adapter. Document and payment state stay local. The model has no access to private keys or the signer.
 
-**Базовый путь: KaleidoSwap builder kit.** KaleidoMind + QVAC, один RLN через kaleido-cli, RGB-операции через SDK или узкий набор MCP tools. Это уменьшает объём собственного agent orchestration. UI для проверки документов строим сами вокруг результата анализа.
+**Baseline: KaleidoSwap builder kit.** KaleidoMind + QVAC, one RLN through kaleido-cli, RGB operations through an SDK or narrow MCP tool set. This reduces custom agent orchestration. Build our own document-review UI around the analysis result.
 
-**Путь с WDK-бонусом: `@utexo/wdk-wallet-rgb`.** В нём описаны decode invoice, preflight, granular send/sign/sendEnd, transfer и backup. **В обсуждавшихся версиях 12 октября его RGB `signet` (`sb:`) несовместим с `signetcustom` (`sbc:`) KaleidoSwap, хотя Bitcoin-chain одна.** Arshia прямо подтвердил: faucet/maker/wallets KaleidoSwap не передают свой актив в такой WDK wallet. Для этого пути выпускаем собственный NIA на plain signet поверх Mutinynet и используем два совместимых кошелька, а не RGB faucet. Такой вариант ментор допустил для judging; размер WDK-бонуса не обещан. Сообщение относится к указанным в чате версиям: перед реализацией проверяем, изменилась ли поддержка в выбранной сборке. Нужно подтвердить chain, indexer/proxy, precision и совместимость обеих сторон. [Adapter](https://github.com/UTEXO-Protocol/wdk-wallet-rgb).
+**WDK bonus path: `@utexo/wdk-wallet-rgb`.** It documents invoice decoding, preflight, granular send/sign/sendEnd, transfers, and backups. **In the versions discussed on October 12, its RGB `signet` (`sb:`) is incompatible with KaleidoSwap `signetcustom` (`sbc:`), despite sharing a Bitcoin chain.** Arshia explicitly confirmed KaleidoSwap faucet/maker/wallet assets cannot transfer into that WDK wallet. For this path, issue our own NIA on plain signet over Mutinynet and use two compatible wallets rather than the RGB faucet. The mentor allowed this for judging; no WDK bonus amount was promised. This applies to the chat's versions: verify support in the chosen build before implementation. Confirm chain, indexer/proxy, precision, and compatibility on both sides. [Adapter](https://github.com/UTEXO-Protocol/wdk-wallet-rgb).
 
-Выбираем один путь в первый час. Если WDK проходит техническую проверку, используем его для настоящего RGB-перевода. Если нет — остаёмся на builder kit и явно указываем отсутствие бонусной интеграции. Две независимые wallet stacks одновременно в MVP не нужны.
+Choose one path in the first hour. If WDK passes the technical check, use it for a real RGB transfer. Otherwise stay with the builder kit and explicitly disclose the absence of the bonus integration. The MVP does not need two independent wallet stacks.
 
-**Важно:** префикс `wdk_*` у MCP tools не является доказательством использования WDK в нашем приложении. В kaleido-mcp эти инструменты могут обращаться к RLN. Для бонуса показываем фактические вызовы WDK и их роль в платеже, а не название инструмента.
+**Important:** a `wdk_*` MCP tool prefix does not prove our app uses WDK. In kaleido-mcp, those tools may call RLN. Show actual WDK calls and their payment role for the bonus, not just tool names.
 
-#### Поток PayProof
+#### PayProof flow
 
 ```mermaid
 flowchart TD
-    A[Текст счёта и договорённости] --> B[Локальный QVAC: извлечение и сравнение]
-    B --> C[Review: поля, фрагменты, расхождения]
-    D[RGB invoice от получателя] --> E[SDK декодирует invoice]
-    E --> F[Код проверяет актив, сумму, сеть и историю]
+    A[Invoice and agreement text] --> B[Local QVAC: extraction and comparison]
+    B --> C[Review: fields, excerpts, discrepancies]
+    D[Recipient RGB invoice] --> E[SDK decodes invoice]
+    E --> F[Code checks asset, amount, network, and history]
     C --> F
-    F --> G[Пользователь подтверждает точный платёж]
-    G --> H[Wallet adapter отправляет RGB]
-    H --> I[Refresh и статус отправителя]
-    I --> J[Получатель проверяет расчёт и баланс]
+    F --> G[User approves the exact payment]
+    G --> H[Wallet adapter sends RGB]
+    H --> I[Refresh and sender status]
+    I --> J[Recipient verifies settlement and balance]
 ```
 
-**Модель предлагает; код проверяет; пользователь разрешает; wallet исполняет.** Если LLM недоступна, документы можно проверить вручную, но зачётное демо должно показывать настоящий локальный inference.
+**The model proposes; code validates; the user authorizes; the wallet executes.** If the LLM is unavailable, documents can be reviewed manually, but the qualifying demo must show actual local inference.
 
-### 8. Базовый план реализации документного сценария
+### 8. Baseline implementation plan for a document workflow
 
-Изначально план составлен для PayProof; для выбранного AidDesk заменяем счёт/договорённость на заявку/правила программы. Платёжный pipeline тот же. Это ориентир по времени, а не обещание совместимости SDK. Отсчёт — от начала командной работы; финальная репетиция должна закончиться до дедлайна подачи.
+Originally written for PayProof; for the then-selected AidDesk, replace invoice/agreement with application/program rules. The payment pipeline stays the same. This is a timing guide, not a promise of SDK compatibility. Time starts when team work begins; the final rehearsal must finish before submission.
 
-| Время | Результат | Условие продолжения |
+| Time | Result | Condition for continuing |
 | --- | --- | --- |
-| 0–1 час | Выбран один wallet stack; QVAC загружен | Inference локальный; сеть подтверждена |
-| 1–3 часа | Первый настоящий RGB round trip | У получателя есть подтверждённое состояние |
-| 3–6 часов | Договорённость + счёт → структурированные поля и сравнение | Работает на наших коротких образцах |
-| 6–10 часов | Review, декодирование invoice, платёж и история | Ни один перевод не идёт без подтверждения |
-| 10–14 часов | Повтор, mismatch, нехватка средств, неизвестный результат | Понятные статусы, нет слепого retry |
-| Оставшееся время | Упрощение интерфейса, повтор демо, запись доказательств | Сценарий укладывается в питч |
+| Hours 0–1 | One wallet stack selected; QVAC loaded | Inference is local; network verified |
+| Hours 1–3 | First real RGB round trip | Recipient has confirmed state |
+| Hours 3–6 | Agreement + invoice → structured fields and comparison | Works on our short samples |
+| Hours 6–10 | Review, invoice decoding, payment, and history | No transfer without approval |
+| Hours 10–14 | Duplicate, mismatch, insufficient funds, unknown result | Clear states, no blind retry |
+| Remaining time | Simplify UI, rehearse demo, record evidence | Scenario fits the pitch |
 
-Пока один участник занимается кошельком, второй может делать UI, третий — extraction/evaluation, четвёртый — demo data и pitch. Это варианты распределения работы будущей команды, не отчёт о выполненной реализации.
+While one teammate handles the wallet, another can build UI, a third can work on extraction/evaluation, and a fourth can prepare demo data and the pitch. These are possible future work assignments, not a report of completed implementation.
 
-Если модель ошибается на длинных документах, сокращаем поддерживаемый формат и явно показываем его ограничения. Если OCR отнимает время — сохраняем текстовый ввод. Если каналы не готовы — оставляем on-chain. Если реальный RGB-перевод не работает, сначала устраняем это с ментором: mock не закрывает обязательный критерий.
+If the model fails on long documents, narrow the supported format and show its limits. If OCR consumes time, keep text input. If channels are not ready, stay on-chain. If a real RGB transfer fails, fix it with a mentor first: mock does not satisfy the mandatory criterion.
 
-### 9. Что доказывать на демо
+### 9. What the demo must prove
 
-1. QVAC действительно запущен локально: выбранная модель, runtime и наблюдаемый inference. Не подменять его скриптом или облачным ответом.
-2. На правильном счёте извлечённые поля подтверждаются исходным текстом. На намеренно изменённом — показано конкретное расхождение. Это отдельная проверка от успешного перевода.
-3. Декодированный invoice совпадает с подтверждаемыми суммой, сетью и contract ID. Если поля отсутствуют, они задаются явно и проверяются отдельно.
-4. Повтор документа или платежа не приводит к новой отправке. Fingerprint документа дополняем нормализованным номером/контрагентом и платёжным журналом: изменение пробела не должно обходить проверку.
-5. У отправки есть transfer ID / txid или payment hash — в зависимости от маршрута. Pending отделён от settled.
-6. Получатель видит соответствующий входящий перевод и доступный баланс. Explorer подтверждает Bitcoin-якорь, но не раскрывает RGB-сумму.
-7. После timeout приложение показывает «результат неизвестен» и сначала сверяет журнал/кошелёк. Никаких автоматических повторных списаний.
-8. При использовании WDK видно, какую часть настоящего денежного потока он выполняет.
+1. QVAC actually runs locally: selected model, runtime, and observable inference. Do not replace it with a script or cloud response.
+2. Extracted fields from a correct invoice are supported by source text. A deliberately altered invoice produces a specific discrepancy. This is a separate check from successful transfer.
+3. The decoded invoice matches the approved amount, network, and contract ID. Missing fields must be supplied explicitly and checked separately.
+4. Repeating a document or payment does not send again. Supplement document fingerprints with normalized invoice number/counterparty and a payment journal: a whitespace edit must not bypass checks.
+5. Sending produces a transfer ID / txid or payment hash, depending on the route. Pending is distinct from settled.
+6. The recipient sees the corresponding incoming transfer and available balance. An explorer confirms the Bitcoin anchor, not the RGB amount.
+7. After a timeout, the app shows “unknown result” and reconciles journal/wallet state first. No automatic repeat debits.
+8. If WDK is used, show its actual role in the monetary flow.
 
-Полезные проверки логики: arithmetic/precision, asset mismatch, повтор, отмена пользователем, истёкший invoice и неопределённый результат отправки. Их прохождение отдельно от live Mutinynet-перевода.
+Useful logic checks: arithmetic/precision, asset mismatch, duplicates, user cancellation, expired invoices, and uncertain send outcomes. Passing these is separate from a live Mutinynet transfer.
 
-### 10. Какие идеи пока отложить
+### 10. Ideas to defer
 
-- Универсальный голосовой кошелёк, DCA и ребалансировку: слишком близко к готовым проектам организаторов.
-- Собственный RGB smart-contract escrow: сначала доказать поддержку схемы, signer и recovery; не закладывать неизвестную механику в основной сценарий.
-- Автономного AI-трейдера с обещаниями прибыли: трудно показать достоверную ценность за выходные.
-- Микроплатежи за каждый токен LLM: сначала измерить ограничения и стоимость конкретного RGB Lightning пути.
-- Международные переводы «до наличных»: предоставленная RGB-инфраструктура не даёт готовый fiat off-ramp.
-- Восстановление RGB только по seed: противоречит модели хранения состояния.
-- Выбор актива по строке USDT: нужен contract ID.
-- Новую custom RGB schema, собственный bridge или сборку всего мобильного стека с нуля: неоправданный риск для первого end-to-end сценария.
+- Universal voice wallets, DCA, and rebalancing: too close to the organizers' existing products.
+- Custom RGB smart-contract escrow: first prove schema, signer, and recovery support; do not base the main scenario on unknown mechanisms.
+- Autonomous AI traders promising profit: hard to demonstrate credible value in a weekend.
+- Micropayments for every LLM token: first measure limits and costs of the specific RGB Lightning route.
+- International remittances “all the way to cash”: the supplied RGB infrastructure does not provide a ready fiat off-ramp.
+- RGB recovery from a seed alone: incompatible with the state-storage model.
+- Asset selection by the string USDT: a contract ID is required.
+- New custom RGB schemas, a custom bridge, or a mobile stack built from scratch: excessive risk for the first end-to-end scenario.
 
-### 11. Что прочитано и где границы исследования
+### 11. Sources reviewed and research boundaries
 
-При первом осмотре был один пользовательский файл — `README.md`; весь его содержательный текст прочитан. Затем добавлен `tg_chat_info.txt`: прочитан целиком, все 809 строк; из него найдена таблица проектов и прочитаны доступные README участников. Остальная большая часть файла — пустые строки с табуляцией. Найдены 43 уникальные строки URL, представляющие 42 ресурса: папка Drive повторяется с query-параметром и без него. Все адреса проверены открытием через web или прямой HTTP; для доступных GitHub-репозиториев изучались README и релевантная документация, **не каждый файл исходного кода каждого репозитория**.
+At the initial inspection, there was one user file, `README.md`; all its substantive text was read. `tg_chat_info.txt` was then added and read in full, all 809 lines; it led to the project spreadsheet and available participant READMEs. Much of the remaining file content consisted of blank, tabbed lines. There were 43 unique URL strings representing 42 resources: the Drive folder appeared with and without query parameters. All addresses were checked through the web or direct HTTP; available GitHub repositories were examined through READMEs and relevant documentation, **not every source file in every repository**.
 
-Полностью рекурсивно прочитать всё по всем последующим ссылкам означало бы уйти из материалов хакатона в зависимости, социальные сети и весь GitHub. Здесь проверен исходный список README, дополнительно изучены текст Telegram и публичные описания команд, углублены разделы, определяющие выбор и реализуемость идей. Это исследование документации; SDK, faucets, transfers и модели в рамках этой задачи не запускались.
+Recursively following every link would expand beyond hackathon materials into dependencies, social networks, and all of GitHub. This research checked the original README list, Telegram text, public team descriptions, and deeper sections affecting idea selection and feasibility. It is documentation research; SDKs, faucets, transfers, and models were not run as part of that task.
 
-#### Материалы из Drive
+#### Drive materials
 
-[Общая папка](https://drive.google.com/drive/folders/1HqZP4TDRmsvYW6hsW7T6-OoNNZMVFV-X).
+[Shared folder](https://drive.google.com/drive/folders/1HqZP4TDRmsvYW6hsW7T6-OoNNZMVFV-X).
 
-| Файл | Что проверено |
+| File | What was checked |
 | --- | --- |
-| [Hackathon-Links.xlsx](https://drive.google.com/file/d/10cAE3DfHGcFfb2xOXwxeOU88Gf5FmHd4/view) | Скачан и прочитан лист, включая текстовые URL; список соответствует таблице в README |
-| [RGB Protocol on Bitcoin — slides.pdf](https://drive.google.com/file/d/17wpSu3qu4LpVFPrBKnXhnHafOpj6Ey-F/view) | Скачан, прочитан извлечённый текст всех страниц; иллюстрации отдельно полностью не разобраны |
-| [RGB theory](https://drive.google.com/file/d/1uOqOUh2uFMPChwEGyG2T_NS0Mxxiu4aF/view) | Проверена страница видео; полный аудиовизуальный разбор не выполнен |
-| [RGB tools](https://drive.google.com/file/d/1hRzjBnqN0lgcbbEBc4ZvYAvO_PeVDLQK/view) | Проверена страница видео; полный аудиовизуальный разбор не выполнен |
-| [QVAC tutorial](https://drive.google.com/file/d/1Ibd5XlPYDIMYHihZ1QEphmcIVhs6FGrC/view) | Открыт плеер; transcript и subtitles disabled; содержание не выдаётся за просмотренное |
-| [WDK tutorial](https://drive.google.com/file/d/10UFIpuC5pmIKv5EHK6YRPj6OC1PFcmln/view) | Проверена страница видео; полный аудиовизуальный разбор не выполнен |
-| [Kaleido builder walkthrough](https://drive.google.com/file/d/19FoSD5JtgwJr1mdttdBZ1hKtc9FgzS8g/view) | Проверена страница видео; прочитан текстовый builder kit; полный просмотр не выполнен |
+| [Hackathon-Links.xlsx](https://drive.google.com/file/d/10cAE3DfHGcFfb2xOXwxeOU88Gf5FmHd4/view) | Downloaded and read the sheet, including text URLs; the list matches the README table |
+| [RGB Protocol on Bitcoin — slides.pdf](https://drive.google.com/file/d/17wpSu3qu4LpVFPrBKnXhnHafOpj6Ey-F/view) | Downloaded and read extracted text from all pages; illustrations were not fully analyzed separately |
+| [RGB theory](https://drive.google.com/file/d/1uOqOUh2uFMPChwEGyG2T_NS0Mxxiu4aF/view) | Video page checked; no complete audiovisual review |
+| [RGB tools](https://drive.google.com/file/d/1hRzjBnqN0lgcbbEBc4ZvYAvO_PeVDLQK/view) | Video page checked; no complete audiovisual review |
+| [QVAC tutorial](https://drive.google.com/file/d/1Ibd5XlPYDIMYHihZ1QEphmcIVhs6FGrC/view) | Player opened; transcript and subtitles disabled; content is not claimed as watched |
+| [WDK tutorial](https://drive.google.com/file/d/10UFIpuC5pmIKv5EHK6YRPj6OC1PFcmln/view) | Video page checked; no complete audiovisual review |
+| [Kaleido builder walkthrough](https://drive.google.com/file/d/19FoSD5JtgwJr1mdttdBZ1hKtc9FgzS8g/view) | Video page checked and text builder kit read; full video not watched |
 
-Чтобы буквально закрыть просьбу «всё внутри ссылок», остаётся полный разбор пяти видео, графики PDF и выбранных исходников. Текстового исследования достаточно для предварительного выбора идей, но оно не заменяет технический spike интеграции.
+Literally completing the request to review “everything inside the links” would still require five complete video reviews, PDF graphics, and selected source code. Text research is sufficient for preliminary idea selection but cannot replace a technical integration spike.
 
-#### Реестр всех ресурсов README
+#### Inventory of all README resources
 
-| Ресурс | Что изучено / ограничение |
+| Resource | Reviewed material / limitation |
 | --- | --- |
-| [Drive](https://drive.google.com/drive/folders/1HqZP4TDRmsvYW6hsW7T6-OoNNZMVFV-X) | Состав папки, Excel, текст PDF; ограничения видео выше |
-| [Builder kit](https://kaleidoswap.github.io/rgb-hackathon/) | Полный текст страницы: stack, wallets, запуск, финансирование, каналы и agent example |
-| [RGB docs](https://docs.rgb.info/) | Вводная, индекс; углублены client-side validation, transfers, invoices, Lightning и supported schemas |
-| [QVAC quickstart](https://docs.qvac.tether.io/quickstart/) | JS/TS SDK, запуск локальной модели, требования runtime |
-| [WDK docs](https://docs.wdk.tether.io/) | Обзор и точки входа; интерфейсы дополнительно проверены по README core и RGB adapter |
-| [RGB Assistant](https://chatgpt.com/g/g-69f31db8cae081918db75cbd969df294-rgb-protocol-on-bitcoin-assistant) | Публичная карточка; обучающие материалы и диалог не доступны из карточки, ответы не использовались как источник |
-| [BTC faucet](https://faucet.mutinynet.com) | Публичная страница; claim и доступность средств не проверялись |
-| [RGB faucet](https://faucet.mutinynet.kaleidoswap.com) | Прямое чтение вернуло 403; описание и условия изучены в builder kit, claim не выполнялся |
+| [Drive](https://drive.google.com/drive/folders/1HqZP4TDRmsvYW6hsW7T6-OoNNZMVFV-X) | Folder contents, Excel, PDF text; video limits above |
+| [Builder kit](https://kaleidoswap.github.io/rgb-hackathon/) | Full page: stack, wallets, startup, funding, channels, and agent example |
+| [RGB docs](https://docs.rgb.info/) | Introduction, index; deeper review of client-side validation, transfers, invoices, Lightning, and supported schemas |
+| [QVAC quickstart](https://docs.qvac.tether.io/quickstart/) | JS/TS SDK, local model startup, runtime requirements |
+| [WDK docs](https://docs.wdk.tether.io/) | Overview and entry points; interfaces additionally checked in core and RGB adapter READMEs |
+| [RGB Assistant](https://chatgpt.com/g/g-69f31db8cae081918db75cbd969df294-rgb-protocol-on-bitcoin-assistant) | Public listing; training material and conversation unavailable from the listing; answers not used as sources |
+| [BTC faucet](https://faucet.mutinynet.com) | Public page; claims and fund availability not tested |
+| [RGB faucet](https://faucet.mutinynet.kaleidoswap.com) | Direct access returned 403; description and terms reviewed in builder kit; no claim made |
 | [kaleido-cli](https://github.com/kaleidoswap/kaleido-cli) | README: node setup, Mutinynet, wallet, invoices, payments |
 | [kaleido-mind](https://github.com/kaleidoswap/kaleido-mind) | README: QVAC, recipes, tools, confirmation, starter |
-| [kaleido-agent](https://github.com/kaleidoswap/kaleido-agent) | README: существующие стратегии, architecture и облачный reasoning по умолчанию |
-| [kaleido-mcp](https://github.com/kaleidoswap/kaleido-mcp) | README: инструменты, funding, RGB send/receive, L402/MPP и сети |
-| [kaleido-sdk](https://github.com/kaleidoswap/kaleido-sdk) | README: TypeScript/Python, maker и RLN clients |
-| [rgb-lib](https://github.com/RGB-Tools/rgb-lib) | README: wallet model, offline/watch-only, single-instance и backup constraints |
-| [rgb-lib-wasm](https://github.com/UTEXO-Protocol/rgb-lib-wasm) | README: IndexedDB, WASM, invoices, transfers и persistence |
+| [kaleido-agent](https://github.com/kaleidoswap/kaleido-agent) | README: existing strategies, architecture, cloud reasoning by default |
+| [kaleido-mcp](https://github.com/kaleidoswap/kaleido-mcp) | README: tools, funding, RGB send/receive, L402/MPP, networks |
+| [kaleido-sdk](https://github.com/kaleidoswap/kaleido-sdk) | README: TypeScript/Python, maker and RLN clients |
+| [rgb-lib](https://github.com/RGB-Tools/rgb-lib) | README: wallet model, offline/watch-only, single-instance and backup constraints |
+| [rgb-lib-wasm](https://github.com/UTEXO-Protocol/rgb-lib-wasm) | README: IndexedDB, WASM, invoices, transfers, persistence |
 | [wdk-wallet-rgb](https://github.com/UTEXO-Protocol/wdk-wallet-rgb) | README: account, network, decode, transfer, sign, backup |
-| [rgb-sdk-rn](https://github.com/UTEXO-Protocol/rgb-sdk-rn) | Readme.md и API overview; мобильная интеграция не проверена запуском |
-| [rgb-sdk-rn-sandbox](https://github.com/UTEXO-Protocol/rgb-sdk-rn-sandbox) | README: flows, инфраструктура, разные сети; virtual trusted_no_broadcast не принимается за обычный settlement |
-| [rgb-btcpay-plugin](https://github.com/UTEXO-Protocol/rgb-btcpay-plugin) | README: checkout, NIA, settlement states, pricing по contract ID |
-| [thunder-swap](https://github.com/UTEXO-Protocol/thunder-swap) | README: submarine POC, HTLC, refund и ограничения |
-| [RGB Lightning Node](https://github.com/RGB-Tools/rgb-lightning-node) | README: REST API, channel liquidity, consignment transport и sync |
-| [rgb-sandbox](https://github.com/rgb-protocol/rgb-sandbox) | README: regtest, issuance и manual transfer flow |
+| [rgb-sdk-rn](https://github.com/UTEXO-Protocol/rgb-sdk-rn) | Readme.md and API overview; mobile integration not executed |
+| [rgb-sdk-rn-sandbox](https://github.com/UTEXO-Protocol/rgb-sdk-rn-sandbox) | README: flows, infrastructure, different networks; virtual trusted_no_broadcast not treated as ordinary settlement |
+| [rgb-btcpay-plugin](https://github.com/UTEXO-Protocol/rgb-btcpay-plugin) | README: checkout, NIA, settlement states, pricing by contract ID |
+| [thunder-swap](https://github.com/UTEXO-Protocol/thunder-swap) | README: submarine POC, HTLC, refund, limitations |
+| [RGB Lightning Node](https://github.com/RGB-Tools/rgb-lightning-node) | README: REST API, channel liquidity, consignment transport, sync |
+| [rgb-sandbox](https://github.com/rgb-protocol/rgb-sandbox) | README: regtest, issuance, manual transfer flow |
 | [webrgb](https://github.com/kaleidoswap/webrgb) | README: provider, capabilities, receive, send, tracking, mock |
-| [Rate](https://github.com/kaleidoswap/Rate) | README: готовый мобильный AI/voice wallet и требования устройства |
-| [desktop-app](https://github.com/kaleidoswap/desktop-app) | README: существующие wallet/trading/AI возможности |
-| [QVAC](https://github.com/tetherto/qvac) | README: SDK, локальный server, text, OCR, transcription и runtime |
-| [WDK](https://github.com/tetherto/wdk) | README: wallet manager и transaction policies; это уже существующая функциональность |
-| [KaleidoSwap docs](https://docs.kaleidoswap.com) | Обзор, карта компонентов и связанные разделы builder kit |
-| [rgb-protocol](https://github.com/rgb-protocol) | Страница организации, официальные компоненты и версия протокола |
-| [RGB-Tools](https://github.com/RGB-Tools) | Каталог библиотек и tooling |
-| [kaleidoswap](https://github.com/kaleidoswap) | Каталог приложений, SDK и agent tooling |
-| [UTEXO-Protocol](https://github.com/UTEXO-Protocol) | Каталог forks, adapters и mobile SDK |
-| [UTEXO](https://utexo.com) | Публичный обзор продукта; маркетинговые заявления не принимались за live proof |
+| [Rate](https://github.com/kaleidoswap/Rate) | README: existing mobile AI/voice wallet and device requirements |
+| [desktop-app](https://github.com/kaleidoswap/desktop-app) | README: existing wallet/trading/AI capabilities |
+| [QVAC](https://github.com/tetherto/qvac) | README: SDK, local server, text, OCR, transcription, runtime |
+| [WDK](https://github.com/tetherto/wdk) | README: wallet manager and transaction policies; these already exist |
+| [KaleidoSwap docs](https://docs.kaleidoswap.com) | Overview, component map, linked builder-kit sections |
+| [rgb-protocol](https://github.com/rgb-protocol) | Organization page, official components, protocol version |
+| [RGB-Tools](https://github.com/RGB-Tools) | Library and tooling catalog |
+| [kaleidoswap](https://github.com/kaleidoswap) | Apps, SDKs, and agent tooling catalog |
+| [UTEXO-Protocol](https://github.com/UTEXO-Protocol) | Fork, adapter, and mobile SDK catalog |
+| [UTEXO](https://utexo.com) | Public product overview; marketing claims not treated as live proof |
 | [rgb-consensus](https://github.com/rgb-protocol/rgb-consensus) | README: consensus-critical validation |
 | [rgb-ops](https://github.com/rgb-protocol/rgb-ops) | README: non-consensus APIs |
-| [rgb-api](https://github.com/rgb-protocol/rgb-api) | README: client APIs и development CLI |
-| [rgb-schemas](https://github.com/rgb-protocol/rgb-schemas) | README: catalog и ограничения готовности схем |
-| [RGB-Documentation](https://github.com/rgb-protocol/RGB-Documentation) | README и исходники ключевых разделов о transfers/invoices/Lightning |
-| [Event](https://rgbprotocol.org/agentic-dollars-hackathon/) | Правила, критерии, расписание и обязательные технологии |
-| [rgb.info](https://rgb.info/) | Обзор протокола и ecosystem |
-| [RGB Association](https://rgbprotocol.org/) | Организатор и контекст протокола |
-| [CypherTank](https://www.cyphertank.org/) | Формат startup pitch; связь с наградой подтверждается страницей хакатона |
+| [rgb-api](https://github.com/rgb-protocol/rgb-api) | README: client APIs and development CLI |
+| [rgb-schemas](https://github.com/rgb-protocol/rgb-schemas) | README: catalog and schema readiness limits |
+| [RGB-Documentation](https://github.com/rgb-protocol/RGB-Documentation) | README and key source sections on transfers/invoices/Lightning |
+| [Event](https://rgbprotocol.org/agentic-dollars-hackathon/) | Rules, criteria, schedule, mandatory technologies |
+| [rgb.info](https://rgb.info/) | Protocol and ecosystem overview |
+| [RGB Association](https://rgbprotocol.org/) | Organizer and protocol context |
+| [CypherTank](https://www.cyphertank.org/) | Startup-pitch format; prize connection confirmed on the hackathon page |
 
-### 12. Что изменил Telegram и список участников
+### 12. What Telegram and the participant list changed
 
-#### Подтверждённые уточнения
+#### Confirmed clarifications
 
-| Тема / сообщение | Вывод для проекта |
+| Topic / message | Project implication |
 | --- | --- |
-| General, MariJ, 15 октября 09:48 | Шесть взвешенных критериев и WDK до +1; используем эту более позднюю инструкцию |
-| RGB, Arshia, 12 октября 21:36 | Signet и signetcustom — разные RGB сети на одной Bitcoin-chain; несовместимость faucet с обсуждаемым WDK adapter |
-| RGB, Arshia, 12 октября 22:31 | Собственные NIA на plain signet поверх Mutinynet допустимы для judging |
-| RGB, Arshia и Birk, 12–13 октября | On-chain с одним подтверждением достаточно; свой regtest разрешён |
-| RGB, Birk, 12 октября 16:22 | Community forks разрешены с раскрытием; slides не означают абсолютный запрет UTEXO |
-| QVAC, Simone, 12 октября 17:12 | Локальный qvac server, вызываемый web UI на том же ноутбуке, засчитывается как on-device |
-| QVAC, ответы и тесты 12 октября | `/no_think` и `reasoning_budget` ведут себя неодинаково в конкретных версиях; универсального рабочего рецепта из переписки не следует |
-| WDK, вопросы 12 октября | Участники сообщают о glibc 2.38 для одной native сборки и отличиях derivation при override. Не переносить seed между версиями в расчёте получить тот же wallet без проверки |
-| RGB, Walter, 14 октября | RGB Multi-Path Payments требуют изменений LN routing/onion/receiver; это не готовая галочка SDK |
+| General, MariJ, October 15 09:48 | Six weighted criteria and WDK up to +1; use these later instructions |
+| RGB, Arshia, October 12 21:36 | Signet and signetcustom are different RGB networks on one Bitcoin chain; faucet incompatible with the discussed WDK adapter |
+| RGB, Arshia, October 12 22:31 | Own NIAs on plain signet over Mutinynet acceptable for judging |
+| RGB, Arshia and Birk, October 12–13 | On-chain with one confirmation suffices; local regtest allowed |
+| RGB, Birk, October 12 16:22 | Community forks allowed with disclosure; slides are not an absolute ban on UTEXO |
+| QVAC, Simone, October 12 17:12 | Local qvac server called by web UI on the same laptop counts as on-device |
+| QVAC, replies and tests on October 12 | `/no_think` and `reasoning_budget` behave differently across specific versions; no universal working recipe follows from the discussion |
+| WDK, questions on October 12 | Participants report glibc 2.38 for one native build and changed derivation after an override. Do not move seeds between versions expecting the same wallet without verification |
+| RGB, Walter, October 14 | RGB Multi-Path Payments require LN routing/onion/receiver changes; not a ready SDK option |
 
-**QVAC structured output:** участник воспроизвёл HTTP 500 `Unexpected empty grammar stack` на Windows/Vulkan с `@qvac/sdk 0.21.0`, `@qvac/cli 0.15.0`, `@qvac/llm-llamacpp 0.55.0`: `/no_think` не помог, а `reasoning_budget: false` помог на его setup. Это отчёт участника, а не наша проверка. Для нашего проекта: маленький schema smoke test на точных версиях и железе, затем фиксация конфигурации. Невалидный JSON не превращаем в платёж; при необходимости используем обычный ответ с последующей строгой валидацией и review.
+**QVAC structured output:** a participant reproduced HTTP 500 `Unexpected empty grammar stack` on Windows/Vulkan with `@qvac/sdk 0.21.0`, `@qvac/cli 0.15.0`, and `@qvac/llm-llamacpp 0.55.0`: `/no_think` did not help, but `reasoning_budget: false` worked on that setup. This is a participant report, not our own test. For our project, run a small schema smoke test on exact versions and hardware, then pin the configuration. Invalid JSON must never become a payment; if needed, use plain output followed by strict validation and review.
 
-**Инфраструктура по чату:** разрешены [Esplora](https://esplora.signet.kaleidoswap.com) и `rpcs://proxy.kaleidoswap.com/json-rpc`, fallback [Mutinynet API](https://mutinynet.com/api) с rate limits. Избегаем tight polling. У BTC faucet обсуждался лимит 1M sats на IP/user/address за 24 часа; у RGB faucet — 100 тестовых USDT, до пяти claims на GitHub account в день. Это условия из переписки 12 октября; доступность и лимиты live не проверены.
+**Infrastructure according to the chat:** [Esplora](https://esplora.signet.kaleidoswap.com) and `rpcs://proxy.kaleidoswap.com/json-rpc` are permitted, with rate-limited [Mutinynet API](https://mutinynet.com/api) as fallback. Avoid tight polling. Discussed faucet limits were 1M sats per IP/user/address per 24 hours for BTC, and 100 test USDT with up to five claims per GitHub account per day for RGB. These terms come from October 12 discussion; live availability and limits were not checked.
 
-**Два разных MPP:** Multi-Path Payments из RGB Q&A и Machine Payments Protocol из paid-API tooling — разные понятия. Их нельзя считать одной интеграцией.
+**Two different MPPs:** Multi-Path Payments in RGB Q&A and Machine Payments Protocol in paid-API tooling are different concepts. Do not present them as a single integration.
 
-#### Пересечения с заявленными проектами
+#### Overlap with announced projects
 
-[Таблица участников](https://docs.google.com/spreadsheets/d/1eLS764VXMB_2f8jX8Nj1ItIYDpPL_mUFeHuoGJyHLqQ/edit?usp=sharing) прочитана через публичный CSV. На момент чтения в ней 23 непустые строки команд; у 19 указан repo. Изучены доступные README этих 19 проектов. Это заявленные направления и self-reported status, не наш аудит работающего кода.
+The [participant spreadsheet](https://docs.google.com/spreadsheets/d/1eLS764VXMB_2f8jX8Nj1ItIYDpPL_mUFeHuoGJyHLqQ/edit?usp=sharing) was read through public CSV. At that time it had 23 nonempty team rows, 19 with repositories. Available READMEs for those 19 projects were reviewed. These are announced directions and self-reported status, not our audit of working code.
 
-| Участник / источник | Заявленное направление | Что не стоит повторять |
+| Participant / source | Announced direction | What to avoid repeating |
 | --- | --- | --- |
-| [WiseLedger](https://github.com/LucaCraft89/WiseLedger) | Локальная проверка счетов, fraud/duplicates, approved RGB payments | PayProof: почти прямое совпадение |
-| [MonteKasa](https://github.com/Kalepox/MonteKasa) | Invoicing, reconciliation, локальные финансовые помощники | Merchant Close и invoice-focused варианты |
-| [ScratchMyPay](https://github.com/ScratchMyPay/ScratchMyPay) | Выплаты команде мероприятия | PayCrew без отдельного сильного сценария |
-| [Freelancer Escrow Agent](https://github.com/bornalesic/Freelancer_Escrow_Agent) | Договорённость → проверка результата → payout/refund | Escrow и AI-приёмка фриланс-задач |
-| [PrivateDeal AI](https://github.com/MohammadEghbal2000/privatedeal-ai) | Переговоры и milestone payments | Агент-переговорщик для фриланса |
-| [Satoshelf](https://github.com/bitfent/satoshelf_public) | Агенты покупают файлы/знания, RGB-лицензии | Agent Tender для платных данных; лицензии |
-| [Satstride](https://github.com/AmirMFarhang/Satstride) | Финансовый AI, риск, approved actions, paid agent collaboration | Широкая платформа agent economy |
-| [Moneyfest](https://github.com/kuzeykacar/Moneyfest) | Конверты бюджета, подписки и накопления | Family Envelope |
-| [kit+ty](https://github.com/marco-pedron/kit-ty) | Групповые поездки, разбор чека и split payments | Private Split |
-| [METEVO](https://github.com/METEVO/metevo-app) | Voice-native wallet | Универсальный голосовой кошелёк |
-| [Student Money Copilot](https://github.com/sudegkc/student-money-copilot) | Финансовый помощник для студентов | Ещё один общий budgeting copilot |
-| [Fidelity Points](https://github.com/kreamistudio-crypto/fidelity-points) | Loyalty points + NWC + WDK customer wallet | Баллы магазина и рекомендации по их трате |
-| [HubWallet](https://github.com/Vittorio-dotcom/hubwallet) | Доступ к устройствам, аренда и machine payments | Смарт-дом и бытовые IoT-платежи |
-| [fork2checkbook](https://github.com/fork2checkbook/fork2checkbook) | Переносимые offline RGB notes и hardware handoff | «Цифровая банкнота» с офлайн-передачей |
-| [AIR-GB Lightning](https://github.com/ObvAstral/air-gb-lightning) | RGB Multi-Path Payments и custom forks | Protocol-level MPP |
-| [LICEX](https://github.com/vvale03/licex) | Рынок software licenses на RGB | Токенизированные лицензии |
-| [RGB Explorer](https://github.com/vcastald/RGB-EXPLORER) | Business treasury insights и swaps | Общий treasury dashboard |
-| [Rueda Mobility](https://github.com/kayyrod21/rueda-hackathon26) | Mobility concierge и планируемые RGB-платежи | AI-покупка поездки |
-| [QVACache](https://github.com/giancpl/rgb-hackaton) | Android RGB wallet как отправная точка; root README мало раскрывает продукт | Нельзя уверенно определить полное пересечение |
+| [WiseLedger](https://github.com/LucaCraft89/WiseLedger) | Local invoice checks, fraud/duplicates, approved RGB payments | PayProof: almost a direct match |
+| [MonteKasa](https://github.com/Kalepox/MonteKasa) | Invoicing, reconciliation, local financial assistants | Merchant Close and invoice-focused variants |
+| [ScratchMyPay](https://github.com/ScratchMyPay/ScratchMyPay) | Event-team payouts | PayCrew without a distinct strong scenario |
+| [Freelancer Escrow Agent](https://github.com/bornalesic/Freelancer_Escrow_Agent) | Agreement → result review → payout/refund | Escrow and AI acceptance of freelance work |
+| [PrivateDeal AI](https://github.com/MohammadEghbal2000/privatedeal-ai) | Negotiation and milestone payments | Freelance negotiation agent |
+| [Satoshelf](https://github.com/bitfent/satoshelf_public) | Agents buying files/knowledge, RGB licenses | Agent Tender for paid data; licensing |
+| [Satstride](https://github.com/AmirMFarhang/Satstride) | Financial AI, risk, approved actions, paid agent collaboration | Broad agent-economy platform |
+| [Moneyfest](https://github.com/kuzeykacar/Moneyfest) | Budget envelopes, subscriptions, savings | Family Envelope |
+| [kit+ty](https://github.com/marco-pedron/kit-ty) | Group trips, receipt analysis, split payments | Private Split |
+| [METEVO](https://github.com/METEVO/metevo-app) | Voice-native wallet | Universal voice wallet |
+| [Student Money Copilot](https://github.com/sudegkc/student-money-copilot) | Financial assistant for students | Another general budgeting copilot |
+| [Fidelity Points](https://github.com/kreamistudio-crypto/fidelity-points) | Loyalty points + NWC + WDK customer wallet | Store points and spending recommendations |
+| [HubWallet](https://github.com/Vittorio-dotcom/hubwallet) | Device access, rental, machine payments | Smart-home and consumer IoT payments |
+| [fork2checkbook](https://github.com/fork2checkbook/fork2checkbook) | Portable offline RGB notes and hardware handoff | Offline-transferable “digital banknote” |
+| [AIR-GB Lightning](https://github.com/ObvAstral/air-gb-lightning) | RGB Multi-Path Payments and custom forks | Protocol-level MPP |
+| [LICEX](https://github.com/vvale03/licex) | RGB software-license marketplace | Tokenized licenses |
+| [RGB Explorer](https://github.com/vcastald/RGB-EXPLORER) | Business treasury insights and swaps | General treasury dashboard |
+| [Rueda Mobility](https://github.com/kayyrod21/rueda-hackathon26) | Mobility concierge and planned RGB payments | AI trip purchasing |
+| [QVACache](https://github.com/giancpl/rgb-hackaton) | Android RGB wallet as a starting point; root README reveals little product detail | Full overlap cannot be determined confidently |
 
-У MONEY WITH MEMORY, BOUNTY HUNTERS, EETEE и KNOTS repo в прочитанной таблице не указан. Из названия не выводим функциональность. Для AidDesk не найден прямой аналог **среди прочитанных описаний**, но уникальность не гарантирована.
+MONEY WITH MEMORY, BOUNTY HUNTERS, EETEE, and KNOTS had no repository listed in the reviewed spreadsheet. Do not infer functionality from names. No direct AidDesk analogue was found **among the reviewed descriptions**, but uniqueness is not guaranteed.
 
-Ссылки на личные Telegram-профили — контакты, а `tg://bot_command` и `tg://search_hashtag` — служебные артефакты экспорта; они не содержат дополнительных технических материалов. [Discord поддержки](https://discord.gg/PaYceGcC) упомянут и проверен по ссылке, но история каналов и новый setup guide не прочитаны. В сервер не вступали. `participant-instructions.pdf` остаётся недостающим первоисточником.
+Personal Telegram profile links are contacts; `tg://bot_command` and `tg://search_hashtag` are export artifacts without additional technical material. The [support Discord](https://discord.gg/PaYceGcC) link was checked, but channel history and the new setup guide were not read. The server was not joined. `participant-instructions.pdf` remains a missing primary source.
 
-### 13. AidDesk — рекомендуемая идея после проверки конкурентов
+### 13. AidDesk — recommendation after competitor review
 
 **Pitch:** “Private aid requests. Human decisions. Dollar payouts on Bitcoin.”
 
-#### Кому и зачем
+#### User and purpose
 
-Маленький благотворительный фонд, университетская emergency-grant программа или локальный фонд взаимопомощи получает свободные текстовые заявки и подтверждающие документы. Сотрудник вручную сопоставляет их с правилами программы, уточняет недостающие сведения и отдельно оформляет выплату.
+A small charity, university emergency-grant program, or local mutual-aid fund receives free-form applications and supporting documents. A staff member manually compares them against program rules, requests missing information, and processes payment separately.
 
-Гипотеза ценности: меньше ручного переноса данных и меньше раскрытия личных обстоятельств облачному AI. Это пока не подтверждённый customer demand; на площадке полезно проверить хотя бы с одним человеком, знакомым с грантовой или благотворительной работой.
+Value hypothesis: less manual data entry and less disclosure of personal circumstances to cloud AI. Customer demand is not yet confirmed; at the venue, test it with at least one person familiar with grant or charity work.
 
-#### Что делает модель
+#### Model responsibilities
 
-QVAC превращает заявку в краткую карточку: запрошенная сумма, назначение, указанные обстоятельства, какие пункты опубликованных правил подтверждаются текстом и каких документов не хватает. Каждый вывод привязан к фрагменту. Модель **не ранжирует людей по «достойности»**, не устанавливает подлинность документов и не определяет самостоятельно право на помощь. Решение принимает сотрудник.
+QVAC turns an application into a short card: requested amount, purpose, stated circumstances, which published requirements the text supports, and missing documents. Every finding links to an excerpt. The model **does not rank people by “deservingness,”** authenticate documents, or independently decide eligibility. A staff member makes the decision.
 
-Локальность здесь связана с содержимым заявки, а не с красивым AI-чатом. Арифметика, бюджет и фактическое разрешение перевода — код.
+Local processing matters because of application content, not because an AI chat looks attractive. Code handles arithmetic, budget, and actual transfer authorization.
 
-#### Демо
+#### Demo
 
-1. Фонд задаёт простую политику: программа компенсации учебных материалов, до 20 тестовых единиц на заявку, документы обязательны. Доступный бюджет 30.
-2. Первая заявка просит 15 и содержит все сведения. QVAC составляет карточку и выделяет подтверждение назначения.
-3. Вторая просит 12, но не содержит подтверждающего документа. Интерфейс предлагает запросить сведения; модель не придумывает их.
-4. Сотрудник одобряет первую. Получатель создаёт настоящий RGB invoice в совместимом кошельке.
-5. Код проверяет invoice и budget, показывает точные условия; сотрудник подтверждает. Реальный перевод доходит получателю; бюджет становится 15.
-6. Повтор одобренной выплаты не создаёт вторую отправку. Новая заявка на 20 показывает недостаток доступного бюджета, не скрывая существующие резервы и pending.
+1. The fund sets a simple policy: educational-material reimbursement, up to 20 test units per application, supporting documents required. Available budget: 30.
+2. The first application requests 15 and contains all required information. QVAC creates a card and highlights evidence of purpose.
+3. The second requests 12 but lacks a supporting document. The UI suggests requesting information; the model does not invent it.
+4. A staff member approves the first application. The recipient creates a real RGB invoice in a compatible wallet.
+5. Code checks invoice and budget and shows exact terms; the staff member confirms. The recipient receives a real transfer; the budget becomes 15.
+6. Repeating the approved payout does not send again. A new application for 20 shows insufficient available budget without hiding existing reservations or pending payments.
 
-#### MVP и архитектура
+#### MVP and architecture
 
-Три экрана: очередь заявок → review с источниками → выплата и её статус. Две синтетические заявки, одна программа, один тестовый актив, два кошелька и один настоящий перевод. Используем выдуманные данные, а не чужие реальные заявки.
+Three screens: application queue → review with sources → payout and status. Two synthetic applications, one program, one test asset, two wallets, and one real transfer. Use fictional data, not other people's actual applications.
 
-Local web UI + QVAC на том же ноутбуке прямо разрешены ментором. Для RGB выбираем один из двух уже разобранных путей: KaleidoSwap signetcustom с его faucet либо WDK plain signet с собственным NIA. Никаких предполагаемых переводов между ними. Основной маршрут — on-chain, одно подтверждение; real-time Lightning не нужен для редкой адресной выплаты.
+A local web UI + QVAC on the same laptop is explicitly allowed by the mentor. Choose one of the two RGB paths already analyzed: KaleidoSwap signetcustom with its faucet, or WDK plain signet with our own NIA. Assume no transfers between them. The main route is on-chain with one confirmation; occasional targeted payouts do not require real-time Lightning.
 
-Состояние выплаты: draft → reviewed → approved → reserved → sending → pending → settled. При отказе до отправки резерв освобождается; при неопределённом результате сохраняется до reconciliation. Изменение суммы, invoice или актива после approval требует повторного подтверждения. Одобренная сумма резервируется атомарно, чтобы две заявки не тратили один доступный остаток.
+Payout states: draft → reviewed → approved → reserved → sending → pending → settled. Cancellation before sending releases the reservation; an uncertain result retains it until reconciliation. Changing amount, invoice, or asset after approval requires new approval. Reserve the approved amount atomically so two applications cannot spend the same available balance.
 
-**Кто держит деньги:** кошелёк фонда принадлежит фонду. Само приложение не получает внешнюю custody, но фонд распоряжается своим бюджетом; нельзя заявлять, что каждый донор сохраняет контроль над пожертвованными средствами. Здесь нет smart-contract charity, escrow или гарантии целевого использования после выплаты.
+**Who holds the money:** the fund owns its wallet. The app does not introduce outside custody, but the fund controls its budget; do not claim each donor retains control over donated funds. There is no smart-contract charity, escrow, or guarantee of how funds are used after payment.
 
-#### Почему это разумнее исходных кандидатов
+#### Why this is more practical than the original candidates
 
-- Связаны все обязательные части: локальный разбор конфиденциальной заявки → human review → фактическая выплата RGB.
-- В прочитанных README нет такого конкретного пользователя и workflow.
-- Для одной выплаты достаточно базовых on-chain возможностей.
-- Три экранных шага понятны на мини-демо; ошибка и недостающий документ демонстрируют пользу AI до показа платежа.
-- Успех не зависит от собственного protocol extension, аппаратуры или сложной системы лицензий.
+- Connects all required parts: local analysis of a confidential application → human review → actual RGB payout.
+- The reviewed READMEs do not describe this specific user and workflow.
+- Basic on-chain capabilities suffice for one payout.
+- Three screen steps are clear in a mini-demo; an error and missing document demonstrate AI value before payment.
+- Success does not depend on a custom protocol extension, hardware, or complex licensing system.
 
-#### Главные возражения
+#### Main objections
 
-**«Почему RGB?»** Нужен конкретный получатель с RGB-кошельком и фонд, желающий хранить/отправлять цифровые доллары на Bitcoin. Без этого rail может быть искусственным. Это главный вопрос customer discovery.
+**“Why RGB?”** It needs a specific recipient with an RGB wallet and a fund wanting to hold/send digital dollars on Bitcoin. Otherwise the payment rail may be artificial. This is the central customer-discovery question.
 
-**«Это обычный документооборот?»** Да, платёжная часть без анализа заявки была бы простой формой. Демо должно показать сопоставление разных формулировок с правилами, ссылки на источник и честный запрос недостающих сведений.
+**“Is this ordinary document workflow?”** Yes: without application analysis, the payment part would be a simple form. The demo must show different wording mapped to rules, source references, and honest requests for missing information.
 
-**«Кому продавать?»** Гипотеза — лицензия или сопровождение для небольших aid/grant программ. Продажи могут быть медленными; не выдаём направление за заведомо лучший бизнес. Для быстрого B2B-пилота Reimburse Local может быть практичнее.
+**“Who would buy it?”** The hypothesis is licensing or support for small aid/grant programs. Sales may be slow; do not present this as an obviously superior business. Reimburse Local may be more practical for a quick B2B pilot.
 
-#### План первого рабочего среза
+#### Plan for the first working slice
 
-1. Прогреть Qwen3.5 2B Q4 через QVAC и получить валидную карточку одной короткой заявки.
-2. Проверить один реальный RGB round trip на выбранном стеке.
-3. Соединить review, budget reservation, confirmation и перевод в один поток.
-4. Добавить вторую неполную заявку, duplicate и статус unknown.
-5. Подготовить мини-демо и пяти минутный pitch до 18 октября 13:00.
+1. Preload Qwen3.5 2B Q4 through QVAC and obtain a valid card for one short application.
+2. Verify one real RGB round trip on the chosen stack.
+3. Connect review, budget reservation, confirmation, and transfer in one flow.
+4. Add a second incomplete application, duplicates, and unknown status.
+5. Prepare the mini-demo and five-minute pitch before October 18 at 13:00.
 
-### Архивное решение перед началом разработки
+### Archived decision before development began
 
-**На предыдущем этапе выбором был AidDesk; эта рекомендация больше не актуальна.** После уточнения пользователя телефония исключена из ограничений, требуется более оригинальный продукт. Актуальная тройка и её ограничения находятся в начале документа. Исходный разбор сохранён как история исследования, а не как утверждённый план реализации.
+**AidDesk was the previous choice; that recommendation is no longer current.** After user clarification, telephony was removed as a constraint and a more original product was requested. The updated three candidates and their limitations appear at the beginning. The original analysis remains as research history, not an approved implementation plan.
 
 ---
 
-## Приложение: полный исходный экспорт
+## Appendix: complete source export
 
-Ниже побайтово сохранено содержимое `tg_chat_info.txt` на момент создания этого файла, кроме обрамления Markdown.
+The following preserves the full `tg_chat_info.txt` content as it was when this file was created, except for Markdown wrapping and the English translation of one Russian display name as `Milan roommate [display name translated from Russian]` in its two occurrences. No messages were omitted. The pre-translation text remains available in Git history.
 
 ```text
 Telegram group export: "Agentic Dollars on Bitcoin" (70 members)
@@ -1199,8 +1199,8 @@ MariJ added almas
 [2026-10-17 09:09] Nikita Lebedev:
 Nikita Lebedev joined the group via invite link
 
-[2026-10-17 09:09] руммейт милан:
-руммейт милан joined the group via invite link
+[2026-10-17 09:09] Milan roommate [display name translated from Russian]:
+Milan roommate [display name translated from Russian] joined the group via invite link
 
 
 ### TOPIC: WDK Q&A (9 messages)

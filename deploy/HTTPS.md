@@ -1,26 +1,27 @@
-# owlpeer.com: подключение без SSH-туннелей
+# owlpeer.com: access without SSH tunnels
 
-Сайт: `https://owlpeer.com/market`. Desktop API: `https://api.owlpeer.com`.
-Один Caddy принимает HTTP/HTTPS и проксирует сайт в `web:8080`, API и WebSocket
-в `runtime:4100`. Certificate storage — постоянный volume `palka-demo_caddy-data`.
-Market SQLite, legacy credentials и Compose project остаются прежними.
+Website: `https://owlpeer.com/market`. Desktop API: `https://api.owlpeer.com`.
+A single Caddy instance accepts HTTP/HTTPS and proxies the site to `web:8080` and
+API/WebSocket traffic to `runtime:4100`. Certificates are stored in the persistent
+`palka-demo_caddy-data` volume. Market SQLite, legacy credentials, and the Compose
+project stay unchanged.
 
 ## 1. DNS
 
-В панели провайдера, обслуживающего DNS домена, настройте:
+In the control panel of the domain's DNS provider, configure:
 
-| Тип | Имя | Значение |
+| Type | Name | Value |
 | --- | --- | --- |
-| A | `@` (или `owlpeer.com`) | публичный IPv4 Oracle-сервера |
-| A | `api` (или `api.owlpeer.com`) | тот же публичный IPv4 |
+| A | `@` (or `owlpeer.com`) | Oracle server's public IPv4 address |
+| A | `api` (or `api.owlpeer.com`) | The same public IPv4 address |
 
-Значение — только IP, без `http://`, порта и `/market`. NS-записи не меняйте.
-Существующую A-запись корня оставьте, если IP уже правильный; иначе измените её.
-Проверьте отсутствие конфликтующих A/CNAME и старых AAAA для этих двух имён.
-AAAA нужна только при настроенном доступном IPv6 этого сервера.
-Для первого запуска через Cloudflare используйте DNS only, без proxy.
+Enter only the IP address, without `http://`, a port, or `/market`. Keep NS records
+unchanged. Keep the existing root A record if its IP is correct; otherwise update
+it. Check for conflicting A/CNAME records and stale AAAA records for both names.
+An AAAA record is appropriate only if this server has working, reachable IPv6.
+For the first launch with Cloudflare, use DNS only with proxying disabled.
 
-На ноутбуке проверьте:
+Check from the laptop:
 
 ```bash
 dig +short A owlpeer.com
@@ -29,18 +30,18 @@ dig +short AAAA owlpeer.com
 dig +short AAAA api.owlpeer.com
 ```
 
-Обе A должны вернуть IP сервера. Обновление зависит от DNS-кеша/TTL.
+Both A queries must return the server IP. Propagation depends on DNS caches and TTL.
 
-## 2. Порты Oracle
+## 2. Oracle ports
 
-В Oracle Console откройте Networking для своей VM: NSG её VNIC или Security List
-её subnet. Добавьте две stateful ingress rules: Source CIDR `0.0.0.0/0`, protocol
-TCP, source ports All, destination port `80` и отдельно `443`.
-Не удаляйте SSH-правило. `44100` и `44080` остаются loopback; не открывайте их.
+In Oracle Console, open Networking for the VM: its VNIC's NSG or its subnet's
+Security List. Add two stateful ingress rules: Source CIDR `0.0.0.0/0`, protocol
+TCP, source ports All, destination port `80` and, separately, `443`.
+Keep the SSH rule. `44100` and `44080` remain on loopback; do not expose them.
 
-OS firewall также должен пропускать эти порты. Если он блокирует HTTPS, команды
-ниже выполняет администратор **в root-сессии** (обычный beknur ранее получил
-Authorization failed). Они не требуют перезагрузки firewall:
+The OS firewall must also allow these ports. If it blocks HTTPS, an administrator
+must run the commands below **in a root session** (the regular beknur user
+previously received Authorization failed). No firewall reload is required:
 
 ```bash
 firewall-cmd --zone=public --add-service=http
@@ -49,12 +50,12 @@ firewall-cmd --zone=public --permanent --add-service=http
 firewall-cmd --zone=public --permanent --add-service=https
 ```
 
-Не запускайте их в непривилегированной сессии в ожидании, что отсутствие sudo
-обойдёт права. Для сертификатов серверу также нужен исходящий DNS/HTTPS.
+Omitting sudo does not bypass permissions; these commands will not work in an
+unprivileged session. Certificate issuance also requires outbound DNS/HTTPS access.
 
-## 3. Включение HTTPS
+## 3. Enabling HTTPS
 
-После настройки DNS/портов, на сервере:
+After configuring DNS and ports, run on the server:
 
 ```bash
 cd ~/palka-demo/repo
@@ -64,38 +65,38 @@ bash deploy/server.sh status
 bash deploy/server.sh logs
 ```
 
-Команда загружает и проверяет Caddy, сохраняет режим в `deploy/.state/https.enabled`
-и пересоздаёт web с loopback-портом `44080`, освобождая `80` для Caddy. Возможен
-короткий перерыв доступа к сайту. Другие Compose projects не затрагиваются.
-Она использует уже собранные web/market-образы. Для первого запуска с нуля сначала
-выполните `bash deploy/server.sh up`.
+The command downloads and validates Caddy, saves the mode in
+`deploy/.state/https.enabled`, and recreates web on loopback port `44080`, freeing
+port `80` for Caddy. A brief website interruption is possible. Other Compose
+projects are unaffected. It uses the existing web/market images. For a fresh
+installation, run `bash deploy/server.sh up` first.
 
-Дождитесь выдачи сертификатов и проверьте:
+Wait for certificate issuance, then check:
 
 ```bash
 bash deploy/server.sh check
 ```
 
-Этот check проверяет TLS на самом сервере, включая hostname и доверенный сертификат.
-Из ноутбука отдельно проверьте публичный маршрут:
+This checks TLS on the server itself, including hostname and trusted certificate
+validation. Separately test public access from the laptop:
 
 ```bash
 curl -I https://owlpeer.com/market
 curl --fail https://api.owlpeer.com/health
 ```
 
-Ожидается HTTP 200 и JSON с `ok: true`. Откройте `https://owlpeer.com/market`.
-HTTP перенаправляется на HTTPS. Если сертификата ещё нет, смотрите `logs`:
-проверяйте оба DNS-имени, ошибочные AAAA, доступ 80/443 и ограничения CAA, если они
-заданы. Не отключайте проверку сертификатов в desktop.
+Expect HTTP 200 and JSON containing `ok: true`. Open `https://owlpeer.com/market`.
+HTTP redirects to HTTPS. If a certificate is not ready, inspect `logs`: check both
+DNS names, incorrect AAAA records, access to ports 80/443, and any configured CAA
+restrictions. Do not disable certificate verification in desktop.
 
-После включения обычные `up`, `start`, `status`, `logs`, `check`, `down` автоматически
-используют HTTPS-профиль. Обновление: `git pull --ff-only`, затем
-`bash deploy/server.sh up`. Не удаляйте volumes или `.state`.
+Once enabled, normal `up`, `start`, `status`, `logs`, `check`, and `down` commands
+use the HTTPS profile automatically. To update, run `git pull --ff-only`, followed
+by `bash deploy/server.sh up`. Do not delete volumes or `.state`.
 
 ## 4. Desktop
 
-Для **нового** профиля, из репозитория на ноутбуке:
+For a **new** profile, from the repository on the laptop:
 
 ```bash
 git pull --ff-only
@@ -104,11 +105,12 @@ export PALKA_PUBLIC_MARKET_URL=https://owlpeer.com/market
 npm run dev:desktop
 ```
 
-URL и автоматически созданные ID/token сохранятся. SSH-туннель не нужен.
+URLs and automatically generated ID/token credentials are saved. No SSH tunnel is
+required.
 
-Для **существующего профиля, который уже подключался к этой же Oracle-базе**:
-закройте desktop, сохраните приватную резервную копию `desktop-config.json` с
-правами 0600 и измените только эти поля в исходном файле:
+For an **existing profile that already connected to this same Oracle database**:
+close desktop, save a private backup of `desktop-config.json` with mode 0600, and
+change only these fields in the original file:
 
 ```json
 {
@@ -117,33 +119,34 @@ URL и автоматически созданные ID/token сохранятс
 }
 ```
 
-Это фрагмент изменений, **не замена всего файла**. Если профиль имеет
-`marketRegistration: "automatic"`, также замените `marketIdentityOrigin` на
-`https://api.owlpeer.com`. Это явное разрешение отправлять прежний токен через
-новый HTTPS-адрес той же базы. Не меняйте ownerId, marketToken, wallet RPC или state.
-Обычно файл на macOS находится в `~/Library/Application Support/palka/`; при
-`PALKA_DESKTOP_DATA_DIR` используйте именно ранее выбранный каталог. Не создавайте
-новый профиль ради смены адреса. Если прежний профиль был от другого локального
-market, сначала перенесите его credentials на сервер; это отдельная миграция.
+This is an edit fragment, **not a replacement for the entire file**. If the profile
+has `marketRegistration: "automatic"`, also set `marketIdentityOrigin` to
+`https://api.owlpeer.com`. This explicitly permits sending the original token to
+the new HTTPS address of the same database. Do not change ownerId, marketToken,
+wallet RPC settings, or state. On macOS the file is usually under
+`~/Library/Application Support/palka/`; if using `PALKA_DESKTOP_DATA_DIR`, use the
+same directory selected previously. Do not create a new profile just to change
+the address. If the profile belonged to a different local market, first transfer
+its credentials to the server; that is a separate migration.
 
-В терминале уберите старые URL overrides перед запуском сохранённого профиля:
+Remove old URL overrides in the terminal before launching the saved profile:
 
 ```bash
 unset PALKA_MARKET_URL PALKA_PUBLIC_MARKET_URL
 npm run dev:desktop
 ```
 
-Если используете готовый `.app`, пересоберите его после обновления исходников.
-Настройка локального sidecar, Bitcoin/RGB-инфраструктуры и пополнение остаются
-отдельными шагами; HTTPS даёт прямой доступ к market.
+If using a packaged `.app`, rebuild it after updating the source. Local sidecar
+configuration, Bitcoin/RGB infrastructure, and funding remain separate steps;
+HTTPS provides direct access to market.
 
-## Проверки и границы
+## Checks and limitations
 
-Конфигурация проверяется `caddy validate`, Compose config и shell syntax check.
-Выдача публичного сертификата и внешний доступ проверяются только после настройки
-DNS/портов на Oracle. HTTPS не добавляет общие API rate limits, backup или управление
-отзывом токенов; текущий профиль предназначен для демки.
+The configuration is checked with `caddy validate`, Compose config, and shell
+syntax validation. Public certificate issuance and external access can only be
+tested after configuring DNS and ports on Oracle. HTTPS does not add general API
+rate limits, backups, or token revocation management; this profile is for a demo.
 
-Официальные источники: [Caddy HTTPS](https://caddyserver.com/docs/quick-starts/https),
+Official references: [Caddy HTTPS](https://caddyserver.com/docs/quick-starts/https),
 [WebSocket proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy),
-[Oracle security rules](https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/securityrules.htm).
+and [Oracle security rules](https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/securityrules.htm).
