@@ -11,6 +11,7 @@ Usage: bash deploy/server.sh COMMAND [OWNER_ID ...]
   user OWNER_ID      Print this participant's private desktop credentials
   up                 Build sequentially and start web + market
   start              Start/reconcile existing images (also applies added users)
+  https              Enable persistent HTTPS for owlpeer.com + api.owlpeer.com
   status             Show this project's containers
   logs               Show the last 100 log lines
   check              Check the local web and public market endpoints
@@ -36,12 +37,25 @@ if (($#)); then
 fi
 if [[ ! -f "$deploy_dir/.state/market.env" ]]; then
   case "$action" in
-    up|start) python3 "$deploy_dir/credentials.py" init ;;
+    up|start|https) python3 "$deploy_dir/credentials.py" init ;;
     *) echo 'Run init or up first.' >&2; exit 1 ;;
   esac
 fi
 
+if [[ "$action" == https || -f "$deploy_dir/.state/https.enabled" ]]; then
+  export PALKA_WEB_BIND=127.0.0.1 PALKA_WEB_PORT=44080
+  compose+=(-f "$deploy_dir/compose.https.yaml")
+fi
+
 case "$action" in
+  https)
+    # Download and validate before moving the existing web listener off port 80.
+    "${compose[@]}" pull edge
+    "${compose[@]}" run --rm --no-deps edge caddy validate --config /etc/caddy/Caddyfile
+    (umask 077; touch "$deploy_dir/.state/https.enabled")
+    "${compose[@]}" up -d --wait
+    echo 'HTTPS mode saved. Certificate issuance may take a minute; run check and logs.'
+    ;;
   up)
     "${compose[@]}" build runtime
     "${compose[@]}" build web
@@ -51,9 +65,17 @@ case "$action" in
   status) "${compose[@]}" ps ;;
   logs) "${compose[@]}" logs --tail=100 ;;
   check)
-    curl --fail --silent --show-error --max-time 10 http://127.0.0.1/health
-    curl --fail --silent --show-error --max-time 10 http://127.0.0.1/market-api/health
-    curl --fail --silent --show-error --max-time 10 http://127.0.0.1/market-api/orders
+    if [[ -f "$deploy_dir/.state/https.enabled" ]]; then
+      # Test the local TLS listener with real hostname/certificate validation.
+      curl --fail --silent --show-error --max-time 15 --resolve owlpeer.com:443:127.0.0.1 https://owlpeer.com/health
+      curl --fail --silent --show-error --max-time 15 --resolve owlpeer.com:443:127.0.0.1 https://owlpeer.com/market-api/health
+      curl --fail --silent --show-error --max-time 15 --resolve owlpeer.com:443:127.0.0.1 https://owlpeer.com/market-api/orders
+      curl --fail --silent --show-error --max-time 15 --resolve api.owlpeer.com:443:127.0.0.1 https://api.owlpeer.com/health
+    else
+      curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${PALKA_WEB_PORT:-80}/health"
+      curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${PALKA_WEB_PORT:-80}/market-api/health"
+      curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${PALKA_WEB_PORT:-80}/market-api/orders"
+    fi
     ;;
   down) "${compose[@]}" down ;;
   *) usage >&2; exit 1 ;;

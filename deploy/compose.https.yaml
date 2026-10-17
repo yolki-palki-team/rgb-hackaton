@@ -1,0 +1,25 @@
+services:
+  edge:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+      runtime:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro,Z
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  caddy-data:
+  caddy-config:

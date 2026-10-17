@@ -40,8 +40,9 @@ Hackathon resources and stack guidance are in [materials.md](materials.md).
 For a separate VM running **only public web and market**, use
 [deploy/README.md](deploy/README.md). The tracked Compose configuration and launcher
 preserve SQLite and private credentials, register new desktops automatically,
-and leave desktop/QVAC/wallets on users' computers. This first profile serves HTTP;
-desktop access uses an SSH tunnel until HTTPS/WSS is configured. It does not yet
+and leave desktop/QVAC/wallets on users' computers. The default profile serves HTTP;
+[the owlpeer.com HTTPS profile](deploy/HTTPS.md) enables direct desktop HTTPS/WSS
+access after DNS and firewall setup. It does not yet
 provision shared regtest infrastructure or independent wallets on multiple machines.
 
 ## Run with Docker
