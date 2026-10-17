@@ -1,5 +1,9 @@
 # Серверная демка palka
 
+Для домена **owlpeer.com** и desktop без туннеля следуйте [HTTPS.md](HTTPS.md).
+Команда `bash deploy/server.sh https` включает и сохраняет HTTPS-режим после
+настройки DNS и портов. Ниже описан исходный HTTP-профиль.
+
 Этот каталог запускает **public web + market + SQLite** на отдельной VM.
 Desktop, local client, QVAC и wallet sidecar работают на компьютерах участников.
 Bitcoin Core/electrs/RGB proxy и настройка независимых кошельков сюда пока не

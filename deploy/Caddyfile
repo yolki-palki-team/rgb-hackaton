@@ -1,0 +1,11 @@
+owlpeer.com {
+	reverse_proxy web:8080
+}
+
+api.owlpeer.com {
+	header {
+		Cache-Control no-store
+		X-Content-Type-Options nosniff
+	}
+	reverse_proxy runtime:4100
+}
