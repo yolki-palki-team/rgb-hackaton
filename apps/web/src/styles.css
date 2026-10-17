@@ -353,8 +353,12 @@ a {
   gap: 12px;
 }
 .order-card {
+  --order-accent: #aaa;
+  --order-tint: #262626;
+
   display: block;
   width: 100%;
+  min-width: 0;
   text-align: left;
   border: 1px solid #333333;
   background: #171717;
@@ -362,6 +366,25 @@ a {
   padding: 24px;
   color: #eeeeee;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+.order-card--waiting {
+  --order-accent: #91e8ae;
+  --order-tint: #20382a;
+
+  border-color: #39654a;
+  background: linear-gradient(115deg, #19271e, #171717 65%);
+  box-shadow: inset 3px 0 var(--order-accent);
+}
+.order-card--executing {
+  --order-accent: #e9cd8b;
+  --order-tint: #38301f;
+
+  border-color: #625539;
+}
+.order-card--finished {
+  background: #1b1b1b;
+  color: #aaa;
+  box-shadow: none;
 }
 .order-card-top,
 .order-card-bottom {
@@ -380,8 +403,8 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #aaaaaa;
-  background: #262626;
+  color: var(--order-accent);
+  background: var(--order-tint);
   border-radius: 100px;
   padding: 6px 9px;
   font-size: 10px;
@@ -391,7 +414,7 @@ a {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #888888;
+  background: currentColor;
 }
 .order-pair {
   display: flex;
@@ -516,28 +539,6 @@ a {
   }
 }
 
-.market-views {
-  display: flex;
-  gap: 6px;
-  margin: 24px 0 16px;
-}
-.market-views button {
-  padding: 10px 18px;
-  border: 1px solid #333;
-  border-radius: 999px;
-  background: transparent;
-  color: #aaa;
-  cursor: pointer;
-}
-.market-views button[aria-pressed='true'] {
-  color: #080808;
-  background: #eee;
-  border-color: #eee;
-}
-.market-views span {
-  margin-left: 8px;
-  font-variant-numeric: tabular-nums;
-}
 .order-execution {
   border-top: 1px solid #333;
   padding-top: 18px;

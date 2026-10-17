@@ -27,12 +27,16 @@ function Landing() {
 function OrderCard({ entry }: { entry: PublicMarketOrder }) {
   const { order, execution } = entry;
   const step = execution ? executionStep(execution.status) : null;
+  const finished =
+    execution &&
+    ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'UNSUPPORTED'].includes(execution.status);
+  const tone = !execution ? 'waiting' : finished ? 'finished' : 'executing';
   return (
-    <article className="order-card">
+    <article className={`order-card order-card--${tone}`}>
       <div className="order-card-top">
         <span className="order-network">{order.network.toUpperCase()}</span>
         <span className="order-open">
-          <span /> {execution ? 'Execution' : 'Waiting'}
+          <span aria-hidden="true" /> {execution ? executionLabels[execution.status] : 'Open order'}
         </span>
       </div>
       <div className="order-pair">
@@ -85,7 +89,6 @@ function OrderCard({ entry }: { entry: PublicMarketOrder }) {
 
 function Market() {
   const [state, setState] = useState<MarketState>({ kind: 'loading', orders: [] });
-  const [view, setView] = useState<'waiting' | 'execution'>('waiting');
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [retry, setRetry] = useState(0);
 
@@ -138,15 +141,10 @@ function Market() {
       ].sort((a, b) => a[1].symbol.localeCompare(b[1].symbol)),
     [state.orders],
   );
-  const waitingCount = state.orders.filter((entry) => entry.execution === null).length;
-  const executionCount = state.orders.length - waitingCount;
-  const viewOrders = state.orders.filter((entry) =>
-    view === 'waiting' ? entry.execution === null : entry.execution !== null,
-  );
   const visibleOrders =
     assetFilter === 'all'
-      ? viewOrders
-      : viewOrders.filter(
+      ? state.orders
+      : state.orders.filter(
           ({ order }) =>
             assetKey(order.giveAsset) === assetFilter ||
             assetKey(order.receiveAsset) === assetFilter,
@@ -174,22 +172,6 @@ function Market() {
               aria-label="Refresh orders"
             >
               <span aria-hidden="true">↻</span> Refresh
-            </button>
-          </div>
-          <div className="market-views" role="group" aria-label="Order state">
-            <button
-              type="button"
-              aria-pressed={view === 'waiting'}
-              onClick={() => setView('waiting')}
-            >
-              Waiting <span>{waitingCount}</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === 'execution'}
-              onClick={() => setView('execution')}
-            >
-              Execution <span>{executionCount}</span>
             </button>
           </div>
           <div className="filter-row" role="group" aria-label="Filter by asset">
@@ -238,15 +220,15 @@ function Market() {
               </button>
             </div>
           )}
-          {state.kind === 'ready' && viewOrders.length === 0 && (
+          {state.kind === 'ready' && state.orders.length === 0 && (
             <div className="market-message" role="status">
               <span className="message-symbol" aria-hidden="true">
                 ◌
               </span>
-              <h3>{view === 'waiting' ? 'No waiting orders' : 'No executions yet'}</h3>
+              <h3>No orders yet</h3>
             </div>
           )}
-          {state.kind === 'ready' && viewOrders.length > 0 && visibleOrders.length === 0 && (
+          {state.kind === 'ready' && state.orders.length > 0 && visibleOrders.length === 0 && (
             <div className="market-message" role="status">
               <h3>No orders for this asset</h3>
               <p>Choose another asset or show all orders.</p>
@@ -259,7 +241,7 @@ function Market() {
               </button>
             </div>
           )}
-          {state.kind === 'ready' && view === 'execution' && viewOrders.length > 0 && (
+          {state.kind === 'ready' && visibleOrders.length > 0 && (
             <p className="execution-note">
               Live wallet-reported progress · Updates every 5 seconds
             </p>

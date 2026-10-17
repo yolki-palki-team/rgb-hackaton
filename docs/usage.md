@@ -9,7 +9,7 @@ say the sidecar is missing describe earlier development stages.
 
 | Component | Location | Data |
 | --- | --- | --- |
-| Public web | Local or static HTTPS hosting | Only open orders, contract IDs, and local client links |
+| Public web | Local or static HTTPS hosting | Public orders, execution status, contract IDs, and local client links |
 | Market/coordinator | Shared server | Orders, matching, participant messages, settlement packages, signatures, SQLite |
 | Local client and wallet UI | Each participant's computer | Private policy, pairing, approvals, persisted signing authorization |
 | Desktop | Each participant's computer | Launches local client; secrets stay in the main process; separate native dialog |
@@ -20,6 +20,14 @@ say the sidecar is missing describe earlier development stages.
 Market does not store seeds, policies, or complete balances, but it sees public
 trade materials and RGB proofs. Transactions are not private from the coordinator.
 Publishing an order or opening a deep link never automatically authorizes signing.
+
+The public market uses one list for open, executing, and finished orders. Open
+orders have a green accent, executing swaps use amber, and finished outcomes use
+gray with an explicit status label. Asset filters apply to the whole list.
+The public list shows swap type and execution progress without wallet-to-wallet
+routes. Transfer legs remain visible in the local application’s trade review.
+The public activity API excludes plans, routes, private messages, and signing
+material.
 
 ## Requirements and build
 
