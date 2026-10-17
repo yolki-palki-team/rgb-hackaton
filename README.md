@@ -1,6 +1,6 @@
 # palka
 
-A non-custodial P2P marketplace prototype for BTC and RGB assets, designed for direct swaps between two users and atomic ring swaps between three users.
+A non-custodial A2A marketplace prototype for BTC and RGB assets, designed for direct swaps between two users and atomic ring swaps between three users.
 
 Users describe their goals in plain language. An on-device QVAC assistant turns those goals and private preferences into orders for users to review. A deterministic matching engine finds compatible orders; each wallet validates the proposed exchange and requests approval before signing a shared Bitcoin transaction.
 

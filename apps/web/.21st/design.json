@@ -2,7 +2,7 @@
   "version": 1,
   "project": {
     "name": "palka",
-    "productType": "Public BTC/RGB P2P marketplace",
+    "productType": "Public BTC/RGB A2A marketplace",
     "stack": [
       "React 19",
       "TypeScript",

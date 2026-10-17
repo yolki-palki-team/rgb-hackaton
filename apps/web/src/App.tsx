@@ -83,8 +83,8 @@ function Market() {
 function SiteFooter() {
   return <HalftoneWordmarkFooter
     wordmark="palka"
-    label="palka P2P Exchange"
-    meta="Bitcoin + RGB · Peer-to-peer market"
+    label="palka A2A Exchange"
+    meta="Bitcoin + RGB · Agent-to-agent market"
     palette={{ background: '#080808', ink: '#eeeeee', warm: '#aaaaaa' }}
     columns={[
       { title: 'Explore', links: [{ label: 'Market', href: marketPath }, { label: 'Home', href: '/' }] },

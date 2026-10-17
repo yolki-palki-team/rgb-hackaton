@@ -1,6 +1,6 @@
 # palka public web UI
 
-React/Vite public site for the RGB P2P exchange. Start it from the repository root with `npm run dev:web`, then open `http://127.0.0.1:5173/` for the landing page or `http://127.0.0.1:5173/market` for open orders. The order book is read-only; it shows public exchange intent, not wallet balances, private policy, matched trade details or signing controls.
+React/Vite public site for the RGB A2A exchange. Start it from the repository root with `npm run dev:web`, then open `http://127.0.0.1:5173/` for the landing page or `http://127.0.0.1:5173/market` for open orders. The order book is read-only; it shows public exchange intent, not wallet balances, private policy, matched trade details or signing controls.
 
 The browser calls only `GET /market-api/health` and `GET /market-api/orders`. In Docker, Nginx proxies those exact paths to the market over the private bridge and strips incoming authentication headers, cookies, bodies and queries. Other market and local-client APIs are not exposed by this site. The market port is not published by Compose.
 

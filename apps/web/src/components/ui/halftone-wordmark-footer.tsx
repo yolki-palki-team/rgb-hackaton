@@ -125,7 +125,7 @@ const HWF_CSS = `
 `
 
 export default function HalftoneWordmarkFooter({
-  wordmark = "palka", label = "palka P2P Exchange", meta = "Regtest demo · Matching only · No BTC/RGB settlement",
+  wordmark = "palka", label = "palka A2A Exchange", meta = "Regtest demo · Matching only · No BTC/RGB settlement",
   columns = DEFAULT_COLUMNS, backToTop = true, preset = "night", palette,
   dotGap = 6, radius = 80, crop = 0.2, grain = 0.5, interactive = true,
   fontFamily = SANS_STACK, fontWeight = 800, monoFamily = MONO_STACK, height = "560px", className = "",
