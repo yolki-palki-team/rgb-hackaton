@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "project": {
+    "name": "palka",
+    "productType": "Public BTC/RGB P2P marketplace",
+    "stack": [
+      "React 19",
+      "TypeScript",
+      "Vite",
+      "Tailwind CSS v4",
+      "shadcn aliases"
+    ]
+  },
+  "sources": {
+    "tokens": [
+      "src/tailwind.css",
+      "src/styles.css"
+    ],
+    "components": [
+      "src/components/ui"
+    ],
+    "assets": [
+      "public/hero"
+    ],
+    "instructions": [
+      "../../AGENTS.md",
+      "README.md"
+    ]
+  },
+  "design": {
+    "colorMode": "dark",
+    "colors": {
+      "background": "#080808",
+      "surface": "#101010",
+      "raised": "#171717",
+      "text": "#eeeeee",
+      "muted": "#aaaaaa",
+      "border": "#333333",
+      "accent": "#dddddd"
+    },
+    "typography": {},
+    "spacing": {},
+    "radius": {},
+    "shadows": {},
+    "motion": {
+      "hero": "Local muted looping MP4 with poster, playback control and reduced-motion support",
+      "footer": "canvas halftone wordmark; honor reduced motion"
+    },
+    "density": "comfortable"
+  },
+  "components": {
+    "installed": [
+      "demo",
+      "halftone-wordmark-footer",
+      "video-hero"
+    ],
+    "preferredPrimitives": [],
+    "patterns": []
+  },
+  "constraints": {
+    "must": [
+      "English UI",
+      "Public GET order book only; private wallet state stays on loopback wallet UI",
+      "Accessible links, keyboard focus, loading/error/empty states",
+      "Use local hero assets; no external font requests"
+    ],
+    "avoid": [
+      "Fake order data",
+      "Wallet balances or pairing controls on public routes",
+      "Additional animation dependencies unless needed"
+    ]
+  },
+  "decisions": [
+    {
+      "decision": "Black and charcoal surfaces with light text and neutral accents; remove green and light backgrounds",
+      "source": "Explicit user correction, 2026-10-17"
+    },
+    {
+      "decision": "Keep hero and footer; remove explanatory sections from landing",
+      "source": "User requested removal below the animation; subsequent footer screenshot retained footer direction"
+    },
+    {
+      "decision": "Replace sculpture with the user-selected Velorah video hero, centered palka copy and glass CTAs; retain the black footer",
+      "source": "Explicit user selection, 2026-10-17"
+    }
+  ],
+  "evidence": [
+    {
+      "fact": "components.installed",
+      "source": "src/components/ui"
+    },
+    {
+      "fact": "project.stack:shadcn",
+      "source": "components.json"
+    }
+  ],
+  "generatedAt": "2026-10-17T10:06:23.996Z"
+}

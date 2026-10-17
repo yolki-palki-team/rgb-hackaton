@@ -19,3 +19,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 tools/
+
+# Packaged desktop builds
+.dist/
