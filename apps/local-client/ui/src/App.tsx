@@ -1,13 +1,5 @@
 import { ChatInput, ChatInputTextArea, ChatInputSubmit } from './components/ui/chat-input';
-import {
-  AssetRow,
-  Button,
-  Icon,
-  Input,
-  Panel,
-  AssetIcon,
-  StatusBadge,
-} from './components/ui/wallet-kit';
+import { AssetRow, Button, Icon, Input, Panel, StatusBadge } from './components/ui/wallet-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FundingPanel } from './FundingPanel';
 import { AssetSelect } from './components/ui/asset-select';
@@ -39,7 +31,6 @@ function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [myOrder, setMyOrder] = useState<Order | null>(null);
   const [trade, setTrade] = useState<Trade | null>(null);
-  const [policy, setPolicy] = useState<PrivatePolicy | null>(null);
   const [policyAssets, setPolicyAssets] = useState<{ key: string; label: string }[]>([]);
   const [sampleTradeKind, setSampleTradeKind] = useState<'direct' | 'ring'>('ring');
   const [samplePreview, setSamplePreview] = useState(false);
@@ -121,7 +112,6 @@ function App() {
       setOrders([]);
       setMyOrder(null);
       setTrade(null);
-      setPolicy(null);
       setPolicyAssets([]);
       workflow.current = new TradeWorkflow();
       setPairToken('');
@@ -150,7 +140,6 @@ function App() {
         setOrders(data.orders);
         setMyOrder(data.myOrder);
         setTrade(data.trade);
-        setPolicy((current) => current ?? data.policy);
         setPolicyAssets(data.policyAssets);
         setSyncError(data.walletError ?? null);
         const codes = data.balances.map((balance) => balance.code);
@@ -234,7 +223,6 @@ function App() {
     setOrders([]);
     setMyOrder(null);
     setTrade(null);
-    setPolicy(null);
     setPolicyAssets([]);
     workflow.current = new TradeWorkflow();
     setSyncError(null);
@@ -263,7 +251,6 @@ function App() {
     try {
       const result = await client.interpret(goal);
       if (result.draft) setDraft(result.draft);
-      setPolicy(result.policy);
       setDraftOpen(true);
 
       setNotice(
@@ -290,10 +277,16 @@ function App() {
   };
 
   const publish = async () => {
-    if (!client || !ready || !policy) return;
+    if (!client || !ready) return;
     setBusy('publish');
     setNotice(null);
     try {
+      const policy: PrivatePolicy = {
+        allowedAssetKeys: policyAssets.map((asset) => asset.key),
+        protectedBalances: {},
+        maxFeeSats: draft.maxFeeSats,
+        allowBtcSale: true,
+      };
       validateDraftShape(draft, policy);
       await client.checkDraft(draft, policy);
       const order = await client.publishDraft(draft, policy);
@@ -1145,93 +1138,10 @@ function App() {
                 />
               </div>
             </div>
-            {policy && (
-              <div className="policy-block">
-                <div className="policy-heading">
-                  <Icon name="shield" size={17} />
-                  <strong>Your wallet limits</strong>
-                  <span>Private</span>
-                </div>
-                <div className="draft-grid">
-                  <div>
-                    <label className="field-label" htmlFor="policy-fee">
-                      Wallet fee limit (sats)
-                    </label>
-                    <Input
-                      id="policy-fee"
-                      value={policy.maxFeeSats}
-                      onChange={(event) => updatePolicy({ maxFeeSats: event.target.value })}
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <div>
-                    <span className="field-label">Bitcoin permission</span>
-                    <label className="policy-toggle">
-                      <Input
-                        type="checkbox"
-                        role="switch"
-                        checked={policy.allowBtcSale}
-                        onChange={(event) => updatePolicy({ allowBtcSale: event.target.checked })}
-                      />
-                      <span>Allow BTC sale</span>
-                    </label>
-                  </div>
-                </div>
-                <fieldset className="policy-reserves">
-                  <legend>Assets allowed for swaps</legend>
-                  <p>
-                    Enable both assets in your order. Newly imported assets may need permission.
-                  </p>
-                  <div className="draft-grid">
-                    {policyAssets.map((asset) => (
-                      <label className="switch-field" key={asset.key}>
-                        <Input
-                          type="checkbox"
-                          checked={policy.allowedAssetKeys.includes(asset.key)}
-                          onChange={(event) =>
-                            updatePolicy({
-                              allowedAssetKeys: event.target.checked
-                                ? [...new Set([...policy.allowedAssetKeys, asset.key])]
-                                : policy.allowedAssetKeys.filter((key) => key !== asset.key),
-                            })
-                          }
-                        />
-                        <span>{asset.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                <fieldset className="policy-reserves">
-                  <legend>Keep after swap (base units)</legend>
-                  <div className="draft-grid">
-                    {policyAssets.map((asset) => (
-                      <label className="reserve-field" key={asset.key}>
-                        <span className="policy-asset field-label">
-                          <AssetIcon code={asset.label} />
-                          {asset.label}
-                        </span>
-                        <Input
-                          value={policy.protectedBalances[asset.key] ?? '0'}
-                          onChange={(event) =>
-                            updatePolicy({
-                              protectedBalances: {
-                                ...policy.protectedBalances,
-                                [asset.key]: event.target.value,
-                              },
-                            })
-                          }
-                          inputMode="numeric"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              </div>
-            )}
             <div className="draft-note">
               <Icon name="shield" size={17} />
               {ready
-                ? 'Checked locally. Your wallet limits update when you publish.'
+                ? 'Amounts and fees are checked locally. Signing requires your approval.'
                 : 'Connect your wallet to check limits and publish.'}
             </div>
             <div className="modal-actions">
@@ -1253,9 +1163,6 @@ function App() {
 
   function updateDraft(change: Partial<Draft>) {
     setDraft((current) => ({ ...current, ...change }));
-  }
-  function updatePolicy(change: Partial<PrivatePolicy>) {
-    setPolicy((current) => (current ? { ...current, ...change } : current));
   }
 }
 
