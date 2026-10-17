@@ -1,0 +1,79 @@
+{
+  "actualDeltas": {
+    "alice": {
+      "regtest:btc:btc": "99667",
+      "regtest:rgb:rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "0",
+      "regtest:rgb:rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "-100",
+      "regtest:rgb:rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    },
+    "bob": {
+      "regtest:btc:btc": "-100333",
+      "regtest:rgb:rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "100",
+      "regtest:rgb:rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "0",
+      "regtest:rgb:rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    },
+    "carol": {
+      "regtest:btc:btc": "-334",
+      "regtest:rgb:rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "-100",
+      "regtest:rgb:rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "100",
+      "regtest:rgb:rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    }
+  },
+  "approvalDigest": "d6d2a8c4fac67934caf180648cc79ab960ff2a5b5df0cf614a41201dcc1f094c",
+  "network": "regtest",
+  "receipts": {
+    "alice": {
+      "chainConfirmed": true,
+      "mode": "real",
+      "network": "regtest",
+      "rgbAccepted": true,
+      "state": "confirmed",
+      "tradeId": "adapter-ring-repeat-v1",
+      "txid": "1266dbbb2a47cf8cf3d9f7ed2529cb0428a0476695ca07bbf9c5dd32cd4df7d8"
+    },
+    "bob": {
+      "chainConfirmed": true,
+      "mode": "real",
+      "network": "regtest",
+      "rgbAccepted": true,
+      "state": "confirmed",
+      "tradeId": "adapter-ring-repeat-v1",
+      "txid": "1266dbbb2a47cf8cf3d9f7ed2529cb0428a0476695ca07bbf9c5dd32cd4df7d8"
+    },
+    "carol": {
+      "chainConfirmed": true,
+      "mode": "real",
+      "network": "regtest",
+      "rgbAccepted": true,
+      "state": "confirmed",
+      "tradeId": "adapter-ring-repeat-v1",
+      "txid": "1266dbbb2a47cf8cf3d9f7ed2529cb0428a0476695ca07bbf9c5dd32cd4df7d8"
+    }
+  },
+  "restartAfterSignature": true,
+  "scenario": "ring",
+  "sdkAllocationIndexSynchronized": true,
+  "tradeId": "adapter-ring-repeat-v1",
+  "transport": "authenticated-loopback-http-v1",
+  "txid": "1266dbbb2a47cf8cf3d9f7ed2529cb0428a0476695ca07bbf9c5dd32cd4df7d8",
+  "expectedDeltas": {
+    "alice": {
+      "regtest:btc:btc": "99667",
+      "regtest:rgb:rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "0",
+      "regtest:rgb:rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0",
+      "regtest:rgb:rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "-100"
+    },
+    "bob": {
+      "regtest:btc:btc": "-100333",
+      "regtest:rgb:rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "0",
+      "regtest:rgb:rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "100",
+      "regtest:rgb:rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    },
+    "carol": {
+      "regtest:btc:btc": "-334",
+      "regtest:rgb:rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "-100",
+      "regtest:rgb:rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0",
+      "regtest:rgb:rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "100"
+    }
+  }
+}

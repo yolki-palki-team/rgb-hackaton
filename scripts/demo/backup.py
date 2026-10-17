@@ -13,11 +13,12 @@ def main():
     locks=[]
     try:
         for profile in ("alice","bob","carol"):
-            path=STATE/profile/".instance.lock"
-            if path.exists():
-                f=path.open("a")
-                fcntl.flock(f.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
-                locks.append(f)
+            for name in (".coordinator.lock",".instance.lock"):
+                path=STATE/profile/name
+                if path.parent.exists():
+                    f=path.open("a")
+                    fcntl.flock(f.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+                    locks.append(f)
         folder=STATE/"backups"; folder.mkdir(mode=0o700,exist_ok=True)
         output=folder/f"local-rgb-{time.time_ns()}.tar.gz"
         with tarfile.open(output,"x:gz") as archive:

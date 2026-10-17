@@ -1,3 +1,200 @@
+# Protocol-v1 wallet sidecar and real settlement
+
+The authenticated loopback sidecar now implements A's complete WalletAdapter v1:
+capabilities, state, reserve/release, cooperative prepare, validate/preview,
+approval-bound sign, finalize/broadcast and sync/receipt. Its Bitcoin/RGB amounts
+and transaction checks are deterministic. Keys and full wallet state stay local.
+The web UI and a future desktop UI can use the same local backend.
+
+## Verified follow-up results
+
+After the first direct/ring proofs, the SQL allocation/transfer index was rebuilt
+from validated RGB stock and confirmed transaction inputs/outputs. SQL settled
+and spendable balances now agree with stock, and SDK transfer history loads.
+Rows are committed atomically and retries do not duplicate allocations.
+
+Two further swaps spent RGB assets received in those first swaps, through the
+real authenticated HTTP adapter. Every sidecar was restarted after all signatures
+were durably saved, before finalization/broadcast. Both then confirmed:
+
+| Scenario | Transaction | Actual BTC deltas, including fees | RGB movements |
+| --- | --- | --- | --- |
+| Direct repeat | `68cfdfaff9cf79a5a03d6dfea85e14cd876adfd2b48d5d6278be96d6957d585b` | Alice +99500; Bob −100500 | Alice → Bob 100 DUSD |
+| Ring repeat | `1266dbbb2a47cf8cf3d9f7ed2529cb0428a0476695ca07bbf9c5dd32cd4df7d8` | Alice +99667; Bob −100333; Carol −334 | Alice → Carol 100 DUSD; Carol → Bob 100 X |
+
+Each is one Bitcoin transaction paying 1000 sats. All unrelated asset deltas are
+zero; Alice's 7 KEEP remain intact. Public evidence includes expected/actual deltas:
+[direct adapter](../scripts/demo/evidence/adapter-direct.json),
+[ring adapter](../scripts/demo/evidence/adapter-ring.json).
+Original proof evidence remains historical and is not overwritten.
+
+The ordinary high-level SDK/proxy smoke also settled at Bob and Carol:
+`bb5164e7bf1608b271ee389c20aaeae81bf35d95738394f41cf8ea88940c77a0`.
+Bob spent 1 X received from the ring, Carol received 1 X plus 1000 sats, and
+Bob paid 503 sats in fees (net BTC −1503). Both SDK histories report Settled,
+the recipient records proxy transport as used, and SQL matches RGB stock.
+This is an ordinary transfer, separate from the atomic-swap proofs above.
+See [SDK smoke evidence](../scripts/demo/evidence/sdk-smoke.json).
+
+A's actual `HttpWalletAdapter`, `planDigest` and Zod schemas from merged PR #1
+were tested against B's real sidecar: capabilities, state, package, preview,
+PrepareResult and confirmed Receipt all passed. This is interface integration;
+it does not claim a new end-to-end QVAC/browser test or change A's Docker runner,
+which still selects its explicit mock mode.
+
+## Start the local sidecar
+
+Use the pinned native bootstrap/build and regtest setup below. After issuance,
+run `rtk proxy python3 scripts/demo/catalog.py` to validate/import public contract
+metadata into all three local wallets. This makes verified zero-balance assets
+available for A's order form without inventing contract IDs or balances.
+
+Start one sidecar per profile with a private random WALLET_RPC_TOKEN of at least
+32 characters in its environment. Do not put the token in Git or a URL.
+
+```sh
+rtk proxy python3 packages/wallet/server.py --profile alice --owner alice --port 4201
+rtk proxy python3 packages/wallet/server.py --profile bob --owner bob --port 4202
+rtk proxy python3 packages/wallet/server.py --profile carol --owner carol --port 4203
+```
+
+`RGB_DEMO_STATE` selects a private state directory beneath `packages/wallet/state`;
+use the same value for setup, catalog, sidecar and demo. Server binds 127.0.0.1,
+requires Bearer authentication and an exact loopback Host, rejects browser Origin,
+limits request bodies and serializes requests. A's authenticated local-client
+performs user confirmation and private-policy checks before calling this trusted
+server-to-server RPC. Do not give its Bearer token to market, the model or browser.
+
+Configure A's local-client with `WALLET_MODE=real`, matching `LOCAL_OWNER_ID`,
+`WALLET_RPC_URL=http://127.0.0.1:4201`, and the same `WALLET_RPC_TOKEN`.
+Profile/owner mapping is fixed by server startup, never supplied by a remote plan.
+
+For an existing generated SDK after updating this extension:
+
+```sh
+rtk proxy python3 scripts/demo/bootstrap-native.py --refresh
+rtk proxy cargo build --locked --manifest-path packages/wallet/native/Cargo.toml
+```
+
+Refresh verifies the pinned source and recorded old extension before replacing
+anything; unrecorded SDK edits cause a refusal. Rust 1.94 and Python 3.12+ are the
+supported toolchain for these scripts (restore uses safe tar extraction).
+
+## Protocol codec and flow
+
+`POST /rpc` uses A's exact v1 envelope and method arguments. Format is
+`rgb-cooperative-v1`. Call reserve once, then prepare as authenticated participant
+materials arrive. There are three material rounds:
+
+1. `funding`: selected public inputs/full prevouts, selected RGB allocations and
+   fresh receiving/change addresses. Full wallet balances and keys are excluded.
+2. `colored`: local transition contribution bound to the common skeleton txid.
+   All RGB allocations on selected inputs are conserved, including unrelated ones.
+3. `proofs`: per-recipient consignments bound to the one final RGB commitment.
+
+Each participant emits its own material before advancing. Prepare returns pending
+until every round is complete, then ready plus the same SettlementPackage at every
+wallet. Market only transports opaque materials. Its existing 256 KiB message
+limit is sufficient for the tested NIA fixtures; larger histories may require a
+separately agreed transport change and are not silently truncated.
+
+The final payload includes funding, colored contributions, proofs and committed
+PSBT/fascia. Validation independently rebuilds the skeleton and commitment,
+checks received RGB amounts/scripts and own input/transition conservation, and
+invokes native signer preflight. `unsignedTxDigest` hashes actual unsigned Bitcoin
+transaction bytes. `commitmentDigest` binds commitment scripts and every proof hash.
+Approval also binds wallet/owner/network/trade/revision/plan/package identifiers.
+Changing any of those or the final package fails before signing.
+
+One active plan per local profile; outpoints are reserved transactionally before
+contribution creation. Final approval records are immutable. Native records are
+isolated under `profile/trades/SHA256(tradeId)` so later trades do not overwrite
+prior signatures. SIGNING is durable before crypto; the signature and parent
+folder are fsynced before return. Repeated sign with the same authorized binding
+returns the saved signature. After signature, release and prepare are refused.
+Finalize saves the completed transaction, queries by txid before sending, and
+keeps inputs pinned on uncertain RPC results. It does not mine. Sync separately
+reports chain confirmation and RGB acceptance; CONFIRMED requires both.
+
+The legacy `adapter.mjs` remains explicitly read-only for compatibility; use the
+HTTP sidecar for the implemented lifecycle. Its old low-level capability flags
+must not be confused with `server.py`'s protocol-v1 capabilities.
+
+## Repeatable adapter integration
+
+For a fresh funded/catalogued directory, omit `--reverse`. Existing confirmed
+fixtures used `--reverse` to spend previously received assets, with new explicit
+user approval at the time. Never reuse an old approval binding for a different package.
+
+```sh
+rtk proxy python3 scripts/demo/adapter-demo.py prepare --scenario ring --trade-id unique-ring-id
+rtk proxy python3 scripts/demo/adapter-demo.py execute --trade-id unique-ring-id --approve REVIEW_DIGEST
+```
+
+Use `--scenario direct` with independent fixture state. Preparation does not sign;
+execute requires the exact reviewed digest and then starts real HTTP sidecars,
+signs locally, restarts them, broadcasts, mines and verifies all expected balances.
+
+Development transfers on regtest/testnet/signet/signetcustom now have standing
+user authorization under AGENTS.md; the agent need not ask on every test.
+Mainnet signing still requires explicit approval. This policy does not expand
+the implementation beyond regtest or remove A's product approval UI. The CLI
+`--approve` digest and RPC approval fields continue to bind the exact transaction.
+
+The ordinary SDK smoke uses Bob's X and Carol's witness invoice:
+
+```sh
+rtk proxy python3 scripts/demo/sdk-smoke.py prepare
+rtk proxy python3 scripts/demo/sdk-smoke.py execute --approve REVIEW_DIGEST
+```
+
+This fixture is memoized; preserve its private review/signature files. Execution
+resumes the same transaction and verifies original deltas, so run it before any
+later transactions change these wallets. Use independent state for a fresh smoke.
+
+## Verification and remaining scope
+
+- 14 Python tests: durable journal/plan binding, amount/plan checks and HTTP
+  authentication, Host and Origin rejection; 3 legacy bridge tests.
+- 12 real HTTP rejection cases with unchanged saved signatures, plus the original
+  17 real native negative cases. See [adapter negatives](../scripts/demo/evidence/adapter-negative.json).
+- Actual A HttpWalletAdapter/schema check: `scripts/demo/check-a-boundary.ts`.
+- SQL/stock agreement, SDK history, repeat spending and restart after signatures
+  verified on real wallets. Backup now also locks the coordinator across native
+  and Python state. A private backup restored all three wallets to a separate
+  ignored directory, with matching BTC/RGB balances and SQL/stock indexes:
+  [restore evidence](../scripts/demo/evidence/restore.json). This was tested
+  against the existing chain and does not claim chain disaster recovery.
+
+Support remains intentionally bounded to regtest, NIA precision 0, SegWit v0,
+direct/two-party and three-party cycles, one outgoing and one incoming leg per
+participant, and distinct contributing contracts. Same-contract multi-sender
+inputs are rejected. Estimated fees use a deterministic 1000-sat split within
+each participant's cap; final plans use their explicit fee split. General fee
+bumping, reorg recovery and mainnet are outside this MVP.
+
+Public contract import validates genesis/schema/network; it does not create an
+owned allocation. Pending ordinary SDK transfers can make inputs unavailable.
+The sidecar is a trusted local boundary, not protection from another process
+running as the same OS user. Test blinding/entropy remain deterministic. Backups
+contain secrets and full RGB state, are unencrypted, local-only and ignored.
+Docker volumes are still anonymous; preserve the running chain and volumes.
+
+A's user policy/publication/approval workflow remains authoritative for local
+private limits; the wallet independently validates the resulting exact plan and
+transaction. A must preserve/replay an approval binding and relay cached signatures
+when recovering a client crash between wallet signature persistence and market
+receipt. The tested restart case covers sidecar restart after signature delivery;
+a real ambiguous-network fault and full-machine disaster recovery are not claimed.
+
+---
+
+# Historical feasibility milestone — PR #2
+
+The following report describes the earlier CLI milestone. Its statements that
+SQL indexing and the full adapter were unavailable are superseded by the current
+status above; its original transaction evidence and stack pin remain valid.
+
 # Real regtest settlement report
 
 Verified on 2026-10-17 after explicit user approval of both package digests.

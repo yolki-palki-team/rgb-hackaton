@@ -1,0 +1,58 @@
+{
+  "actualDeltas": {
+    "alice": {
+      "regtest:btc:btc": "99500",
+      "regtest:rgb:rgb:NHnvnRRz-LcLeVz9-D6ltYhw-H8SH9RE-rtVZC3J-F7Cf5ng": "0",
+      "regtest:rgb:rgb:Sl6gjbUt-T8Mftg_-dtUJv7k-L78xA~z-hoF8s6M-5A~E_vM": "-100",
+      "regtest:rgb:rgb:omOtoeBs-yF5A5Ib-0KFMUKZ-mMz9OBB-nZTvnKX-zG6WPYY": "0"
+    },
+    "bob": {
+      "regtest:btc:btc": "-100500",
+      "regtest:rgb:rgb:NHnvnRRz-LcLeVz9-D6ltYhw-H8SH9RE-rtVZC3J-F7Cf5ng": "0",
+      "regtest:rgb:rgb:Sl6gjbUt-T8Mftg_-dtUJv7k-L78xA~z-hoF8s6M-5A~E_vM": "100",
+      "regtest:rgb:rgb:omOtoeBs-yF5A5Ib-0KFMUKZ-mMz9OBB-nZTvnKX-zG6WPYY": "0"
+    }
+  },
+  "approvalDigest": "e221bc622552b70c4f22df425f4108fec0175ccdd2a1cdf51e557e607ff1cac0",
+  "network": "regtest",
+  "receipts": {
+    "alice": {
+      "chainConfirmed": true,
+      "mode": "real",
+      "network": "regtest",
+      "rgbAccepted": true,
+      "state": "confirmed",
+      "tradeId": "adapter-direct-repeat-v1",
+      "txid": "68cfdfaff9cf79a5a03d6dfea85e14cd876adfd2b48d5d6278be96d6957d585b"
+    },
+    "bob": {
+      "chainConfirmed": true,
+      "mode": "real",
+      "network": "regtest",
+      "rgbAccepted": true,
+      "state": "confirmed",
+      "tradeId": "adapter-direct-repeat-v1",
+      "txid": "68cfdfaff9cf79a5a03d6dfea85e14cd876adfd2b48d5d6278be96d6957d585b"
+    }
+  },
+  "restartAfterSignature": true,
+  "scenario": "direct",
+  "sdkAllocationIndexSynchronized": true,
+  "tradeId": "adapter-direct-repeat-v1",
+  "transport": "authenticated-loopback-http-v1",
+  "txid": "68cfdfaff9cf79a5a03d6dfea85e14cd876adfd2b48d5d6278be96d6957d585b",
+  "expectedDeltas": {
+    "alice": {
+      "regtest:btc:btc": "99500",
+      "regtest:rgb:rgb:omOtoeBs-yF5A5Ib-0KFMUKZ-mMz9OBB-nZTvnKX-zG6WPYY": "0",
+      "regtest:rgb:rgb:NHnvnRRz-LcLeVz9-D6ltYhw-H8SH9RE-rtVZC3J-F7Cf5ng": "0",
+      "regtest:rgb:rgb:Sl6gjbUt-T8Mftg_-dtUJv7k-L78xA~z-hoF8s6M-5A~E_vM": "-100"
+    },
+    "bob": {
+      "regtest:btc:btc": "-100500",
+      "regtest:rgb:rgb:Sl6gjbUt-T8Mftg_-dtUJv7k-L78xA~z-hoF8s6M-5A~E_vM": "100",
+      "regtest:rgb:rgb:omOtoeBs-yF5A5Ib-0KFMUKZ-mMz9OBB-nZTvnKX-zG6WPYY": "0",
+      "regtest:rgb:rgb:NHnvnRRz-LcLeVz9-D6ltYhw-H8SH9RE-rtVZC3J-F7Cf5ng": "0"
+    }
+  }
+}
