@@ -64,4 +64,23 @@ class JournalTests(unittest.TestCase):
         self.j.db.execute("UPDATE trades SET intent=?",(json.dumps({**self.intent,"fee":"999"}),))
         with self.assertRaises(ValueError): self.j.begin_signing("t",self.h,True)
 
+    def test_plan_reservation_only_one_active_and_immutable_binding(self):
+        self.j.release("t")
+        plan={"network":"regtest","tradeId":"next","digest":"unit-fixture"}
+        self.j.reserve_plan("next",plan,["next:0"])
+        with self.assertRaises(ValueError): self.j.reserve_plan("other",plan,["other:0"])
+        with self.assertRaises(ValueError): self.j.reserve_plan("next",plan,["changed:0"])
+        h=self.j.bind_approval("next",plan,self.intent)
+        self.assertEqual(h,self.j.bind_approval("next",plan,self.intent))
+        with self.assertRaises(ValueError):self.j.bind_approval("next",plan,{**self.intent,"fee":"999"})
+        self.j.begin_signing("next",h,True)
+        with self.assertRaises(ValueError):self.j.release("next")
+
+    def test_preparing_can_cancel_but_not_reopen(self):
+        self.j.release("t")
+        plan={"network":"regtest"}
+        self.j.reserve_plan("next",plan,["next:0"])
+        self.j.release("next")
+        with self.assertRaises(ValueError):self.j.reserve_plan("next",plan,["next:0"])
+
 if __name__ == "__main__": unittest.main()

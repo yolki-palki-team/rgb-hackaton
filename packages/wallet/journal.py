@@ -74,6 +74,35 @@ class Journal:
             return None
         return self.transaction(op)
 
+    def reserve_plan(self, trade_id, plan, outpoints):
+        """Pin inputs before contributions exist; one active plan per local profile."""
+        h = digest(plan)
+        if not outpoints or len(set(outpoints)) != len(outpoints):
+            raise ValueError("invalid inputs")
+        def op():
+            row = self.db.execute("SELECT digest,state FROM trades WHERE id=?", (trade_id,)).fetchone()
+            if row:
+                if row != (h, "PREPARING"):
+                    raise ValueError("plan already bound or closed")
+                actual = {r[0] for r in self.db.execute("SELECT outpoint FROM reservations WHERE trade_id=?", (trade_id,))}
+                if actual != set(outpoints): raise ValueError("changed reserved inputs")
+                return
+            if self.db.execute("SELECT 1 FROM trades WHERE state NOT IN ('CONFIRMED','CANCELLED') LIMIT 1").fetchone():
+                raise ValueError("another active local trade")
+            self.db.execute("INSERT INTO trades(id,digest,intent,state) VALUES(?,?,?,'PREPARING')", (trade_id,h,canonical(plan)))
+            for point in outpoints: self.db.execute("INSERT INTO reservations VALUES(?,?)", (point,trade_id))
+        self.transaction(op)
+
+    def bind_approval(self, trade_id, plan, intent):
+        h = digest(intent)
+        def op():
+            row = self.db.execute("SELECT digest,state FROM trades WHERE id=?", (trade_id,)).fetchone()
+            if row == (h,"AWAITING_APPROVAL"): return h
+            if row != (digest(plan),"PREPARING"): raise ValueError("cannot replace immutable approval")
+            self.db.execute("UPDATE trades SET digest=?,intent=?,state='AWAITING_APPROVAL' WHERE id=?", (h,canonical(intent),trade_id))
+            return h
+        return self.transaction(op)
+
     def record_signature(self, trade_id, signed_psbt):
         def op():
             row = self.db.execute("SELECT state,signature FROM trades WHERE id=?",(trade_id,)).fetchone()
@@ -87,7 +116,7 @@ class Journal:
     def release(self, trade_id):
         def op():
             row = self.db.execute("SELECT state FROM trades WHERE id=?",(trade_id,)).fetchone()
-            if not row or row[0] != "AWAITING_APPROVAL":
+            if not row or row[0] not in ("PREPARING", "AWAITING_APPROVAL"):
                 raise ValueError("signature may exist: TTL cannot release these inputs")
             self.db.execute("DELETE FROM reservations WHERE trade_id=?",(trade_id,))
             self.db.execute("UPDATE trades SET state='CANCELLED' WHERE id=?",(trade_id,))

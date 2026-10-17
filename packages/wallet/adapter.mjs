@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const base = fileURLToPath(new URL('.', import.meta.url));
 export class UnsupportedSettlementError extends Error {
   constructor(operation) {
-    super(`${operation}: confirmed cooperative settlement is not enabled; see docs/settlement.md`);
+    super(`${operation}: this legacy bridge is read-only; use protocol-v1 HTTP sidecar described in docs/settlement.md`);
     this.code = 'UNVERIFIED_SETTLEMENT_CAPABILITY';
   }
 }
