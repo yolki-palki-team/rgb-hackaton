@@ -1049,7 +1049,7 @@ function App() {
                       </StatusBadge>
                     </div>
                     <div className="flow-caption">TRADE PARTICIPANTS</div>
-                    <div className={`trade-flow ${shownTrade.kind}`}>
+                    <div className="trade-flow" data-trade-kind={shownTrade.kind}>
                       {shownTrade.participants.map((participant, index) => (
                         <div
                           className={`participant-card ${participant.mine ? 'mine' : ''}`}
