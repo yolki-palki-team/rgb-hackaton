@@ -372,8 +372,9 @@ independently on three unrelated chains does not make them interoperable.
 
 The current backend intentionally targets regtest. Rust uses local electrs
 `127.0.0.1:50001` and proxy `127.0.0.1:3000`; Python calls Bitcoin RPC through
-`docker compose exec … bitcoin-cli`. Multi-host RPC transport and separate
-onboarding/funding for one profile are not implemented yet. `catalog.py` also
+`docker compose exec … bitcoin-cli`. Independent desktop wallet initialization
+and sidecar startup are available through [DESKTOP.md](../deploy/DESKTOP.md), but
+multi-host RPC transport and standalone funding remain separate work. `catalog.py` also
 expects three local profiles. The scenario below is therefore an acceptance target
 for the next stage, not a verified command to deploy everything on three computers.
 

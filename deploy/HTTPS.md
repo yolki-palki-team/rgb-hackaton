@@ -140,6 +140,9 @@ If using a packaged `.app`, rebuild it after updating the source. Local sidecar
 configuration, Bitcoin/RGB infrastructure, and funding remain separate steps;
 HTTPS provides direct access to market.
 
+For a new independent real regtest wallet and its local sidecar, follow
+[DESKTOP.md](DESKTOP.md). Market registration alone does not configure that sidecar.
+
 ## Checks and limitations
 
 The configuration is checked with `caddy validate`, Compose config, and shell
