@@ -17,6 +17,7 @@ FROM dependencies AS source
 COPY tsconfig.json ./
 COPY apps/ ./apps/
 COPY packages/contracts/ ./packages/contracts/
+COPY packages/ui/ ./packages/ui/
 
 FROM source AS ui-build
 RUN npm run build

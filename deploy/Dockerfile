@@ -8,6 +8,7 @@ FROM base AS public-build
 RUN npm ci --no-audit --no-fund && npm cache clean --force
 COPY tsconfig.json ./
 COPY packages/contracts/ ./packages/contracts/
+COPY packages/ui/ ./packages/ui/
 COPY apps/web/ ./apps/web/
 RUN npm exec vite -- build --config apps/web/vite.config.ts
 

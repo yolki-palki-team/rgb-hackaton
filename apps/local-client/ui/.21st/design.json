@@ -32,12 +32,23 @@
       "implementation": "Adapted with existing wallet-kit primitives; registry CLI requires sign-in."
     },
     {
-      "decision": "Show the order book and exact wallet balances in aligned Overview columns, stacking on mobile. Remove the wallet Market tab. Use a short accent on the first a in pálka. navbars and pálka without a dot in footers.",
+      "decision": "Show the order book and exact wallet balances in aligned Overview columns, stacking on mobile. Remove the wallet Market tab. Use a short accent on the first a in p\u00e1lka. navbars and p\u00e1lka without a dot in footers.",
       "source": "User correction, 2026-10-17"
     },
     {
       "decision": "Cycle English swap examples with a type-and-erase placeholder. Keep user input untouched, stop while it is nonempty, and show static text for reduced motion.",
       "source": "User request, 2026-10-17"
+    },
+    {
+      "decision": "Use restrained dark liquid-glass surfaces and softly colored glass asset icons. Reuse exact wallet names, units and balances in both Overview and keyboard-accessible Give/Receive selectors. Preserve atomic-unit inputs and local policy checks.",
+      "source": "User request, 2026-10-17",
+      "implementation": "Adapted existing wallet-kit primitives; 21st catalog search requires sign-in."
+    },
+    {
+      "decision": "Adapt Apple iPhone patterns in the shared wallet UI: grouped asset rows, rounded glass menus, native checked-state switches, a mobile review sheet, and system typography for wallet assets and review. Use subtle monochrome Matrix rain across wallet and public pages; respect reduced motion and transparency.",
+      "source": "User request, 2026-10-17",
+      "reference": "https://developer.apple.com/design/resources/",
+      "implementation": "React and CSS adaptation using existing components; no native UIKit dependency or bundled Apple fonts."
     }
   ]
 }

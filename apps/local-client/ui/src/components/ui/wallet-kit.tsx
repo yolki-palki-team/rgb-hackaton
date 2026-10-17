@@ -33,16 +33,24 @@ export function StatusBadge({ className, ...props }: HTMLAttributes<HTMLSpanElem
 export function AssetRow({ balance }: { balance: Balance }) {
   return (
     <li className="asset-row" data-asset={balance.code}>
+      <AssetDetails balance={balance} />
+    </li>
+  );
+}
+
+export function AssetDetails({ balance }: { balance: Balance }) {
+  return (
+    <>
       <AssetIcon code={balance.code} size="large" />
-      <div className="asset-name">
+      <span className="asset-name">
         <strong>{balance.label}</strong>
         <span>{balance.code}</span>
-      </div>
-      <div className="asset-amount">
+      </span>
+      <span className="asset-amount">
         <span>{balance.amount}</span>
         <small>{balance.unit}</small>
-      </div>
-    </li>
+      </span>
+    </>
   );
 }
 
@@ -136,6 +144,7 @@ export function AssetIcon({
   return (
     <span
       className={`asset-icon ${assetClass} ${size === 'large' ? 'large' : ''}`}
+      data-asset={code}
       aria-hidden="true"
     >
       {code === 'BTC' ? '₿' : code.slice(0, 1).toUpperCase()}

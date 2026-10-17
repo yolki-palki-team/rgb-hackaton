@@ -3,6 +3,7 @@ import { assetKey, type PublicOrder } from '@rgb-exchange/contracts';
 import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
+import { MatrixRain } from '@/components/ui/matrix-rain';
 import { getPublicHealth, getPublicOrders } from './api';
 import { assetIdentity, desktopOfferUrl, formatAsset, shortId, type MarketState } from './model';
 
@@ -34,6 +35,21 @@ function StatusPill({ live }: { live: boolean | null }) {
       <span className="status-dot" />
       {live === null ? 'Checking connection' : live ? 'Market online' : 'Market offline'}
     </span>
+  );
+}
+
+function SiteRain() {
+  return (
+    <MatrixRain
+      className="site-rain"
+      background="#080808"
+      color="#b5b5b5"
+      highlight="#eeeeee"
+      density={0.55}
+      fontSize={18}
+      glow={1}
+      speed={0.65}
+    />
   );
 }
 
@@ -242,6 +258,7 @@ function Market() {
 
   return (
     <div className="public-site market-page">
+      <SiteRain />
       <SiteHeader active="market" />
       <main>
         <section className="market-hero">

@@ -17,6 +17,8 @@
 !packages/
 !packages/contracts/
 !packages/contracts/**
+!packages/ui/
+!packages/ui/**
 !docker/
 !docker/**
 !deploy/

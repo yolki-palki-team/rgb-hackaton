@@ -5,18 +5,19 @@ import {
   Icon,
   Input,
   Panel,
-  Select,
+  AssetIcon,
   StatusBadge,
 } from './components/ui/wallet-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FundingPanel } from './FundingPanel';
+import { AssetSelect } from './components/ui/asset-select';
+import { MatrixRain } from './components/ui/matrix-rain';
 import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './model';
-import type { AssetCode, Balance, Draft, Order, Trade, View } from './model';
+import type { Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
 import { TradeWorkflow, tradeProgress } from './workflow';
 import type { PrivatePolicy } from '@rgb-exchange/contracts';
 
-const sampleAssetCodes: AssetCode[] = ['BTC', 'X', 'DUSD'];
 const goalExamples = [
   'Can I swap 10 X for at least 5 DUSD?',
   'What can I get for 0.0001 BTC?',
@@ -64,11 +65,40 @@ function App() {
   const ready = connected && !syncError && balances.length > 0;
   const visibleBalances = connected ? balances : samplePreview ? sampleBalances : [];
   const visibleOrders = connected ? orders : samplePreview ? sampleOrders : [];
-  const assetCodes = connected
-    ? balances.map((balance) => balance.code)
-    : samplePreview
-      ? sampleAssetCodes
-      : [];
+
+  useEffect(() => {
+    if (!draftOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = document.querySelector<HTMLElement>('[aria-labelledby="draft-title"]');
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialog?.querySelector<HTMLButtonElement>('button')?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === 'Escape') setDraftOpen(false);
+      if (event.key !== 'Tab' || !dialog) return;
+      const controls = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), [tabindex="0"]',
+        ),
+      );
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [draftOpen]);
 
   useEffect(() => {
     if (!notice || notice.tone === 'error') return;
@@ -342,6 +372,16 @@ function App() {
 
   return (
     <div className="app-shell">
+      <MatrixRain
+        className="wallet-rain"
+        background="#080808"
+        color="#b5b5b5"
+        highlight="#eeeeee"
+        density={0.55}
+        fontSize={18}
+        glow={1}
+        speed={0.65}
+      />
       <div className="main-area">
         <header className="topbar">
           <button className="site-brand" onClick={() => setView('home')} aria-label="pálka. home">
@@ -1018,7 +1058,7 @@ function App() {
 
       {draftOpen && (
         <div
-          className="modal-backdrop"
+          className="modal-backdrop draft-backdrop"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setDraftOpen(false);
           }}
@@ -1029,6 +1069,7 @@ function App() {
             aria-modal="true"
             aria-labelledby="draft-title"
           >
+            <div className="sheet-handle" aria-hidden="true" />
             <div className="modal-head">
               <div className="modal-icon">
                 <Icon name="arrows" size={21} />
@@ -1043,53 +1084,39 @@ function App() {
               One asset for another, at fixed amounts. Publishing permits matching, not spending.
             </p>
             <div className="draft-grid">
-              <div>
-                <label className="field-label" htmlFor="give-asset">
-                  Give
-                </label>
-                <Select
-                  id="give-asset"
-                  value={draft.giveAsset}
-                  onChange={(event) => updateDraft({ giveAsset: event.target.value as AssetCode })}
-                >
-                  {assetCodes.map((code) => (
-                    <option key={code}>{code}</option>
-                  ))}
-                </Select>
-              </div>
+              <AssetSelect
+                id="give-asset"
+                label="Give"
+                value={draft.giveAsset}
+                balances={visibleBalances}
+                onChange={(giveAsset) => updateDraft({ giveAsset })}
+              />
               <div>
                 <label className="field-label" htmlFor="give-amount">
                   Amount {draft.giveAsset === 'BTC' ? 'in sats' : 'in atomic units'}
                 </label>
                 <Input
                   id="give-amount"
+                  className="draft-amount-input"
                   value={draft.giveAmount}
                   onChange={(event) => updateDraft({ giveAmount: event.target.value })}
                   inputMode="numeric"
                 />
               </div>
-              <div>
-                <label className="field-label" htmlFor="receive-asset">
-                  Receive
-                </label>
-                <Select
-                  id="receive-asset"
-                  value={draft.receiveAsset}
-                  onChange={(event) =>
-                    updateDraft({ receiveAsset: event.target.value as AssetCode })
-                  }
-                >
-                  {assetCodes.map((code) => (
-                    <option key={code}>{code}</option>
-                  ))}
-                </Select>
-              </div>
+              <AssetSelect
+                id="receive-asset"
+                label="Receive"
+                value={draft.receiveAsset}
+                balances={visibleBalances}
+                onChange={(receiveAsset) => updateDraft({ receiveAsset })}
+              />
               <div>
                 <label className="field-label" htmlFor="receive-amount">
                   At least {draft.receiveAsset === 'BTC' ? 'sats' : 'atomic units'}
                 </label>
                 <Input
                   id="receive-amount"
+                  className="draft-amount-input"
                   value={draft.minReceiveAmount}
                   onChange={(event) => updateDraft({ minReceiveAmount: event.target.value })}
                   inputMode="numeric"
@@ -1140,6 +1167,7 @@ function App() {
                   <label className="policy-toggle">
                     <Input
                       type="checkbox"
+                      role="switch"
                       checked={policy.allowBtcSale}
                       onChange={(event) => updatePolicy({ allowBtcSale: event.target.checked })}
                     />
@@ -1150,7 +1178,10 @@ function App() {
                   <span className="field-label">Protected balance after swap, base units</span>
                   {policyAssets.map((asset) => (
                     <label key={asset.key}>
-                      <span>{asset.label}</span>
+                      <span className="policy-asset">
+                        <AssetIcon code={asset.label} />
+                        {asset.label}
+                      </span>
                       <Input
                         value={policy.protectedBalances[asset.key] ?? '0'}
                         onChange={(event) =>

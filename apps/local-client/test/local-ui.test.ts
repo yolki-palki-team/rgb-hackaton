@@ -7,12 +7,45 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MockWalletAdapter } from '../src/wallet.ts';
 import App from '../ui/src/App.tsx';
+import { AssetSelect } from '../ui/src/components/ui/asset-select.tsx';
 import {
   ChatInput,
   ChatInputSubmit,
   ChatInputTextArea,
 } from '../ui/src/components/ui/chat-input.tsx';
 import { LocalClient, formatAsset, mapBalance, type DesktopBridge } from '../ui/src/api.ts';
+
+test('asset selector preserves exact balance strings, asset identity, and unavailable state', () => {
+  const balances = [{ code: 'KEEP', label: 'RGB KEEP', amount: '9007199254740993', unit: 'KP' }];
+  const html = renderToStaticMarkup(
+    createElement(AssetSelect, {
+      id: 'give-asset',
+      label: 'Give',
+      value: 'KEEP',
+      balances,
+      onChange: () => {
+        throw new Error('Rendering must not select or submit');
+      },
+    }),
+  );
+  assert.match(html, /data-asset="KEEP"/);
+  assert.match(html, /RGB KEEP/);
+  assert.match(html, /9007199254740993/);
+  assert.match(html, /<small>KP<\/small>/);
+  assert.match(html, /aria-expanded="false"/);
+  const missing = renderToStaticMarkup(
+    createElement(AssetSelect, {
+      id: 'give-asset',
+      label: 'Give',
+      value: 'KEEP',
+      balances: [],
+      onChange: () => {},
+    }),
+  );
+  assert.match(missing, /disabled/);
+  assert.match(missing, /Unavailable/);
+  assert.doesNotMatch(missing, /9007199254740993|<small>/);
+});
 
 test('chat composer blocks empty, disconnected, and loading submissions', () => {
   for (const state of [
