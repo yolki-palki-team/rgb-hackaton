@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -101,10 +102,10 @@ test('local preview rejects a changed RGB contract and fee above user limit', as
   try {
     const { service, wallet } = await fixture(store);
     wallet.previewAsset = wrongDusd;
-    await assert.rejects(service.preview('trade-1'), /изменяет суммы\/активы/);
+    await assert.rejects(service.preview('trade-1'), /changes plan amounts or assets/);
     wallet.previewAsset = dusd;
     wallet.feeSats = '1001';
-    await assert.rejects(service.preview('trade-1'), /комиссия превышает заявку/);
+    await assert.rejects(service.preview('trade-1'), /Final fee exceeds the order limit/);
     assert.equal(wallet.signCount, 0);
   } finally { store.close(); }
 });
@@ -115,7 +116,7 @@ test('stale preview requires new approval before signing', async () => {
     const { service, wallet } = await fixture(store);
     const { approvalToken } = await service.preview('trade-1');
     wallet.stateValue.balances[0].amount = '999999';
-    await assert.rejects(service.approve('trade-1', { approvalToken, confirmed: true }), /Условия изменились/);
+    await assert.rejects(service.approve('trade-1', { approvalToken, confirmed: true }), /Terms changed/);
     assert.equal(wallet.signCount, 0);
   } finally { store.close(); }
 });
@@ -130,7 +131,7 @@ test('local client rejects a trade for another owner even if market returns it',
       fees: [{ ownerId: 'b', feeSats: '1000' }, { ownerId: 'c', feeSats: '1000' }],
     };
     market.trade = { plan: { ...otherBase, digest: planDigest(otherBase) }, status: 'RESERVED', messages: [] };
-    await assert.rejects(service.trade('trade-1'), /Неверный участник/);
+    await assert.rejects(service.trade('trade-1'), /Invalid participant/);
   } finally { store.close(); }
 });
 
@@ -149,7 +150,7 @@ test('uncertain signature relay persists across restart and keeps market reserva
     store.close();
     second = new LocalStore(path);
     const restarted = new LocalService('a', wallet, market as unknown as MarketClient, second, qvac);
-    await assert.rejects(restarted.prepare('trade-1'), /После подписи требуется сверка/);
+    await assert.rejects(restarted.prepare('trade-1'), /Reconciliation is required after signing/);
     const result = await restarted.reject('trade-1', 'Relay uncertain');
     assert.equal(result.status, 'reconciling');
     assert.equal((market.messages.at(-1) as {payload:{signatureMayExist?:boolean}}).payload.signatureMayExist, true);
@@ -208,22 +209,95 @@ test('server confirmation cannot substitute for local wallet sync and repeated s
   }finally{store.close();}
 });
 
-test('local HTTP requires paired Origin and bearer before showing wallet state', async () => {
+test('local HTTP accepts only its own origin and requires a bearer for wallet state', async () => {
   const store = new LocalStore(':memory:');
   const { service } = await fixture(store);
-  const server = createLocalServer(service, { token: 'a'.repeat(40), allowedOrigins: ['http://127.0.0.1:5173'] });
+  const origins:string[]=[];
+  const server = createLocalServer(service, { token: 'a'.repeat(40), allowedOrigins: origins });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
-  const url = `http://127.0.0.1:${address.port}/api/state`;
+  const self = `http://127.0.0.1:${address.port}`;
+  origins.push(self);
+  const url = `${self}/api/state`;
+  const authorization = `Bearer ${'a'.repeat(40)}`;
+  const withHost = (host:string) => new Promise<number>((resolve,reject)=>{
+    const request=httpRequest(url,{headers:{Host:host,Authorization:authorization}},response=>{response.resume();resolve(response.statusCode ?? 0);});
+    request.on('error',reject);
+    request.end();
+  });
   try {
-    assert.equal((await fetch(url, { headers: { Authorization: `Bearer ${'a'.repeat(40)}` } })).status, 403);
-    assert.equal((await fetch(url, { headers: { Origin: 'http://evil.example', Authorization: `Bearer ${'a'.repeat(40)}` } })).status, 403);
-    assert.equal((await fetch(url, { headers: { Origin: 'http://127.0.0.1:5173', Authorization: 'Bearer invalid' } })).status, 401);
-    const allowed = await fetch(url, { headers: { Origin: 'http://127.0.0.1:5173', Authorization: `Bearer ${'a'.repeat(40)}` } });
+    assert.equal((await fetch(url)).status, 401);
+    assert.equal((await fetch(url, { headers: { Origin: 'http://evil.example', Authorization: authorization } })).status, 403);
+    assert.equal((await fetch(url, { headers: { Origin: 'http://127.0.0.1:5173', Authorization: authorization } })).status, 403);
+    assert.equal((await fetch(url, { headers: { Origin: self, Authorization: 'Bearer invalid' } })).status, 401);
+    assert.equal((await fetch(url, { headers: { Origin: self, Authorization: authorization, 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+    assert.equal((await fetch(url, { headers: { Authorization: authorization, 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+    assert.equal(await withHost('evil.example'), 403);
+    assert.equal(await withHost('127.0.0.1:5173'), 403);
+    assert.equal((await fetch(url, { headers: { Authorization: authorization } })).status, 200);
+    assert.equal((await fetch(url, { headers: { Authorization: authorization, 'Sec-Fetch-Site': 'same-origin' } })).status, 200);
+    const allowed = await fetch(url, { headers: { Origin: self, Authorization: authorization } });
     assert.equal(allowed.status, 200);
     assert.equal((await allowed.json() as { ownerId: string }).ownerId, 'a');
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.close();
+  }
+});
+
+test('local UI serves only built files and never falls back to private files or API paths', async () => {
+  const store = new LocalStore(':memory:');
+  const { service } = await fixture(store);
+  const directory = mkdtempSync(join(tmpdir(), 'rgb-local-ui-'));
+  mkdirSync(join(directory, 'assets'));
+  writeFileSync(join(directory, 'index.html'), '<!doctype html><script src="/assets/app.js"></script>');
+  writeFileSync(join(directory, 'assets', 'app.js'), 'window.app = true;');
+  writeFileSync(join(directory, '.env'), 'SECRET_SHOULD_NOT_LEAK');
+  symlinkSync(join(directory, '.env'), join(directory, 'assets', 'secrets.js'));
+  const server = createLocalServer(service, { token: 'a'.repeat(40), uiDirectory: directory });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const url = `http://127.0.0.1:${address.port}`;
+  try {
+    const index = await fetch(url);
+    assert.equal(index.status, 200);
+    assert.match(index.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+    assert.equal(index.headers.get('referrer-policy'), 'no-referrer');
+    assert.match(await index.text(), /assets\/app.js/);
+    const asset = await fetch(`${url}/assets/app.js`);
+    assert.equal(asset.status, 200);
+    assert.equal(await asset.text(), 'window.app = true;');
+    for (const path of ['/.env', '/assets/secrets.js', '/assets/%2e%2e/.env', '/api/no-such-route']) {
+      const response = await fetch(`${url}${path}`);
+      assert.notEqual(response.status, 200, path);
+      assert.doesNotMatch(await response.text(), /SECRET_SHOULD_NOT_LEAK|window\.app/);
+    }
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('missing local UI returns build guidance while private API stays available', async () => {
+  const store = new LocalStore(':memory:');
+  const { service } = await fixture(store);
+  const directory = join(tmpdir(), `rgb-missing-ui-${randomUUID()}`);
+  const server = createLocalServer(service, { token: 'a'.repeat(40), uiDirectory: directory });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const url = `http://127.0.0.1:${address.port}`;
+  try {
+    const index = await fetch(url);
+    assert.equal(index.status, 503);
+    assert.match(await index.text(), /Local UI is not built/);
+    assert.equal((await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${'a'.repeat(40)}` } })).status, 200);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     store.close();

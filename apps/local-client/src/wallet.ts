@@ -7,6 +7,19 @@ export function requireLoopback(value: string): URL {
   if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.username || url.password || url.search || url.hash) throw new Error('Wallet RPC must use a loopback HTTP URL');
   return url;
 }
+export const REAL_WALLET_UNAVAILABLE = 'Real wallet unavailable: configure WALLET_RPC_URL and WALLET_RPC_TOKEN.';
+const unavailable = async (): Promise<never> => { throw new Error(REAL_WALLET_UNAVAILABLE); };
+export class UnavailableWalletAdapter implements WalletAdapter {
+  capabilities = unavailable;
+  state = unavailable;
+  reserve = unavailable;
+  release = unavailable;
+  prepare = unavailable;
+  validate = unavailable;
+  sign = unavailable;
+  finalize = unavailable;
+  sync = unavailable;
+}
 export class HttpWalletAdapter implements WalletAdapter {
   private readonly url: URL;
   constructor(url: string, private readonly token: string) {
@@ -17,7 +30,7 @@ export class HttpWalletAdapter implements WalletAdapter {
     const response = await fetch(new URL('/rpc', this.url), {method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${this.token}`}, body:JSON.stringify({protocolVersion:1, requestId:randomUUID(), method, params}), signal:AbortSignal.timeout(60_000), redirect:'error'});
     if (!response.ok) throw new Error(`Wallet RPC ${method}: HTTP ${response.status}; settlement not assumed`);
     const envelope = z.object({protocolVersion:z.literal(1),result:z.unknown().optional(),error:z.object({code:z.string().regex(/^[A-Z0-9_]{1,80}$/),message:z.string()}).optional()}).strict().parse(await response.json());
-    if (envelope.error) throw new Error(`Wallet adapter отказал: ${envelope.error.code}`);
+    if (envelope.error) throw new Error(`Wallet adapter rejected the request: ${envelope.error.code}`);
     return envelope.result;
   }
   async capabilities() { return WalletCapabilitiesSchema.parse(await this.call('capabilities', {})); }
@@ -32,7 +45,7 @@ export class HttpWalletAdapter implements WalletAdapter {
 }
 export class MockWalletAdapter implements WalletAdapter {
   constructor(private readonly ownerId: string) {}
-  async capabilities() { return WalletCapabilitiesSchema.parse({protocolVersion:1,mode:'mock',network:'regtest',directSwap:false,ringSwap:false,signing:false,broadcast:false,adapterVersion:'A-balance-mock-v1',reason:'В демонстрационном кошельке доступны баланс и поиск. Подписание и отправка BTC/RGB отключены.'}); }
+  async capabilities() { return WalletCapabilitiesSchema.parse({protocolVersion:1,mode:'mock',network:'regtest',directSwap:false,ringSwap:false,signing:false,broadcast:false,adapterVersion:'A-balance-mock-v1',reason:'The demo wallet supports balances and matching. BTC/RGB signing and broadcast are disabled.'}); }
   async state(): Promise<WalletState> {
     return WalletStateSchema.parse({walletId:`mock-wallet-${this.ownerId}`,ownerId:this.ownerId,network:'regtest',mode:'mock',observedAt:Date.now(),balances:[
       {asset:{kind:'btc',network:'regtest',symbol:'BTC',precision:8},amount:'1000000'},

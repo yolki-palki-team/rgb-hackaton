@@ -1,5 +1,5 @@
 {
-  "name": "rgb-p2p-exchange",
+  "name": "palka",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,27 +15,42 @@
     "dev:local": "tsx apps/local-client/src/main.ts",
     "dev:web": "vite --config apps/web/vite.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test packages/contracts/test/*.test.ts apps/market/test/*.test.ts apps/local-client/test/*.test.ts",
-    "build": "vite build --config apps/web/vite.config.ts",
+    "test": "tsx --test packages/contracts/test/*.test.ts apps/market/test/*.test.ts apps/local-client/test/*.test.ts apps/web/src/test/*.test.ts apps/desktop/test/*.test.ts",
+    "build": "npm run build:web && npm run build:local",
     "smoke:qvac": "tsx apps/local-client/scripts/qvac-smoke.ts",
-    "dev:mock": "tsx apps/local-client/scripts/dev-mock.ts"
+    "dev:mock": "tsx apps/local-client/scripts/dev-mock.ts",
+    "build:web": "vite build --config apps/web/vite.config.ts",
+    "build:local": "vite build --config apps/local-client/ui/vite.config.ts",
+    "predev:mock": "npm run build:local",
+    "build:desktop": "tsx apps/desktop/scripts/build.ts",
+    "dev:desktop": "npm run build:local && npm run build:desktop && electron .",
+    "package:desktop": "tsx apps/desktop/scripts/package.ts"
   },
   "dependencies": {
     "@qvac/sdk": "0.21.1",
     "b4a": "1.9.0",
+    "clsx": "2.1.1",
+    "lucide-react": "1.59.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "ws": "8.18.3",
+    "tailwind-merge": "3.7.0",
+    "ws": "8.22.0",
     "zod": "3.24.2"
   },
   "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@tailwindcss/vite": "4.3.3",
     "@types/node": "22.13.0",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/ws": "8.18.1",
+    "electron": "44.9.0",
+    "esbuild": "0.28.2",
     "node": "22.17.0",
+    "tailwindcss": "4.3.3",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
     "vite": "6.4.4"
-  }
+  },
+  "main": "apps/desktop/dist/main.cjs"
 }

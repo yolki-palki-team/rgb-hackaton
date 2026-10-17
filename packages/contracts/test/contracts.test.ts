@@ -20,15 +20,15 @@ test('atomic-unit conversion is exact at u64 boundaries', () => {
 
 test('policy protects RGB balance and BTC fee reserve with BigInt', () => {
   assert.doesNotThrow(() => assertPolicy(draft, policy, state, now));
-  assert.throws(() => assertPolicy({ ...draft, giveAmount: '51' }, policy, state, now), /защищённый остаток/);
-  assert.throws(() => assertPolicy({ ...draft, maxFeeSats: '1001' }, policy, state, now), /лимит комиссии/);
-  assert.throws(() => assertPolicy({ ...draft, giveAsset: btc, giveAmount: '990000' }, policy, state, now), /защищённый остаток/);
+  assert.throws(() => assertPolicy({ ...draft, giveAmount: '51' }, policy, state, now), /protected balance/);
+  assert.throws(() => assertPolicy({ ...draft, maxFeeSats: '1001' }, policy, state, now), /Fee limit/);
+  assert.throws(() => assertPolicy({ ...draft, giveAsset: btc, giveAmount: '990000' }, policy, state, now), /protected balance/);
 });
 
 test('policy rejects tampered network and RGB contract IDs', () => {
-  assert.throws(() => assertPolicy({ ...draft, receiveAsset: { ...dusd, contractId: 'attacker' } }, policy, state, now), /Непроверенный актив/);
-  assert.throws(() => assertPolicy({ ...draft, receiveAsset: { ...dusd, network: 'signet' } }, policy, state, now), /Непроверенный актив/);
-  assert.throws(() => assertPolicy({ ...draft, giveAsset: dusd, giveAmount: '1', receiveAsset: btc }, policy, state, now), /Недостаточно средств/);
+  assert.throws(() => assertPolicy({ ...draft, receiveAsset: { ...dusd, contractId: 'attacker' } }, policy, state, now), /Unverified asset/);
+  assert.throws(() => assertPolicy({ ...draft, receiveAsset: { ...dusd, network: 'signet' } }, policy, state, now), /Unverified asset/);
+  assert.throws(() => assertPolicy({ ...draft, giveAsset: dusd, giveAmount: '1', receiveAsset: btc }, policy, state, now), /Insufficient funds/);
 });
 
 test('public order schema cannot carry private policy or a mismatched asset network', () => {

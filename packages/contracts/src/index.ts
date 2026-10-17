@@ -137,9 +137,9 @@ export const AiIntentSchema = z.object({
 }).strict();
 export type AiIntent = z.infer<typeof AiIntentSchema>;
 export function toAtomic(value: string, precision: number): string {
-  if (!/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value) || value.length > 80) throw new Error('Введите положительное десятичное число без exponent');
+  if (!/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value) || value.length > 80) throw new Error('Enter a non-negative decimal number without an exponent');
   const [whole, fraction = ''] = value.split('.');
-  if (fraction.length > precision) throw new Error('Слишком много знаков после запятой');
+  if (fraction.length > precision) throw new Error('Too many decimal places');
   return AtomicAmountSchema.parse((BigInt(whole) * 10n ** BigInt(precision) + BigInt(fraction.padEnd(precision, '0') || '0')).toString());
 }
 export function formatAmount(value: string, precision: number): string {
@@ -148,21 +148,21 @@ export function formatAmount(value: string, precision: number): string {
 }
 export function assertPolicy(draft: OrderDraft, policy: PrivatePolicy, state: WalletState, now = Date.now()): void {
   OrderDraftSchema.parse(draft); PrivatePolicySchema.parse(policy); WalletStateSchema.parse(state);
-  if (draft.expiresAt <= now) throw new Error('Заявка просрочена');
-  if (Object.keys(policy.protectedBalances).some(key => !state.balances.some(b => assetKey(b.asset) === key))) throw new Error('Неизвестный актив в защищённых остатках');
-  if (sameAsset(draft.giveAsset, draft.receiveAsset)) throw new Error('Выберите два разных актива');
+  if (draft.expiresAt <= now) throw new Error('Order expired');
+  if (Object.keys(policy.protectedBalances).some(key => !state.balances.some(b => assetKey(b.asset) === key))) throw new Error('Unknown asset in protected balances');
+  if (sameAsset(draft.giveAsset, draft.receiveAsset)) throw new Error('Choose two different assets');
   for (const asset of [draft.giveAsset, draft.receiveAsset]) {
-    if (asset.network !== state.network || !state.balances.some(b => sameAsset(b.asset, asset))) throw new Error('Непроверенный актив, contractId или сеть');
-    if (!policy.allowedAssetKeys.includes(assetKey(asset))) throw new Error('Актив запрещён локальной политикой');
+    if (asset.network !== state.network || !state.balances.some(b => sameAsset(b.asset, asset))) throw new Error('Unverified asset, contractId or network');
+    if (!policy.allowedAssetKeys.includes(assetKey(asset))) throw new Error('Asset is blocked by local policy');
   }
-  if (draft.giveAsset.kind === 'btc' && !policy.allowBtcSale) throw new Error('Продажа BTC запрещена локальной политикой');
+  if (draft.giveAsset.kind === 'btc' && !policy.allowBtcSale) throw new Error('BTC sale is blocked by local policy');
   const fee = BigInt(draft.maxFeeSats);
-  if (fee > BigInt(policy.maxFeeSats)) throw new Error('Превышен лимит комиссии');
+  if (fee > BigInt(policy.maxFeeSats)) throw new Error('Fee limit exceeded');
   for (const b of state.balances) {
     const outgoing = sameAsset(b.asset, draft.giveAsset) ? BigInt(draft.giveAmount) : 0n;
     // Incoming assets cannot finance a fee or satisfy a protected pre-trade reserve.
     const after = BigInt(b.amount) - outgoing - (b.asset.kind === 'btc' ? fee : 0n);
-    if (after < BigInt(policy.protectedBalances[assetKey(b.asset)] ?? '0')) throw new Error('Недостаточно средств или нарушен защищённый остаток');
+    if (after < BigInt(policy.protectedBalances[assetKey(b.asset)] ?? '0')) throw new Error('Insufficient funds or protected balance violation');
   }
-  if (fee > 0n && !state.balances.some(b => b.asset.kind === 'btc')) throw new Error('Нет BTC для комиссии');
+  if (fee > 0n && !state.balances.some(b => b.asset.kind === 'btc')) throw new Error('No BTC available for fees');
 }

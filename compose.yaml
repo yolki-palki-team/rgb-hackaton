@@ -8,8 +8,12 @@ services:
     init: true
     restart: unless-stopped
     stop_grace_period: 30s
-    # Only the demo's paired local APIs are published. Market stays inside
-    # this container, so its HTTP credentials never cross a Docker network.
+    environment:
+      PALKA_DEMO_MODE: ${PALKA_DEMO_MODE:-false}
+      WALLET_RPC_URL: ${WALLET_RPC_URL:-http://127.0.0.1:4201}
+      WALLET_RPC_TOKEN: ${WALLET_RPC_TOKEN:-}
+    # Local wallet interfaces bind to host loopback. The market is reachable
+    # only inside Docker; web proxies only its two unauthenticated GET routes.
     ports:
       - "127.0.0.1:4101:4101"
       - "127.0.0.1:4102:4102"

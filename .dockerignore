@@ -12,6 +12,8 @@
 !apps/local-client/**
 !apps/web/
 !apps/web/**
+!apps/desktop/
+!apps/desktop/package.json
 !packages/
 !packages/contracts/
 !packages/contracts/**

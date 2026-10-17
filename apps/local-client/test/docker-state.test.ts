@@ -16,6 +16,20 @@ test('Docker restart preserves distinct pairing and market credentials',()=>{
   } finally {rmSync(dir,{recursive:true,force:true});}
 });
 
+test('Legacy pairing mode metadata migrates without rotating tokens or touching wallet state',()=>{
+  const dir=mkdtempSync(resolve(tmpdir(),'rgb-docker-legacy-'));
+  try {
+    const first=ensurePairing(dir);
+    const path=resolve(dir,'pairing.json');
+    writeFileSync(path,JSON.stringify({mode:'mock',profiles:first.profiles}));
+    writeFileSync(resolve(dir,'A.sqlite'),'existing-mock-state');
+    assert.deepEqual(ensurePairing(dir),first);
+    assert.equal(JSON.parse(readFileSync(path,'utf8')).mode,undefined);
+    assert.equal(readFileSync(resolve(dir,'A.sqlite'),'utf8'),'existing-mock-state');
+    assert.equal(statSync(path).mode & 0o777,0o600);
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
 test('Malformed stored credentials fail without replacing credentials or database',()=>{
   const dir=mkdtempSync(resolve(tmpdir(),'rgb-docker-invalid-'));
   try {

@@ -2,7 +2,33 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { test } from 'node:test';
-import { HttpWalletAdapter, MockWalletAdapter, requireLoopback } from '../src/wallet.ts';
+import { HttpWalletAdapter, MockWalletAdapter, REAL_WALLET_UNAVAILABLE, UnavailableWalletAdapter, requireLoopback } from '../src/wallet.ts';
+import { LocalService } from '../src/service.ts';
+import { LocalStore } from '../src/store.ts';
+import { MarketClient } from '../src/market-client.ts';
+
+test('unconfigured real wallet is explicitly unavailable and cannot sign',async()=>{
+  const wallet=new UnavailableWalletAdapter();
+  await assert.rejects(wallet.capabilities(),{message:REAL_WALLET_UNAVAILABLE});
+  await assert.rejects(wallet.state(),{message:REAL_WALLET_UNAVAILABLE});
+  await assert.rejects(wallet.sign(),{message:REAL_WALLET_UNAVAILABLE});
+});
+
+test('degraded real-wallet health is visible without starting QVAC',async()=>{
+  const store=new LocalStore(':memory:');
+  const market=new MarketClient('http://127.0.0.1:4100','test-token');
+  let modelStarted=false;
+  const qvac={health:async()=>{modelStarted=true;return {available:true,model:'unexpected'};},interpret:async()=>{throw new Error('not used');}};
+  const service=new LocalService('A',new UnavailableWalletAdapter(),market,store,qvac);
+  try {
+    const health=await service.health();
+    assert.equal(health.mode,'real');
+    assert.equal(health.wallet,null);
+    assert.equal(health.blockedReason,REAL_WALLET_UNAVAILABLE);
+    assert.equal(health.qvac.available,false);
+    assert.equal(modelStarted,false);
+  } finally {store.close();market.close();}
+});
 
 test('wallet HTTP boundary validates protocol, authenticates, and never retries an uncertain request',async()=>{
   const mock=new MockWalletAdapter('A');
