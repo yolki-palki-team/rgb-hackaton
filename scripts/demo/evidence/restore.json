@@ -1,0 +1,27 @@
+{
+  "mode": "real-local-restore",
+  "network": "regtest",
+  "signed": false,
+  "separateIgnoredDirectory": true,
+  "profiles": [
+    {
+      "profile": "alice",
+      "btcBalancesMatch": true,
+      "rgbStockMatches": true,
+      "sqlIndexMatches": true
+    },
+    {
+      "profile": "bob",
+      "btcBalancesMatch": true,
+      "rgbStockMatches": true,
+      "sqlIndexMatches": true
+    },
+    {
+      "profile": "carol",
+      "btcBalancesMatch": true,
+      "rgbStockMatches": true,
+      "sqlIndexMatches": true
+    }
+  ],
+  "limitation": "Restores wallet/RGB/BDK/journal against the existing chain; no bitcoind disaster recovery claimed"
+}

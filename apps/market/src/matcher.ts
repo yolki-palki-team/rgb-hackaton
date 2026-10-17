@@ -2,14 +2,18 @@ import { sameAsset, type AssetRef, type PublicOrder } from '@rgb-exchange/contra
 
 export type MatchOrder = PublicOrder;
 
-export type Match = { orders: MatchOrder[]; legs: { fromOrderId: string; toOrderId: string; asset: AssetRef; amount: string }[] };
+export type Match = {
+  orders: MatchOrder[];
+  legs: { fromOrderId: string; toOrderId: string; asset: AssetRef; amount: string }[];
+};
 
 export const MAX_ATOMIC_AMOUNT = (1n << 64n) - 1n;
 
 export function atomicAmount(value: string, positive = false): bigint {
   if (!/^(0|[1-9][0-9]*)$/.test(value)) throw new Error('INVALID_ATOMIC_AMOUNT');
   const amount = BigInt(value);
-  if (amount > MAX_ATOMIC_AMOUNT || (positive && amount === 0n)) throw new Error('INVALID_ATOMIC_AMOUNT');
+  if (amount > MAX_ATOMIC_AMOUNT || (positive && amount === 0n))
+    throw new Error('INVALID_ATOMIC_AMOUNT');
   return amount;
 }
 
@@ -27,14 +31,22 @@ function validCycle(orders: MatchOrder[], now: number): Match | null {
     const giver = orders[i];
     const recipient = orders[(i + 1) % orders.length];
     if (!sameAsset(giver.giveAsset, recipient.receiveAsset)) return null;
-    if (atomicAmount(giver.giveAmount, true) < atomicAmount(recipient.minReceiveAmount, true)) return null;
-    legs.push({ fromOrderId: giver.id, toOrderId: recipient.id, asset: giver.giveAsset, amount: giver.giveAmount });
+    if (atomicAmount(giver.giveAmount, true) < atomicAmount(recipient.minReceiveAmount, true))
+      return null;
+    legs.push({
+      fromOrderId: giver.id,
+      toOrderId: recipient.id,
+      asset: giver.giveAsset,
+      amount: giver.giveAmount,
+    });
   }
   return { orders, legs };
 }
 
 export function findMatch(input: MatchOrder[], now = Date.now()): Match | null {
-  const orders = input.filter((order) => isOpen(order, now)).sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  const orders = input
+    .filter((order) => isOpen(order, now))
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   for (let i = 0; i < orders.length; i++) {
     for (let j = i + 1; j < orders.length; j++) {
       const direct = validCycle([orders[i], orders[j]], now);

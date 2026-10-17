@@ -1,0 +1,53 @@
+{
+  "network": "regtest",
+  "scenario": "direct",
+  "mode": "real-local-sdk-extension",
+  "txid": "542ce6b9ac3a44b355f6caa385f4245a2917f8f5d3ff17dd1378241a24f3ee92",
+  "blockHash": "5dcf439774eedb14268d47a6b79df9ef69d708963e217d7229de0e1a68ef295b",
+  "confirmationsAtExport": 2,
+  "transactionCount": 1,
+  "approvalDigest": "a76b8e7a28934dc4f90ccd490aa258b48481dc293fa253150e1bb7882c488ec6",
+  "feeSats": "1000",
+  "contracts": {
+    "DUSD": "rgb:Sl6gjbUt-T8Mftg_-dtUJv7k-L78xA~z-hoF8s6M-5A~E_vM"
+  },
+  "participants": {
+    "alice": {
+      "expectedBtcDeltaSats": "-100500",
+      "actualBtcDeltaSats": "-100500",
+      "rgb": {
+        "DUSD": {
+          "expectedDelta": "100",
+          "actualDelta": "100"
+        }
+      },
+      "chainConfirmed": true,
+      "rgbAccepted": true,
+      "sdkAllocationIndexSynchronized": false
+    },
+    "bob": {
+      "expectedBtcDeltaSats": "99500",
+      "actualBtcDeltaSats": "99500",
+      "rgb": {
+        "DUSD": {
+          "expectedDelta": "-100",
+          "actualDelta": "-100"
+        }
+      },
+      "chainConfirmed": true,
+      "rgbAccepted": true,
+      "sdkAllocationIndexSynchronized": false
+    }
+  },
+  "preSignatureRgbValidations": [
+    {
+      "receiver": "alice",
+      "ticker": "DUSD",
+      "contractId": "rgb:Sl6gjbUt-T8Mftg_-dtUJv7k-L78xA~z-hoF8s6M-5A~E_vM",
+      "amount": "100",
+      "valid": true,
+      "signed": false
+    }
+  ],
+  "productionAdapterEnabled": false
+}

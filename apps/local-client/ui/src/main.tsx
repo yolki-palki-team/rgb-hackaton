@@ -5,4 +5,8 @@ import './tailwind.css';
 import './styles.css';
 import './ui-kit.css';
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);

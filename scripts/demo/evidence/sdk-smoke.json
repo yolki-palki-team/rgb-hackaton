@@ -1,0 +1,37 @@
+{
+  "network": "regtest",
+  "kind": "ordinary-rgb-send-not-swap",
+  "txid": "bb5164e7bf1608b271ee389c20aaeae81bf35d95738394f41cf8ea88940c77a0",
+  "feeSats": "503",
+  "sdkProxyTransportUsed": true,
+  "bothSdkHistoriesSettled": true,
+  "sdkAllocationIndexSynchronized": true,
+  "expectedDeltas": {
+    "bob": {
+      "BTC": "-1503",
+      "rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "-1",
+      "rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "0",
+      "rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    },
+    "carol": {
+      "BTC": "1000",
+      "rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "1",
+      "rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "0",
+      "rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    }
+  },
+  "actualDeltas": {
+    "bob": {
+      "BTC": "-1503",
+      "rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "-1",
+      "rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "0",
+      "rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    },
+    "carol": {
+      "BTC": "1000",
+      "rgb:2F2a62Du-Ud~evaB-UUyxhGG-q8AEppz-RYVHECG-kZ7gd2E": "1",
+      "rgb:DJzaEQs2-z9nplOb-mnCrs~Q-37Klkwu-hdE0tb3-pE~YMs8": "0",
+      "rgb:qYc3hPhp-s5CRwSZ-4D3Iv5U-AhVifk_-yKebDqr-XFuRJxs": "0"
+    }
+  }
+}

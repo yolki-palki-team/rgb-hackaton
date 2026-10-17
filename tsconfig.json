@@ -9,26 +9,12 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": [
-        "./apps/web/src/*"
-      ]
+      "@/*": ["./apps/web/src/*"]
     }
   },
-  "include": [
-    "apps/**/*.ts",
-    "apps/**/*.tsx",
-    "packages/contracts/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "front",
-    "tools",
-    "apps/web/dist",
-    "apps/local-client/ui/dist"
-  ]
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/contracts/**/*.ts"],
+  "exclude": ["node_modules", "front", "tools", "apps/web/dist", "apps/local-client/ui/dist"]
 }
