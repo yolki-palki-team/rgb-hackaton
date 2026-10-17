@@ -1,4 +1,4 @@
-import { WalletCapabilitiesSchema } from '@rgb-exchange/contracts';
+import { HistoryCursorSchema, WalletCapabilitiesSchema } from '@rgb-exchange/contracts';
 import { z } from 'zod';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -13,6 +13,11 @@ export function parseOfferLink(raw: string): string | null {
 
 export function validateWalletRequest(method: unknown, path: unknown): boolean {
   if (method !== 'GET' && method !== 'POST') return false;
+  if (method === 'GET' && typeof path === 'string') {
+    if (path === '/api/history') return true;
+    const history = /^\/api\/history\?cursor=([a-zA-Z0-9_-]+)$/.exec(path);
+    if (history) return HistoryCursorSchema.safeParse(history[1]).success;
+  }
   if (
     typeof path !== 'string' ||
     path.length > 250 ||

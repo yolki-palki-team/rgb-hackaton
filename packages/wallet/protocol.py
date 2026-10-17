@@ -184,8 +184,9 @@ class Backend:
 
     def state(self):
         self.sync_shared_catalog()
-        # One wallet open and online sync, retaining the same allocation-index validation.
-        raw = self.call_native("checked-state")
+        return self._state_from_raw(self.call_native("state"))
+
+    def _state_from_raw(self, raw):
         balances = [
             {
                 "asset": BTC,
@@ -287,7 +288,9 @@ class Backend:
                     raise ValueError("existing plan immutable or already signed")
                 return {"reservationId": plan["tradeId"]}
             # A validates its saved publication/private policy locally before this authenticated RPC.
-            state = self.state()
+            self.sync_shared_catalog()
+            raw = self.call_native("state")
+            state = self._state_from_raw(raw)
             known = {asset_key(b["asset"]): b for b in state["balances"]}
             give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == self.owner)
             receive = next(leg for leg in plan["legs"] if leg["toOwnerId"] == self.owner)
@@ -296,7 +299,6 @@ class Backend:
                     raise ValueError("contract must be imported and verified locally first")
             if int(known[asset_key(give["asset"])]["amount"]) < units(give["amount"]):
                 raise ValueError("insufficient give asset")
-            raw = self.call_native("state")
             selected = []
             allocated = {}
             total = 0

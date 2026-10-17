@@ -13,6 +13,13 @@ export function ensureDependencies(
     });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error('Locked Node dependency installation failed');
+    // The pinned Electron package ships its installer without a postinstall script.
+    const electron = spawnSync(process.execPath, [join(root, 'node_modules/electron/install.js')], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+    if (electron.error) throw electron.error;
+    if (electron.status !== 0) throw new Error('Electron runtime installation failed');
   },
 ) {
   const lock = readFileSync(join(root, 'package-lock.json'));

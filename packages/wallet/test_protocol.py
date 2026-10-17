@@ -8,7 +8,7 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from journal import Journal
 from protocol import BTC, Backend, digest, plan_check, read, save, units
@@ -32,10 +32,51 @@ class ProtocolTests(unittest.TestCase):
             ) as call,
         ):
             self.assertEqual(backend.state()["balances"], [{"asset": BTC, "amount": "30"}])
-            call.assert_called_once_with("checked-state")
+            call.assert_called_once_with("state")
             with self.assertRaisesRegex(ValueError, "index mismatch"):
                 backend.state()
             self.assertEqual(call.call_count, 2, "completed balance reads must not be cached")
+
+    def test_state_uses_one_native_call_and_preserves_balances(self):
+        backend = Backend.__new__(Backend)
+        backend.owner = "alice"
+        backend.wallet_id = "unit-wallet"
+        raw = {
+            "btc": {"vanilla": {"settled": "40"}, "colored": {"settled": "60"}},
+            "assets": {"nia": [{"asset_id": "rgb:unit", "ticker": "X", "precision": 0}]},
+            "stockBalances": {"rgb:unit": "7"},
+        }
+        with (
+            patch.object(backend, "sync_shared_catalog") as catalog,
+            patch.object(backend, "call_native", return_value=raw) as native_call,
+        ):
+            state = backend.state()
+        catalog.assert_called_once_with()
+        native_call.assert_called_once_with("state")
+        self.assertEqual(state["balances"][0]["amount"], "100")
+        self.assertEqual(state["balances"][1]["amount"], "7")
+        self.assertEqual(
+            set(state), {"walletId", "ownerId", "network", "mode", "balances", "observedAt"}
+        )
+        self.assertEqual(
+            {k: state[k] for k in ("walletId", "ownerId", "network", "mode")},
+            {"walletId": "unit-wallet", "ownerId": "alice", "network": "regtest", "mode": "real"},
+        )
+        self.assertIsInstance(state["observedAt"], int)
+        with self.assertRaises(TypeError):
+            backend.handle("state", {"raw": raw})
+
+    def test_state_propagates_native_consistency_failure(self):
+        backend = Backend.__new__(Backend)
+        with (
+            patch.object(backend, "sync_shared_catalog"),
+            patch.object(
+                backend, "call_native", side_effect=ValueError("index mismatch")
+            ) as native_call,
+        ):
+            with self.assertRaisesRegex(ValueError, "index mismatch"):
+                backend.state()
+        native_call.assert_called_once_with("state")
 
     def test_funding_target_is_owned_vanilla_regtest_address(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -144,6 +185,139 @@ class ProtocolTests(unittest.TestCase):
         for v in [1, "01", "-1", "1e3", "1.1", str(2**64)]:
             with self.assertRaises(ValueError):
                 units(v)
+
+    def reservation_fixture(self, tmp, owner):
+        backend = Backend.__new__(Backend)
+        backend.root = Path(tmp)
+        backend.owner = owner
+        backend.wallet_id = "unit-wallet"
+        plan = self.plan()
+        contract = plan["legs"][1]["asset"]["contractId"]
+        raw = {
+            "btc": {"vanilla": {"settled": "105000"}, "colored": {"settled": "5000"}},
+            "assets": {"nia": [{"asset_id": contract, "ticker": "TEST", "precision": 0}]},
+            "stockBalances": {contract: "150"},
+            "unspents": [
+                {
+                    "utxo": {
+                        "outpoint": {"txid": "btc-funding", "vout": 0},
+                        "btc_amount": "105000",
+                    },
+                    "rgb_allocations": [],
+                },
+                {
+                    "utxo": {"outpoint": {"txid": "rgb-funding", "vout": 1}, "btc_amount": "5000"},
+                    "rgb_allocations": [
+                        {"asset_id": contract, "settled": True, "assignment": {"Fungible": "150"}}
+                    ],
+                },
+            ],
+        }
+        return backend, plan, raw
+
+    def test_reserve_reuses_snapshot_and_keeps_inputs_and_plan_immutable(self):
+        chain = {"confirmations": 1, "coinbase": False, "scriptPubKey": {"hex": "synthetic-script"}}
+        addresses = {"btcAddress": "synthetic-btc-address", "rgbAddress": "synthetic-rgb-address"}
+        for owner, txid, vout, amount in (
+            ("a", "btc-funding", 0, "105000"),
+            ("b", "rgb-funding", 1, "5000"),
+        ):
+            with self.subTest(owner=owner), tempfile.TemporaryDirectory() as tmp:
+                backend, plan, raw = self.reservation_fixture(tmp, owner)
+                with (
+                    patch.object(backend, "sync_shared_catalog") as catalog,
+                    patch.object(
+                        backend, "call_native", side_effect=[raw, addresses]
+                    ) as native_call,
+                    patch(
+                        "protocol.rpc",
+                        side_effect=lambda method, *args: chain
+                        if method == "gettxout"
+                        else "synthetic-raw-tx",
+                    ) as chain_call,
+                ):
+                    self.assertEqual(backend.reserve(plan), {"reservationId": "unit"})
+                    self.assertEqual(backend.reserve(plan), {"reservationId": "unit"})
+                    changed = copy.deepcopy(plan)
+                    changed["legs"][0]["amount"] = "100001"
+                    changed["digest"] = digest({k: v for k, v in changed.items() if k != "digest"})
+                    with self.assertRaisesRegex(ValueError, "immutable"):
+                        backend.reserve(changed)
+                catalog.assert_called_once_with()
+                self.assertEqual(native_call.call_args_list, [call("state"), call("addresses")])
+                self.assertEqual(
+                    chain_call.call_args_list,
+                    [
+                        call("gettxout", "btc-funding", 0),
+                        call("gettxout", "rgb-funding", 1),
+                        call("getrawtransaction", txid, False),
+                    ],
+                )
+                funding = read(backend.folder("unit") / "funding.json")
+                self.assertEqual(
+                    funding["inputs"],
+                    [
+                        {
+                            "txid": txid,
+                            "vout": vout,
+                            "amountSats": amount,
+                            "scriptPubKey": "synthetic-script",
+                            "rawTx": "synthetic-raw-tx",
+                        }
+                    ],
+                )
+                self.assertEqual(
+                    funding["allocations"], raw["stockBalances"] if owner == "b" else {}
+                )
+                self.assertEqual(read(backend.folder("unit") / "plan.json"), plan)
+                journal = Journal(backend.root / "journal.sqlite")
+                try:
+                    self.assertEqual(journal.snapshot("unit")["state"], "PREPARING")
+                    self.assertEqual(
+                        journal.db.execute("SELECT outpoint,trade_id FROM reservations").fetchall(),
+                        [(f"{txid}:{vout}", "unit")],
+                    )
+                finally:
+                    journal.db.close()
+
+    def test_reserve_rejects_low_balance_before_input_selection(self):
+        for owner in ("a", "b"):
+            with self.subTest(owner=owner), tempfile.TemporaryDirectory() as tmp:
+                backend, plan, raw = self.reservation_fixture(tmp, owner)
+                raw["btc"]["vanilla"]["settled"] = "94999"
+                raw["stockBalances"] = {key: "99" for key in raw["stockBalances"]}
+                with (
+                    patch.object(backend, "sync_shared_catalog"),
+                    patch.object(backend, "call_native", return_value=raw) as native_call,
+                    patch("protocol.rpc") as chain_call,
+                ):
+                    with self.assertRaisesRegex(ValueError, "insufficient give asset"):
+                        backend.reserve(plan)
+                native_call.assert_called_once_with("state")
+                chain_call.assert_not_called()
+                self.assertFalse((backend.folder("unit") / "funding.json").exists())
+
+    def test_reserve_still_checks_chain_before_reserving_snapshot_inputs(self):
+        for chain in (None, {"confirmations": 0}, {"confirmations": 100, "coinbase": True}):
+            with self.subTest(chain=chain), tempfile.TemporaryDirectory() as tmp:
+                backend, plan, raw = self.reservation_fixture(tmp, "b")
+                with (
+                    patch.object(backend, "sync_shared_catalog"),
+                    patch.object(backend, "call_native", return_value=raw) as native_call,
+                    patch("protocol.rpc", return_value=chain) as chain_call,
+                ):
+                    with self.assertRaisesRegex(ValueError, "no spendable RGB inputs"):
+                        backend.reserve(plan)
+                native_call.assert_called_once_with("state")
+                self.assertEqual(chain_call.call_count, 2)
+                journal = Journal(backend.root / "journal.sqlite")
+                try:
+                    self.assertIsNone(journal.snapshot("unit"))
+                    self.assertEqual(
+                        journal.db.execute("SELECT * FROM reservations").fetchall(), []
+                    )
+                finally:
+                    journal.db.close()
 
 
 class HttpTests(unittest.TestCase):

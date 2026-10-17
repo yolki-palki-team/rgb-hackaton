@@ -225,15 +225,14 @@ fn run() -> Result<()> {
         }
         "export" => cooperative::export(&wallet, &root, &req)?,
         "validate" => cooperative::validate(&mut wallet, &root, &req)?,
-        "state" | "checked-state" | "offline-state" => {
-            let on = if op != "offline-state" {
-                Some(online(&mut wallet)?)
+        "state" | "offline-state" => {
+            let on = if op == "state" {
+                let on = online(&mut wallet)?;
+                wallet.cooperative_check_index()?;
+                Some(on)
             } else {
                 None
             };
-            if op == "checked-state" {
-                wallet.cooperative_check_index()?;
-            }
             let unspents = wallet.list_unspents(on, false, op == "offline-state")?;
             json!({"profile":profile,"network":"regtest","btc":wallet.get_btc_balance(on,op == "offline-state")?,
                 "stockBalances":wallet.cooperative_stock_balances()?.iter().map(|(k,v)|(k.clone(),v.to_string())).collect::<std::collections::BTreeMap<_,_>>(),
@@ -243,7 +242,11 @@ fn run() -> Result<()> {
             let on = online(&mut wallet)?;
             wallet.list_unspents(Some(on), false, false)?;
             let ticker = req["ticker"].as_str().ok_or("missing ticker")?;
-            if !["X", "DUSD", "KEEP"].contains(&ticker) {
+            let assigned_demo = ticker.len() == 7
+                && ticker.starts_with('T')
+                && ticker.as_bytes()[1..].iter().all(u8::is_ascii_digit)
+                && ticker != "T000000";
+            if !["X", "DUSD", "KEEP"].contains(&ticker) && !assigned_demo {
                 return Err("demo assets only".into());
             }
             let amount = req["amount"]
@@ -258,8 +261,18 @@ fn run() -> Result<()> {
             let amount: u64 = amount.parse()?;
             let receipt = root.join(format!("issued-{ticker}.json"));
             if receipt.exists() {
-                serde_json::from_slice(&fs::read(receipt)?)?
+                let saved: Value = serde_json::from_slice(&fs::read(receipt)?)?;
+                if saved["ticker"] != ticker || saved["issued_supply"].as_u64() != Some(amount) {
+                    return Err("saved issuance does not match requested ticker and amount".into());
+                }
+                saved
             } else {
+                // A lost response after SDK issuance must never create a second contract.
+                let pending = root.join(format!("issuing-{ticker}.json"));
+                if pending.exists() {
+                    return Err("uncertain issuance; reconcile the local wallet before retrying".into());
+                }
+                private_write(&pending, &serde_json::to_vec(&json!({"ticker":ticker,"amount":amount.to_string()}))?)?;
                 let asset = wallet.issue_asset_nia(
                     ticker.into(),
                     format!("Regtest {ticker}"),
@@ -268,6 +281,7 @@ fn run() -> Result<()> {
                 )?;
                 let value = serde_json::to_value(asset)?;
                 private_write(&receipt, &serde_json::to_vec(&value)?)?;
+                fs::remove_file(pending)?;
                 value
             }
         }

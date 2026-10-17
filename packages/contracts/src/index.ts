@@ -296,6 +296,15 @@ export type PublicMarketOrder = z.infer<typeof PublicMarketOrderSchema>;
 export const PublicMarketActivitySchema = z
   .object({ orders: z.array(PublicMarketOrderSchema) })
   .strict();
+export const HistoryCursorSchema = z
+  .string()
+  .min(1)
+  .max(300)
+  .regex(/^[a-zA-Z0-9_-]+$/);
+export const PublicMarketHistorySchema = z
+  .object({ orders: z.array(PublicMarketOrderSchema), nextCursor: HistoryCursorSchema.nullable() })
+  .strict();
+export type PublicMarketHistory = z.infer<typeof PublicMarketHistorySchema>;
 
 export const CoordinationMessageSchema = z
   .object({
@@ -326,6 +335,19 @@ export const TradeSnapshotSchema = z
   })
   .strict();
 export type TradeSnapshot = z.infer<typeof TradeSnapshotSchema>;
+export const TradeHistorySchema = TradeSnapshotSchema.omit({
+  messages: true,
+  settlementPackage: true,
+});
+export type TradeHistory = z.infer<typeof TradeHistorySchema>;
+export const MarketHistorySchema = z
+  .object({
+    myOrders: z.array(PublicOrderSchema),
+    trades: z.array(TradeHistorySchema),
+    nextCursor: HistoryCursorSchema.nullable(),
+  })
+  .strict();
+export type MarketHistory = z.infer<typeof MarketHistorySchema>;
 export const EventEnvelopeSchema = z
   .object({
     protocolVersion: z.literal(1),

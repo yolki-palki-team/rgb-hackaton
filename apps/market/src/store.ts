@@ -3,6 +3,8 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   CoordinationMessageSchema,
   EventEnvelopeSchema,
+  HistoryCursorSchema,
+  IdSchema,
   MarketSnapshotSchema,
   PROTOCOL_VERSION,
   PublicOrderSchema,
@@ -15,6 +17,8 @@ import {
   type CoordinationMessage,
   type EventEnvelope,
   type MarketSnapshot,
+  type MarketHistory,
+  type PublicMarketHistory,
   type PublicOrder,
   type TradePlan,
   type TradeSnapshot,
@@ -24,6 +28,12 @@ import { participantId, participantTokenHash } from '@rgb-exchange/contracts/par
 import { findMatch } from './matcher.ts';
 
 type OrderRow = { data: string; status: PublicOrder['status']; revision: number };
+type HistoryRow = OrderRow & {
+  id: string;
+  trade_id: string | null;
+  trade_status: TradeSnapshot['status'] | null;
+  participants: number;
+};
 type TradeRow = { data: string };
 type EventRow = { data: string; audience: string };
 type Pending = { event: EventEnvelope; audience: string[] }[];
@@ -50,10 +60,13 @@ export class MarketStore {
       CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, revision INTEGER NOT NULL, status TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at, id);
       CREATE INDEX IF NOT EXISTS idx_orders_owner_status ON orders(owner_id, status);
+      CREATE INDEX IF NOT EXISTS idx_orders_history ON orders(created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_orders_owner_history ON orders(owner_id, created_at DESC, id DESC);
       CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, status TEXT NOT NULL, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS trade_participants (trade_id TEXT NOT NULL REFERENCES trades(id), owner_id TEXT NOT NULL, PRIMARY KEY (trade_id, owner_id));
       CREATE INDEX IF NOT EXISTS idx_participant_owner ON trade_participants(owner_id);
       CREATE TABLE IF NOT EXISTS trade_orders (trade_id TEXT NOT NULL REFERENCES trades(id), order_id TEXT NOT NULL REFERENCES orders(id), PRIMARY KEY (trade_id, order_id));
+      CREATE INDEX IF NOT EXISTS idx_trade_orders_order ON trade_orders(order_id);
       CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, audience TEXT NOT NULL, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS relay_idempotency (trade_id TEXT NOT NULL, owner_id TEXT NOT NULL, message_id TEXT NOT NULL, digest TEXT NOT NULL, sequence INTEGER NOT NULL REFERENCES events(sequence), PRIMARY KEY (trade_id, owner_id, message_id));
     `);
@@ -538,6 +551,79 @@ export class MarketStore {
       );
     }
     return { orders };
+  }
+
+  private historyRows(
+    cursor?: string,
+    ownerId?: string,
+  ): { rows: HistoryRow[]; nextCursor: string | null } {
+    const values: (string | number)[] = [];
+    const conditions: string[] = [];
+    if (ownerId !== undefined) {
+      conditions.push('o.owner_id=?');
+      values.push(ownerId);
+    }
+    if (cursor !== undefined) {
+      if (!HistoryCursorSchema.safeParse(cursor).success)
+        throw new MarketError('INVALID_HISTORY_CURSOR', 400);
+      const id = Buffer.from(cursor, 'base64url').toString('utf8');
+      if (!IdSchema.safeParse(id).success || Buffer.from(id).toString('base64url') !== cursor)
+        throw new MarketError('INVALID_HISTORY_CURSOR', 400);
+      const previous = this.getOrder(id);
+      if (!previous || (ownerId !== undefined && previous.ownerId !== ownerId))
+        throw new MarketError('INVALID_HISTORY_CURSOR', 400);
+      conditions.push('(o.created_at, o.id) < (?, ?)');
+      values.push(previous.createdAt, previous.id);
+    }
+    const rows = this.db
+      .prepare(
+        `
+      SELECT o.id, o.data, o.status, o.revision, r.trade_id, t.status AS trade_status,
+        (SELECT COUNT(*) FROM trade_participants p WHERE p.trade_id=t.id) AS participants
+      FROM orders o LEFT JOIN trade_orders r ON r.order_id=o.id LEFT JOIN trades t ON t.id=r.trade_id
+      ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
+      ORDER BY o.created_at DESC, o.id DESC LIMIT 51
+    `,
+      )
+      .all(...values) as HistoryRow[];
+    const hasMore = rows.length > 50;
+    if (hasMore) rows.pop();
+    return { rows, nextCursor: hasMore ? Buffer.from(rows[49].id).toString('base64url') : null };
+  }
+
+  publicHistory(cursor?: string): PublicMarketHistory {
+    const { rows, nextCursor } = this.historyRows(cursor);
+    return {
+      orders: rows.map((row) =>
+        PublicMarketOrderSchema.parse({
+          order: this.order(row),
+          execution: row.trade_status
+            ? { status: row.trade_status, participants: row.participants }
+            : null,
+        }),
+      ),
+      nextCursor,
+    };
+  }
+
+  history(ownerId: string, cursor?: string): MarketHistory {
+    const { rows, nextCursor } = this.historyRows(cursor, ownerId);
+    return {
+      myOrders: rows.map((row) => this.order(row)),
+      trades: rows.flatMap((row) => {
+        const trade = row.trade_id ? this.getTrade(row.trade_id, ownerId) : null;
+        return trade
+          ? [
+              {
+                plan: trade.plan,
+                status: trade.status,
+                ...(trade.reason !== undefined ? { reason: trade.reason } : {}),
+              },
+            ]
+          : [];
+      }),
+      nextCursor,
+    };
   }
 
   getOrder(id: string): PublicOrder | null {

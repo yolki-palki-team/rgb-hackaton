@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ClientStatus, FundingStatus, LocalClient } from './api';
 import { ArrowDown, ArrowRight, Bitcoin } from 'lucide-react';
-import { Button, Input, Panel, Spinner, StatusBadge } from './components/ui/wallet-kit';
+import { Button, Input, Panel, StatusBadge } from './components/ui/wallet-kit';
+import { MorphingSquare } from './components/ui/morphing-square';
 
 const sats = (value: string) => `${BigInt(value).toLocaleString()} sats`;
 
@@ -158,11 +159,13 @@ export function FundingPanel({
           <p className="funding-message" role="status">
             {funding.reason ?? 'The local funding service is not ready.'}
           </p>
-        ) : !funding ? (
+        ) : !funding && visible ? (
           <div role="status">
-            <p className="funding-message loading-message">
-              <Spinner /> Loading your WDK account…
-            </p>
+            <MorphingSquare
+              message="Loading your WDK account…"
+              wrapperClassName="funding-message py-8"
+              role="presentation"
+            />
             <div className="skeleton skeleton-offer" aria-hidden="true" />
           </div>
         ) : null}
@@ -237,8 +240,8 @@ export function FundingPanel({
               <StatusBadge>{operation.status}</StatusBadge>
             </div>
             {operation.status !== 'PREVIEW' && operation.status !== 'CONFIRMED' && (
-              <p className="funding-message loading-message" role="status">
-                <Spinner />
+              <div className="funding-message loading-message" role="status">
+                {busy && <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />}
                 {operation.status === 'BROADCAST'
                   ? 'Waiting for Bitcoin confirmation. Use Check status to refresh.'
                   : operation.status === 'RECONCILING'
@@ -246,7 +249,7 @@ export function FundingPanel({
                     : operation.status === 'SIGNING'
                       ? 'Waiting for the signing result. Use Check status to refresh.'
                       : 'Waiting for the signed transfer to be broadcast. Use Check status to continue.'}
-              </p>
+              </div>
             )}
             <dl>
               <div>

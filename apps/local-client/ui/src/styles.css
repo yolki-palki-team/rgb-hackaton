@@ -196,7 +196,10 @@ p {
   color: var(--muted);
 }
 .asset-disclaimer {
-  margin: 16px 0 0;
+  margin: 0;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
 }
 .content > section {
   margin-bottom: 44px;
@@ -600,15 +603,6 @@ p {
   padding: 4px;
   margin-left: auto;
 }
-.modal-icon,
-.approval-lock {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border: 1px solid #444;
-  border-radius: 12px;
-}
 .ai-status {
   margin-left: auto;
 }
@@ -861,9 +855,6 @@ textarea {
   color: #aaa;
   overflow-wrap: anywhere;
 }
-.approval-lock {
-  margin: 22px 0;
-}
 .approval-panel dl {
   margin: 24px 0;
 }
@@ -913,21 +904,6 @@ textarea {
   color: #aaa;
   max-width: 760px;
   margin-bottom: 0;
-}
-.loading-spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  flex: none;
-  border: 2px solid currentcolor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-.progress-heading > .loading-spinner {
-  width: 24px;
-  height: 24px;
-  margin-top: 5px;
 }
 .loading-message {
   display: flex;
@@ -995,11 +971,6 @@ textarea {
     background-position: -100% 0;
   }
 }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .progress-steps {
   list-style: none;
   padding: 0;
@@ -1045,7 +1016,7 @@ textarea {
   font-size: 14px;
   font-weight: 500;
 }
-.trade-notification > span:not(.loading-spinner) {
+.trade-notification > span {
   flex: 1;
 }
 .trade-notification small {
@@ -1308,9 +1279,18 @@ textarea {
     padding: 8px 8px 0;
   }
   .modal.draft-modal {
+    --draft-control-height: 48px;
+    --draft-control-radius: 14px;
+
     max-height: calc(100dvh - 16px);
     padding: 12px 20px max(24px, env(safe-area-inset-bottom));
     border-radius: 32px 32px 0 0;
+  }
+  .draft-modal .draft-grid {
+    gap: 12px;
+  }
+  .draft-modal .ui-input:not([type='checkbox']) {
+    font-size: 16px;
   }
   .sheet-handle {
     display: block;
@@ -1352,6 +1332,23 @@ textarea {
   }
 }
 @media (max-width: 800px) {
+  .site-brand,
+  .site-nav button,
+  .text-button,
+  .refresh-button,
+  .technical-details summary {
+    min-height: 44px;
+  }
+  .chat-input-submit,
+  .notice button,
+  .modal-head > button {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+  .ui-input:not([type='checkbox']) {
+    font-size: 16px;
+  }
   .topbar,
   .content,
   .footer {
@@ -1404,6 +1401,9 @@ textarea {
   .asset-list {
     padding: 0 16px;
     border-radius: 28px;
+  }
+  .asset-disclaimer {
+    padding-inline: 16px;
   }
   .asset-row {
     grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1.2fr);

@@ -34,8 +34,12 @@ test('desktop reuses locked dependencies, invalidates changed manifests, and rep
 echo "$*" >> installs.log
 if [ -f fail-install ]; then exit 1; fi
 mkdir -p node_modules/tsx node_modules/vite node_modules/node/bin node_modules/electron/dist
-touch node_modules/.package-lock.json node_modules/tsx/package.json node_modules/vite/package.json node_modules/node/bin/node node_modules/electron/dist/test-electron
-echo test-electron > node_modules/electron/path.txt
+touch node_modules/.package-lock.json node_modules/tsx/package.json node_modules/vite/package.json node_modules/node/bin/node
+cat > node_modules/electron/install.js <<'JS'
+const fs = require('node:fs');
+fs.writeFileSync('node_modules/electron/dist/test-electron', '');
+fs.writeFileSync('node_modules/electron/path.txt', 'test-electron');
+JS
 `,
     { mode: 0o755 },
   );

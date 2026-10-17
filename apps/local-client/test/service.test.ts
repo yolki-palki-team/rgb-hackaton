@@ -96,6 +96,7 @@ class FakeWallet implements WalletAdapter {
   previewAsset: AssetRef = dusd;
   feeSats = '500';
   signCount = 0;
+  finalizeCount = 0;
   releaseCount = 0;
   beforeSign?: () => void;
   async capabilities() {
@@ -155,6 +156,7 @@ class FakeWallet implements WalletAdapter {
     _packageValue: SettlementPackage,
     _signatures: Array<{ ownerId: string; signature: unknown }>,
   ): Promise<Receipt> {
+    this.finalizeCount++;
     return this.sync('trade-1');
   }
   async sync(tradeId: string): Promise<Receipt> {
@@ -256,6 +258,260 @@ async function fixture(store: LocalStore, wallet = new FakeWallet(), market = ne
   };
   return { service, wallet, market, tradePlan, published };
 }
+
+async function saveCommittedIntent(service: LocalService, store: LocalStore) {
+  await service.preview('trade-1');
+  const { package: packageValue, approval } = store.get<{
+    package: SettlementPackage;
+    approval: Approval;
+  }>('approval:trade-1')!;
+  store.set('signing:trade-1', { package: packageValue, approval });
+  store.set('signature:trade-1', { testOnly: true });
+  store.set('operation:trade-1', { state: 'SIGNED' });
+}
+
+test('local record enumeration binds literal prefixes without SQL or wildcard interpretation', () => {
+  const store = new LocalStore(':memory:');
+  try {
+    store.set('operation:trade-1', { state: 'SIGNED' });
+    store.set('operation:trade-2', { state: 'PREPARING' });
+    store.set('receipt:trade-1', { state: 'pending' });
+    for (const prefix of ['operation_%:', "operation' OR 1=1 --", 'operation\\:', 'OPERATION:']) {
+      const key = `${prefix}literal`;
+      store.set(key, { marker: key });
+      assert.deepEqual(store.entries(prefix), [{ key, value: { marker: key } }]);
+    }
+    assert.deepEqual(store.entries('operation:'), [
+      { key: 'operation:trade-1', value: { state: 'SIGNED' } },
+      { key: 'operation:trade-2', value: { state: 'PREPARING' } },
+    ]);
+  } finally {
+    store.close();
+  }
+});
+
+test('automatic recovery survives restart and unavailable capabilities without signing or finalizing', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'rgb-committed-recovery-'));
+  const path = join(directory, 'local.sqlite');
+  let store = new LocalStore(path);
+  try {
+    const { service, wallet, market } = await fixture(store);
+    await saveCommittedIntent(service, store);
+    market.trade!.status = 'BROADCAST';
+    store.close();
+    store = new LocalStore(path);
+    const restarted = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
+    const capabilities = await wallet.capabilities();
+    let capabilityCalls = 0;
+    wallet.capabilities = async () => {
+      capabilityCalls++;
+      return {
+        ...capabilities,
+        directSwap: false,
+        ringSwap: false,
+        signing: false,
+        broadcast: false,
+      };
+    };
+    wallet.state = async () => {
+      throw new Error('Spent input needs reconciliation');
+    };
+    market.snapshot = async () => {
+      throw new Error('Recovery must use durable operations, not the latest 50 trades');
+    };
+    let syncCalls = 0;
+    const receipt: Receipt = {
+      mode: 'real',
+      tradeId: 'trade-1',
+      network: 'regtest',
+      state: 'confirmed',
+      txid: 'a'.repeat(64),
+      chainConfirmed: true,
+      rgbAccepted: true,
+    };
+    wallet.sync = async (id) => {
+      assert.equal(id, 'trade-1');
+      syncCalls++;
+      return receipt;
+    };
+    assert.equal(await restarted.recoverCommitted(), false);
+    assert.equal(await restarted.recoverCommitted(), false);
+    assert.equal(syncCalls, 1);
+    assert.equal(capabilityCalls, 0);
+    assert.equal(wallet.signCount, 0);
+    assert.equal(wallet.finalizeCount, 0);
+    assert.equal(wallet.releaseCount, 0);
+    assert.deepEqual(store.get('receipt:trade-1'), receipt);
+    assert.deepEqual(store.get('operation:trade-1'), { state: 'CONFIRMED' });
+    assert.deepEqual(
+      market.trade!.messages.map((item) => item.message.type),
+      ['receipt'],
+    );
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('automatic recovery ignores unsigned preparations and peer signing status', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    await service.preview('trade-1');
+    store.set('operation:trade-1', { state: 'PREPARING' });
+    market.trade!.status = 'SIGNING';
+    let syncCalls = 0;
+    wallet.sync = async () => {
+      syncCalls++;
+      throw new Error('Unsigned trades must not be synced automatically');
+    };
+    assert.equal(await service.recoverCommitted(), false);
+    assert.equal(syncCalls, 0);
+    assert.equal(wallet.signCount, 0);
+    assert.equal(wallet.finalizeCount, 0);
+    assert.equal(wallet.releaseCount, 0);
+    assert.deepEqual(store.get('operation:trade-1'), { state: 'PREPARING' });
+    assert.equal(market.messages.length, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('automatic recovery reports pending receipts until local settlement is confirmed', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    await saveCommittedIntent(service, store);
+    market.trade!.status = 'SIGNING';
+    let receipt: Receipt = {
+      mode: 'real',
+      tradeId: 'trade-1',
+      network: 'regtest',
+      state: 'pending',
+      chainConfirmed: false,
+      rgbAccepted: false,
+    };
+    wallet.sync = async () => receipt;
+    assert.equal(await service.recoverCommitted(), true);
+    assert.deepEqual(store.get('operation:trade-1'), { state: 'SIGNED' });
+    receipt = { ...receipt, state: 'reconciling', txid: 'a'.repeat(64) };
+    assert.equal(await service.recoverCommitted(), true);
+    receipt = { ...receipt, state: 'confirmed', chainConfirmed: true, rgbAccepted: true };
+    assert.equal(await service.recoverCommitted(), false);
+    assert.deepEqual(store.get('operation:trade-1'), { state: 'CONFIRMED' });
+    assert.equal(wallet.signCount, 0);
+    assert.equal(wallet.finalizeCount, 0);
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('automatic recovery rejects changed or unbound packages before calling the wallet', async (t) => {
+  for (const change of ['digest', 'package', 'binding'] as const) {
+    await t.test(change, async () => {
+      const store = new LocalStore(':memory:');
+      try {
+        const { service, wallet, market } = await fixture(store);
+        await saveCommittedIntent(service, store);
+        if (change === 'digest') market.trade!.plan.digest = 'f'.repeat(64);
+        if (change === 'package') market.trade!.settlementPackage!.payload = { tampered: true };
+        if (change === 'binding') store.set('signing:trade-1', null);
+        let syncCalls = 0;
+        wallet.sync = async () => {
+          syncCalls++;
+          throw new Error('Changed packages must be rejected before wallet sync');
+        };
+        await assert.rejects(service.recoverCommitted(), /Committed trade recovery is pending/);
+        assert.equal(syncCalls, 0);
+        assert.equal(wallet.signCount, 0);
+        assert.equal(wallet.finalizeCount, 0);
+        assert.equal(wallet.releaseCount, 0);
+        assert.deepEqual(store.get('operation:trade-1'), { state: 'SIGNED' });
+      } finally {
+        store.close();
+      }
+    });
+  }
+});
+
+test('automatic recovery preserves receipts and reservations on wallet failure or invalid evidence', async (t) => {
+  const prior: Receipt = {
+    mode: 'real',
+    tradeId: 'trade-1',
+    network: 'regtest',
+    state: 'pending',
+    txid: 'a'.repeat(64),
+    chainConfirmed: false,
+    rgbAccepted: false,
+  };
+  const invalid: Array<Receipt | Error> = [
+    new Error('Wallet is unavailable'),
+    { ...prior, tradeId: 'another-trade' },
+    { ...prior, txid: 'b'.repeat(64) },
+    { ...prior, txid: undefined },
+    { ...prior, state: 'confirmed', chainConfirmed: true, rgbAccepted: false },
+  ];
+  for (const [index, result] of invalid.entries()) {
+    await t.test(`failure ${index + 1}`, async () => {
+      const store = new LocalStore(':memory:');
+      try {
+        const { service, wallet, market } = await fixture(store);
+        await saveCommittedIntent(service, store);
+        store.set('receipt:trade-1', prior);
+        wallet.sync = async () => {
+          if (result instanceof Error) throw result;
+          return result;
+        };
+        await assert.rejects(service.recoverCommitted(), /Committed trade recovery is pending/);
+        assert.deepEqual(store.get('receipt:trade-1'), prior);
+        assert.deepEqual(store.get('operation:trade-1'), { state: 'SIGNED' });
+        assert.equal(wallet.signCount, 0);
+        assert.equal(wallet.finalizeCount, 0);
+        assert.equal(wallet.releaseCount, 0);
+        assert.equal(market.messages.length, 0);
+      } finally {
+        store.close();
+      }
+    });
+  }
+});
+
+test('automatic recovery keeps a confirmed receipt when relay fails and retries without signing', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, wallet, market } = await fixture(store);
+    await saveCommittedIntent(service, store);
+    market.trade!.status = 'RECONCILING';
+    const receipt: Receipt = {
+      mode: 'real',
+      tradeId: 'trade-1',
+      network: 'regtest',
+      state: 'confirmed',
+      txid: 'a'.repeat(64),
+      chainConfirmed: true,
+      rgbAccepted: true,
+    };
+    wallet.sync = async () => receipt;
+    const request = market.request.bind(market);
+    let unavailable = true;
+    market.request = async (path, method, body) => {
+      if (method === 'POST' && unavailable) throw new Error('Receipt relay unavailable');
+      return request(path, method, body);
+    };
+    await assert.rejects(service.recoverCommitted(), /Committed trade recovery is pending/);
+    assert.deepEqual(store.get('receipt:trade-1'), receipt);
+    assert.deepEqual(store.get('operation:trade-1'), { state: 'SIGNED' });
+    unavailable = false;
+    await service.recoverCommitted();
+    assert.deepEqual(store.get('operation:trade-1'), { state: 'CONFIRMED' });
+    assert.equal(wallet.signCount, 0);
+    assert.equal(wallet.finalizeCount, 0);
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+  }
+});
 
 test('local progress exposes only durable recovery state and validates participant ownership', async () => {
   const store = new LocalStore(':memory:');

@@ -8,7 +8,11 @@ export type WorkflowClient = {
 };
 export type WorkflowAction = 'prepare' | 'preview' | 'sync';
 export function nextTradeAction(trade: Trade): WorkflowAction | null {
-  if (['CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(trade.status))
+  if (
+    ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
+      trade.status,
+    )
+  )
     return null;
   if (trade.recoveryRequired || trade.signingAuthorized) return 'sync';
   if (['BROADCAST', 'READY_TO_BROADCAST'].includes(trade.status)) return 'sync';
@@ -27,6 +31,9 @@ export class TradeWorkflow {
   private failures = 0;
   private retryAt = 0;
   error: string | null = null;
+  get running() {
+    return this.inFlight;
+  }
   get paused() {
     return this.failures >= 3;
   }
@@ -44,7 +51,9 @@ export class TradeWorkflow {
     const action = nextTradeAction(trade);
     if (
       !action &&
-      ['CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(trade.status)
+      ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
+        trade.status,
+      )
     )
       this.retry();
     if (!action || this.paused || now < this.retryAt) return;
@@ -77,10 +86,10 @@ export function tradeProgress(
       step: 4,
       title: 'Swap complete',
       detail:
-        'Bitcoin is confirmed and your RGB assets have been accepted. Your balances are up to date.',
+        'Bitcoin is confirmed and your RGB assets have been accepted. Wallet balances refresh separately.',
       waiting: false,
     };
-  if (['CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(trade.status))
+  if (['REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(trade.status))
     return {
       step: 0,
       title: trade.status === 'UNSUPPORTED' ? 'This swap is unavailable' : 'This swap has stopped',
