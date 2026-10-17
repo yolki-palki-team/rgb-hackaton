@@ -8,9 +8,16 @@ they are no longer required for normal desktop use. Do not run a separate sideca
 alongside automatic desktop startup.
 
 The `/chain/bootstrap` endpoint enrolls a desktop using its existing market token.
-It returns private network access over HTTPS and assigns the first two issuers
-persistently. This intentionally enables automatic test funding for registered
+It returns private network access over HTTPS and reserves one distinct demo token
+per new participant: X, DUSD, then T000001, T000002, and so on. The desktop issues
+1,000 precision-0 units locally and publishes the public RGB contract. Reservations
+survive reconnects and concurrent enrollments. Existing X/DUSD assignments stay
+unchanged. This intentionally enables automatic test funding for registered
 demo participants; it is not a production admission policy.
+
+Update both the server gateway and the desktop/native bridge to enable generated
+tickers. Already completed BTC-only profiles keep their existing startup state;
+this change applies to new enrollment and does not reset or replace old wallets.
 
 The public market and the blockchain are separate services. This opt-in profile
 adds Bitcoin Core, a persistent Electrum indexer, RGB proxy, an authenticated
@@ -123,8 +130,14 @@ Each command issues **1,000 atomic units**, precision 0, into that participant's
 real local wallet and publishes the public contract. A ticker has one issuer in
 this shared catalog; another participant cannot silently create a second asset
 under that name. Repeating issuance uses the saved issuance receipt.
+For subsequent automatic participants the same flow uses their reserved T-number;
+manual diagnostics accept that assigned ticker via `--asset T000001`. Arbitrary
+unreserved T-numbers are rejected before local issuance. If SDK issuance is
+interrupted before its receipt is saved, the local `issuing-TICKER.json` marker
+blocks another mint until the original result is reconciled; do not delete it
+and blindly retry.
 
-After both issuances, run on **every** participant, including a BTC-only third one:
+After manual issuance, run on **every** participant:
 
 ```bash
 uv run --locked python scripts/demo/desktop_wallet.py sync \
@@ -133,8 +146,13 @@ uv run --locked python scripts/demo/desktop_wallet.py sync \
 
 The native SDK validates imported contracts and checks their contract IDs.
 Catalog import gives visibility to an asset, **not ownership of its tokens**.
-Initially the X issuer owns X, the DUSD issuer owns DUSD, and a third participant
-can contribute BTC. Tokens move between participants through the existing direct
+Initially each new participant owns only their issued RGB token, plus test BTC.
+Running idle sidecars import newly published contracts on balance refresh (at most
+once every 15 seconds); active trades defer catalog imports until reconciliation.
+For a token-only ring, Alice can offer 100 X for 100 DUSD, Bob 100 DUSD for
+100 T000001, and Carol 100 T000001 for 100 X. Each still needs BTC for fees.
+The matcher supports direct swaps and three-party rings; more issued token types
+do not add support for longer rings. Tokens move through the existing direct
 or atomic ring settlement. There is no central RGB mint with users' private keys,
 and no synthetic balance credit. These test assets have no backing or cash value.
 
@@ -182,6 +200,25 @@ the atomic swap signer. Keep its seed/private state local, and never send mainne
 BTC to this demo.
 
 ## Diagnostics and limits
+
+On 2026-10-17, the isolated automatic-enrollment check passed with four independent
+real regtest wallets: X, DUSD, T000001 and T000002, each holding 1,000 units of its
+own token. Repeating issuance and restarting preserved each contract ID and
+balance; the first wallet also imported the later participants' contracts. This
+checks funding, issuance and catalog distribution, not a completed token-only ring.
+
+```bash
+rtk proxy uv run --locked python scripts/demo/automatic-desktop-smoke.py --execute
+```
+
+The check retains its wallets under ignored state directories and uses the
+isolated `palka-auto-token-check` Compose project. Stop its services without
+deleting volumes after inspection:
+
+```bash
+rtk proxy docker compose -p palka-auto-token-check -f deploy/compose.network.yaml \
+  -f deploy/.state/auto-token-smoke/compose.json stop
+```
 
 Local ARM64 integration verified two independent wallets over authenticated HTTPS,
 repeat-safe BTC funding, real X/DUSD issuance and SDK catalog validation. A WDK

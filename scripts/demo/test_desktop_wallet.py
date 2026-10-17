@@ -4,6 +4,7 @@ import hashlib
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import desktop_wallet
@@ -130,6 +131,52 @@ class DesktopWalletTests(unittest.TestCase):
             (state / SLOT / "keys.json").unlink()
             with self.assertRaisesRegex(ValueError, "configuration mismatch"):
                 desktop_wallet.start(self.config_path)
+
+    def test_assigned_token_is_issued_locally_and_published_on_retry(self):
+        state = self.initialize()
+        config = read_private(self.config_path)
+        save_private(state / "shared-network.json", {"synthetic": True})
+        args = SimpleNamespace(command="issue", asset="T000001")
+        calls = []
+        publication = {"contractId": "rgb:unique", "contract": "eA=="}
+
+        def native(_state, operation, **kwargs):
+            calls.append((operation, kwargs))
+            if operation == "identity":
+                return {"fingerprint": "synthetic-fingerprint"}
+            if operation == "state":
+                return {"unspents": [{"utxo": {"colorable": True}}]}
+            if operation == "issue":
+                self.assertEqual(kwargs, {"ticker": "T000001", "amount": "1000"})
+                return {"asset_id": "rgb:unique"}
+            if operation == "catalog-export":
+                return {"contract": "eA=="}
+            if operation == "catalog-import":
+                return {"contractId": "rgb:unique"}
+            raise AssertionError(operation)
+
+        with (
+            patch.object(desktop_wallet, "settings", return_value=(config, state, 4201)),
+            patch.object(desktop_wallet, "native", side_effect=native),
+            patch("chain_transport.Client") as client_class,
+            patch("chain_transport.Adapters"),
+            patch("chain_transport.environment", return_value={}),
+            patch("builtins.print"),
+        ):
+            client = client_class.return_value
+            client.request.side_effect = lambda _path, request: (
+                {"T000001": publication} if not request else {}
+            )
+            for _ in range(2):
+                desktop_wallet.network_command(self.config_path, args)
+            client.request.assert_any_call(
+                "/catalog", {"ticker": "T000001", "ownerId": config["ownerId"], **publication}
+            )
+            calls.clear()
+            client.request.side_effect = ValueError("This asset already has an issuer")
+            with self.assertRaisesRegex(ValueError, "issuer"):
+                desktop_wallet.network_command(self.config_path, args)
+            self.assertNotIn("issue", [operation for operation, _ in calls])
 
 
 if __name__ == "__main__":

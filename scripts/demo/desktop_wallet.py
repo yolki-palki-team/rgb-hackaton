@@ -7,6 +7,7 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import secrets
 import signal
 import sqlite3
@@ -310,8 +311,11 @@ def network_command(config_path, args):
                         )
                     )
             elif args.command == "issue":
-                if args.asset not in ("X", "DUSD"):
-                    raise ValueError("Pass --asset X or --asset DUSD")
+                if not isinstance(args.asset, str) or not (
+                    args.asset in ("X", "DUSD")
+                    or (re.fullmatch(r"T[0-9]{6}", args.asset) and args.asset != "T000000")
+                ):
+                    raise ValueError("Pass --asset X, DUSD or the assigned demo ticker")
                 client.request("/catalog", {"ticker": args.asset, "ownerId": config["ownerId"]})
                 # Wait for the confirmed colored funding output to reach electrs.
                 for _attempt in range(30):
@@ -359,7 +363,7 @@ def main():
     )
     parser.add_argument("--desktop-data-dir", required=True, type=Path)
     parser.add_argument("--invite", type=Path)
-    parser.add_argument("--asset", choices=["X", "DUSD"])
+    parser.add_argument("--asset", help="X, DUSD or the demo ticker assigned during enrollment")
     parser.add_argument("--wdk-address")
     args = parser.parse_args()
     config_path = args.desktop_data_dir.expanduser().resolve() / "desktop-config.json"

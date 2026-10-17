@@ -141,6 +141,8 @@ def electrum(request):
 
 class Network:
     def assignment(self, owner):
+        if not re.fullmatch(r"participant-[0-9a-f]{64}", owner):
+            raise ValueError("Automatic participant ID required")
         path = self.state / "catalog.json"
         with self.lock:
             entries = json.loads(path.read_text()) if path.exists() else {}
@@ -152,7 +154,17 @@ class Network:
                     entries[ticker] = {"ownerId": owner}
                     atomic(path, entries)
                     return ticker
-            return None
+            # Reserve before returning so concurrent enrollments cannot share a ticker.
+            number = 1 + max(
+                (int(ticker[1:]) for ticker in entries if re.fullmatch(r"T[0-9]{6}", ticker)),
+                default=0,
+            )
+            if number > 999999:
+                raise ValueError("Demo asset namespace exhausted")
+            ticker = f"T{number:06d}"
+            entries[ticker] = {"ownerId": owner}
+            atomic(path, entries)
+            return ticker
 
     def __init__(self, state):
         self.state = state
@@ -209,11 +221,16 @@ class Network:
             ticker = request.get("ticker")
             if ticker is None:
                 return entries
-            if ticker not in ("X", "DUSD"):
-                raise ValueError("Only X and DUSD demo issuance is supported")
+            if not isinstance(ticker, str) or not (
+                ticker in ("X", "DUSD")
+                or (re.fullmatch(r"T[0-9]{6}", ticker) and ticker != "T000000")
+            ):
+                raise ValueError("Expected X, DUSD or an assigned demo ticker")
             owner = request.get("ownerId", "")
             if not re.fullmatch(r"participant-[0-9a-f]{64}", owner):
                 raise ValueError("Automatic participant ID required")
+            if ticker not in ("X", "DUSD") and ticker not in entries:
+                raise ValueError("Demo ticker must be assigned during enrollment first")
             entry = entries.get(ticker, {"ownerId": owner})
             if entry["ownerId"] != owner:
                 raise ValueError(
@@ -228,6 +245,11 @@ class Network:
                 base64.b64decode(candidate["contract"], validate=True)
                 if not candidate["contractId"].startswith("rgb:"):
                     raise ValueError("RGB contract ID required")
+                if any(
+                    name != ticker and other.get("contractId") == candidate["contractId"]
+                    for name, other in entries.items()
+                ):
+                    raise ValueError("Contract is already published under another ticker")
                 if "contract" in entry and candidate != entry:
                     raise ValueError("Published contracts are immutable")
                 entry = candidate

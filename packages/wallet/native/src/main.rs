@@ -270,9 +270,14 @@ fn run() -> Result<()> {
                 // A lost response after SDK issuance must never create a second contract.
                 let pending = root.join(format!("issuing-{ticker}.json"));
                 if pending.exists() {
-                    return Err("uncertain issuance; reconcile the local wallet before retrying".into());
+                    return Err(
+                        "uncertain issuance; reconcile the local wallet before retrying".into(),
+                    );
                 }
-                private_write(&pending, &serde_json::to_vec(&json!({"ticker":ticker,"amount":amount.to_string()}))?)?;
+                private_write(
+                    &pending,
+                    &serde_json::to_vec(&json!({"ticker":ticker,"amount":amount.to_string()}))?,
+                )?;
                 let asset = wallet.issue_asset_nia(
                     ticker.into(),
                     format!("Regtest {ticker}"),

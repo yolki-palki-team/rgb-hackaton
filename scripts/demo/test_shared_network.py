@@ -5,6 +5,7 @@ import json
 import tempfile
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,8 +25,54 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.network.assignment(first), "X")
         self.assertEqual(self.network.assignment(first), "X")
         self.assertEqual(self.network.assignment(second), "DUSD")
-        self.assertIsNone(self.network.assignment(third))
+        self.assertEqual(self.network.assignment(third), "T000001")
+        self.assertEqual(self.network.assignment(third), "T000001")
         self.assertEqual(self.network.catalog({})["X"]["ownerId"], first)
+
+    def test_concurrent_enrollments_get_distinct_persistent_assets(self):
+        owners = [f"participant-{index:064x}" for index in range(20)]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            tickers = list(pool.map(self.network.assignment, owners))
+        self.assertEqual(len(set(tickers)), len(owners))
+        self.assertEqual(set(tickers), {"X", "DUSD", *(f"T{i:06d}" for i in range(1, 19))})
+        # Reconstruct the gateway over the saved catalog, including unpublished reservations.
+        restarted = gateway.Network.__new__(gateway.Network)
+        restarted.state = self.network.state
+        restarted.lock = threading.Lock()
+        self.assertEqual([restarted.assignment(owner) for owner in owners], tickers)
+        self.assertEqual(restarted.assignment("participant-" + "f" * 64), "T000019")
+
+    def test_dynamic_catalog_requires_assignment_and_a_new_contract(self):
+        self.network.assignment("participant-" + "1" * 64)
+        self.network.assignment("participant-" + "2" * 64)
+        owner = self.request["ownerId"]
+        request = {"ticker": "T000001", "ownerId": owner}
+        with self.assertRaisesRegex(ValueError, "assigned"):
+            self.network.catalog(request)
+        self.assertEqual(self.network.assignment(owner), "T000001")
+        with self.assertRaisesRegex(ValueError, "already has an issuer"):
+            self.network.catalog(request | {"ownerId": "participant-" + "b" * 64})
+        publication = request | {"contractId": "rgb:unique", "contract": "eA=="}
+        self.assertEqual(
+            self.network.catalog(publication),
+            {key: value for key, value in publication.items() if key != "ticker"},
+        )
+        self.assertEqual(self.network.catalog(publication)["contractId"], "rgb:unique")
+        with self.assertRaisesRegex(ValueError, "immutable"):
+            self.network.catalog(publication | {"contractId": "rgb:changed"})
+        self.network.assignment("participant-" + "b" * 64)
+        with self.assertRaisesRegex(ValueError, "another ticker"):
+            self.network.catalog(
+                publication | {"ticker": "T000002", "ownerId": "participant-" + "b" * 64}
+            )
+
+    def test_invalid_assignment_does_not_reserve_a_ticker(self):
+        with self.assertRaisesRegex(ValueError, "participant ID"):
+            self.network.assignment("alice")
+        self.assertEqual(self.network.catalog({}), {})
+        for ticker in ("../X", "T000000", "T1", "T0000001", "USDT"):
+            with self.assertRaises(ValueError):
+                self.network.catalog({"ticker": ticker, "ownerId": self.request["ownerId"]})
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
