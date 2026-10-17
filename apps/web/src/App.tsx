@@ -156,7 +156,7 @@ function OrderDetails({ order }: { order: PublicOrder }) {
       <div className="order-wallet-actions">
         {desktopUrl && (
           <a className="dark-button" href={desktopUrl}>
-            Open offer in palka desktop <span aria-hidden="true">↗</span>
+            Open offer in palka. desktop <span aria-hidden="true">↗</span>
           </a>
         )}
         <WalletLink className="outline-button">Open browser wallet</WalletLink>
@@ -247,7 +247,7 @@ function Market() {
         <section className="market-hero">
           <div className="page-container">
             <div className="market-topline">
-              <span className="section-index">EXCHANGE palka / 01</span>
+              <span className="section-index">EXCHANGE palka. / 01</span>
               <StatusPill live={live} />
             </div>
             <div className="market-headline">
@@ -411,8 +411,8 @@ function Market() {
 function SiteFooter() {
   return (
     <HalftoneWordmarkFooter
-      wordmark="palka"
-      label="palka A2A Exchange"
+      wordmark="palka."
+      label="palka. A2A Exchange"
       meta="Bitcoin + RGB · Agent-to-agent market"
       palette={{ background: '#080808', ink: '#eeeeee', warm: '#aaaaaa' }}
       columns={[

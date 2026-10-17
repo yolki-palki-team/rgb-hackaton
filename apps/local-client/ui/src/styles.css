@@ -194,6 +194,87 @@ p {
 .balance-card {
   padding: 24px;
   min-width: 0;
+  background: linear-gradient(135deg, #30254b, #171320);
+  border-color: #594174;
+}
+.balance-card[data-asset='BTC'] {
+  background: linear-gradient(135deg, #59351c, #24190f);
+  border-color: #895b30;
+}
+.balance-card[data-asset='DUSD'] {
+  background: linear-gradient(135deg, #163d43, #102328);
+  border-color: #34666b;
+}
+.balance-card[data-asset='KEEP'] {
+  background: linear-gradient(135deg, #263b5e, #141d30);
+  border-color: #455f8c;
+}
+.balance-card .balance-code,
+.balance-card p,
+.balance-card small {
+  color: #d7d2df;
+}
+.balance-card .asset-icon {
+  background: #ffffff12;
+  border-color: #ffffff30;
+}
+.goal-section {
+  padding-top: 40px;
+}
+.composer-heading {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+.composer-heading h1 {
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 500;
+  margin: 0;
+}
+.chat-input {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #444;
+  border-radius: 20px;
+  background: #101010;
+}
+.chat-input:focus-within {
+  border-color: #999;
+}
+.chat-input .chat-input-textarea {
+  min-height: 0;
+  max-height: 400px;
+  resize: none;
+  overflow-x: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px;
+  font-size: 16px;
+  outline: none;
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-left: 8px;
+}
+.chat-input-submit {
+  height: 40px;
+  width: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: #eee;
+  color: #111;
+}
+.composer-help {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 14px 0 0;
 }
 .balance-card-top {
   display: flex;
@@ -355,29 +436,6 @@ p {
   padding: 4px;
   margin-left: auto;
 }
-.goal-card {
-  padding: 32px;
-}
-.goal-card-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
-}
-.goal-card-head strong,
-.goal-card-head span:not(.ai-status) {
-  display: block;
-}
-.goal-card-head strong {
-  font-size: 16px;
-  font-weight: 500;
-}
-.goal-card-head span:not(.ai-status) {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 5px;
-}
-.goal-mark,
 .modal-icon,
 .approval-lock {
   display: grid;
@@ -414,49 +472,6 @@ textarea {
 }
 .ui-input::placeholder {
   color: #888;
-}
-.goal-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-  margin-top: 22px;
-}
-.goal-actions > span {
-  max-width: 350px;
-  font-size: 12px;
-  color: #999;
-  line-height: 1.6;
-}
-.goal-actions > div {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.how-section {
-  border-top: 1px solid var(--line);
-  padding-top: 32px;
-}
-.step-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
-}
-.step-grid span {
-  display: block;
-  color: #888;
-  font-size: 12px;
-  margin-bottom: 16px;
-}
-.step-grid strong {
-  display: block;
-  font-size: 15px;
-  font-weight: 500;
-  margin-bottom: 10px;
-}
-.step-grid p {
-  color: #aaa;
-  font-size: 13px;
 }
 .market-layout,
 .trade-layout {
@@ -981,17 +996,8 @@ textarea {
     font-size: 52px;
   }
   .market-layout,
-  .trade-layout,
-  .step-grid {
+  .trade-layout {
     grid-template-columns: 1fr;
-  }
-  .goal-actions {
-    align-items: start;
-    flex-direction: column;
-  }
-  .goal-actions > div {
-    width: 100%;
-    justify-content: space-between;
   }
   .mode-banner strong {
     display: block;
@@ -1005,7 +1011,6 @@ textarea {
   .balance-value {
     font-size: 24px;
   }
-  .goal-card,
   .swap-progress {
     padding: 24px;
   }
@@ -1036,9 +1041,6 @@ textarea {
     padding: 12px;
   }
   .modal-actions {
-    flex-wrap: wrap;
-  }
-  .goal-actions > div {
     flex-wrap: wrap;
   }
   .ai-status {

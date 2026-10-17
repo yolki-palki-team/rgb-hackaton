@@ -1,3 +1,4 @@
+import { ChatInput, ChatInputTextArea, ChatInputSubmit } from './components/ui/chat-input';
 import {
   AssetCard,
   Button,
@@ -5,7 +6,6 @@ import {
   Input,
   Panel,
   Select,
-  Textarea,
   SectionTitle,
   StatusBadge,
 } from './components/ui/wallet-kit';
@@ -340,8 +340,8 @@ function App() {
     <div className="app-shell">
       <div className="main-area">
         <header className="topbar">
-          <button className="site-brand" onClick={() => setView('home')} aria-label="palka home">
-            palka
+          <button className="site-brand" onClick={() => setView('home')} aria-label="palka. home">
+            palka.
           </button>
           <nav className="site-nav" aria-label="Wallet navigation">
             {navItems.map((item) => (
@@ -459,19 +459,60 @@ function App() {
             )}
           {view === 'home' && (
             <>
-              <div className="page-heading">
-                <div>
-                  <div className="eyebrow">YOUR LOCAL WALLET</div>
-                  <h1>
-                    Swap on your terms<span className="accent-stop">.</span>
-                  </h1>
-                  <p>Describe your swap. The local assistant prepares an order for your review.</p>
+              <section className="goal-section" aria-labelledby="goal-heading">
+                <div className="composer-heading">
+                  <h1 id="goal-heading">What would you like to swap?</h1>
+                  <StatusBadge className="ai-status">
+                    QVAC · {status?.qvacAvailable ? 'LOCAL' : connected ? 'UNAVAILABLE' : 'OFFLINE'}
+                  </StatusBadge>
                 </div>
-              </div>
+                {connected && !status?.qvacAvailable && (
+                  <p className="qvac-reason" role="status">
+                    {status?.qvacReason ?? 'Local model unavailable.'} Use the manual form.
+                  </p>
+                )}
+                <ChatInput
+                  value={goal}
+                  onChange={(event) => setGoal(event.target.value)}
+                  onSubmit={() => void interpret()}
+                  loading={busy === 'interpret'}
+                  disabled={busy !== null || !connected}
+                  rows={2}
+                >
+                  <ChatInputTextArea
+                    id="goal"
+                    aria-label="Describe your swap and limits"
+                    aria-describedby="goal-help"
+                    placeholder="What would you give, and what would you like in return?"
+                  />
+                  <div className="composer-actions">
+                    <Button
+                      className="text-button"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        if (connected || samplePreview) setDraftOpen(true);
+                        else
+                          setNotice({
+                            tone: 'info',
+                            text: 'Pair a local wallet before creating an order.',
+                          });
+                      }}
+                    >
+                      Fill in manually
+                    </Button>
+                    <ChatInputSubmit />
+                  </div>
+                </ChatInput>
+                <p className="composer-help" id="goal-help">
+                  Private on this device. Review terms before publishing; signing needs your
+                  approval.
+                </p>
+              </section>
+              <FundingPanel client={client} wallet={status} />
               <section aria-labelledby="balance-heading">
                 <SectionTitle
                   id="balance-heading"
-                  kicker="01 / ASSETS"
+                  kicker="YOUR WALLET"
                   title="Your assets"
                   action={
                     <span className="section-note">
@@ -500,107 +541,9 @@ function App() {
                 )}
                 {visibleBalances.some((balance) => balance.code === 'DUSD') && (
                   <p className="asset-disclaimer">
-                    DUSD is a test RGB asset on regtest. It is not dollar-backed or USDT.
+                    DUSD: regtest asset, not dollar-backed or USDT.
                   </p>
                 )}
-              </section>
-              <FundingPanel client={client} wallet={status} />
-              <section className="goal-section" aria-labelledby="goal-heading">
-                <SectionTitle
-                  id="goal-heading"
-                  kicker="03 / NEW ORDER"
-                  title="What would you like to swap?"
-                />
-                <Panel className="goal-card">
-                  <div className="goal-card-head">
-                    <div className="goal-mark">
-                      <Icon name="spark" size={23} />
-                    </div>
-                    <div>
-                      <strong>QVAC assistant</strong>
-                      <span>Interprets your goal on this device</span>
-                    </div>
-                    <StatusBadge
-                      className={`ai-status ${status?.qvacAvailable ? 'available' : ''}`}
-                    >
-                      {status?.qvacAvailable
-                        ? 'AVAILABLE'
-                        : connected
-                          ? 'UNAVAILABLE'
-                          : 'NOT CONNECTED'}
-                    </StatusBadge>
-                  </div>
-                  {connected && !status?.qvacAvailable && (
-                    <p className="qvac-reason" role="status">
-                      {status?.qvacReason ?? 'Local model unavailable.'} You can enter the order
-                      manually.
-                    </p>
-                  )}
-                  <label className="field-label" htmlFor="goal">
-                    Describe your goal and limits in your own words
-                  </label>
-                  <Textarea
-                    id="goal"
-                    value={goal}
-                    onChange={(event) => setGoal(event.target.value)}
-                    rows={3}
-                    placeholder="Describe the asset you would give and the minimum you want in return."
-                  />
-                  <div className="goal-actions">
-                    <span>
-                      QVAC suggests terms. Code checks amounts and limits before publication.
-                    </span>
-                    <div>
-                      <Button
-                        className="text-button"
-                        type="button"
-                        onClick={() => {
-                          if (connected || samplePreview) {
-                            setDraftOpen(true);
-                          } else
-                            setNotice({
-                              tone: 'info',
-                              text: 'Pair a local wallet before creating an order.',
-                            });
-                        }}
-                      >
-                        Fill in manually
-                      </Button>
-                      <Button
-                        className="primary-button"
-                        type="button"
-                        onClick={() => void interpret()}
-                        disabled={busy !== null || !goal.trim() || !connected}
-                      >
-                        <Icon name="spark" size={16} />
-                        {busy === 'interpret' ? 'Interpreting…' : 'Prepare order'}
-                        <Icon name="arrow" size={16} />
-                      </Button>
-                    </div>
-                  </div>
-                </Panel>
-              </section>
-              <section className="how-section" aria-labelledby="how-heading">
-                <SectionTitle kicker="HOW IT WORKS" title="Three steps to a swap" />
-                <div className="step-grid">
-                  <div>
-                    <span>01</span>
-                    <strong>Describe your goal</strong>
-                    <p>QVAC prepares an order locally. You review and confirm its terms.</p>
-                  </div>
-                  <div>
-                    <span>02</span>
-                    <strong>Find a match</strong>
-                    <p>The market looks for a direct pair or a three-party ring.</p>
-                  </div>
-                  <div>
-                    <span>03</span>
-                    <strong>Review and sign</strong>
-                    <p>
-                      The wallet validates the final transaction. Signing requires your approval.
-                    </p>
-                  </div>
-                </div>
               </section>
             </>
           )}
@@ -1038,7 +981,7 @@ function App() {
           )}
         </main>
         <footer className="footer">
-          <span>palka · A2A Exchange</span>
+          <span>palka.</span>
           <span>
             {connected
               ? `Bitcoin ${status?.network} · ${status?.mode.toUpperCase()} wallet`
