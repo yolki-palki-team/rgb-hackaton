@@ -1031,6 +1031,9 @@ textarea {
   overflow-y: auto;
 }
 .modal.draft-modal {
+  --draft-control-height: 56px;
+  --draft-control-radius: 18px;
+
   width: min(100%, 760px);
   padding: 28px;
 }
@@ -1042,8 +1045,8 @@ textarea {
   display: none;
 }
 .draft-modal .modal-head {
-  align-items: center;
-  margin-bottom: 16px;
+  align-items: start;
+  margin-bottom: 8px;
 }
 .draft-modal .modal-head > button {
   display: grid;
@@ -1058,23 +1061,48 @@ textarea {
 .modal.draft-modal h2 {
   font-size: 32px;
   font-weight: 600;
-  margin: 8px 0 12px;
+  margin: 8px 0 0;
 }
 .draft-modal .ui-input {
-  border-radius: 16px;
+  border-radius: var(--draft-control-radius);
   border-color: #ffffff14;
   background: #ffffff06;
 }
+.draft-modal .ui-input:not([type='checkbox']),
+.draft-modal .asset-select-trigger,
+.draft-modal .policy-toggle {
+  height: var(--draft-control-height);
+  min-height: var(--draft-control-height);
+  width: 100%;
+  border-radius: var(--draft-control-radius);
+}
+.draft-modal .ui-input:not([type='checkbox']) {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.draft-modal .asset-select .asset-row {
+  min-height: var(--draft-control-height);
+  padding: 8px 12px;
+}
+.draft-modal .field-label {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #b5b5bb;
+}
+.draft-modal .asset-select .asset-name strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .draft-modal .modal-actions .primary-button {
   width: 100%;
-  min-height: 50px;
+  min-height: var(--draft-control-height);
   justify-content: center;
-  border-radius: 999px;
-}
-.draft-grid .draft-amount-input {
-  height: 76px;
-  font-size: 24px;
-  font-variant-numeric: tabular-nums;
+  border-radius: var(--draft-control-radius);
 }
 .modal-head {
   display: flex;
@@ -1101,19 +1129,17 @@ textarea {
 }
 .draft-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-}
-.draft-grid label {
-  font-size: 12px;
-  color: #aaa;
-  display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 .draft-note {
   font-size: 12px;
   color: #aaa;
   margin: 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .policy-block {
   margin-top: 24px;
@@ -1137,8 +1163,8 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   font-size: 13px;
-  padding: 14px;
-  border-radius: 16px;
+  padding: 10px 14px;
+  border: 1px solid #ffffff14;
   background: #ffffff06;
 }
 .policy-toggle input[role='switch'] {
@@ -1175,32 +1201,35 @@ textarea {
   transform: translateX(20px);
 }
 .policy-reserves {
-  margin-top: 20px;
-  padding: 16px;
-  background: #ffffff05;
-  border-radius: 20px;
+  min-width: 0;
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
 }
-.policy-reserves label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.policy-reserves legend {
+  padding: 0;
+  margin-bottom: 12px;
   font-size: 12px;
-  color: #aaa;
+  color: #b5b5bb;
+}
+.reserve-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
   margin: 0;
-  padding: 10px 0;
 }
-.policy-reserves label + label {
-  border-top: 1px solid #ffffff0d;
-}
-.policy-reserves input {
-  max-width: 140px;
-  text-align: right;
+.draft-modal .reserve-field .field-label {
+  margin: 0;
 }
 .policy-asset {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+.policy-asset .asset-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
 }
 @media (max-width: 640px) {
   .draft-grid {

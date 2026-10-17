@@ -1068,36 +1068,35 @@ function App() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="draft-title"
+            aria-describedby="draft-description"
           >
             <div className="sheet-handle" aria-hidden="true" />
             <div className="modal-head">
-              <div className="modal-icon">
-                <Icon name="arrows" size={21} />
+              <div>
+                <div className="eyebrow">ORDER TERMS</div>
+                <h2 id="draft-title">Review swap</h2>
               </div>
               <Button type="button" onClick={() => setDraftOpen(false)} aria-label="Close">
                 <Icon name="close" size={18} />
               </Button>
             </div>
-            <div className="eyebrow">ORDER TERMS</div>
-            <h2 id="draft-title">Review swap</h2>
-            <p>
-              One asset for another, at fixed amounts. Publishing permits matching, not spending.
+            <p id="draft-description">
+              Review your amounts and limits. Publishing allows matching, not spending.
             </p>
             <div className="draft-grid">
               <AssetSelect
                 id="give-asset"
-                label="Give"
+                label="You give"
                 value={draft.giveAsset}
                 balances={visibleBalances}
                 onChange={(giveAsset) => updateDraft({ giveAsset })}
               />
               <div>
                 <label className="field-label" htmlFor="give-amount">
-                  Amount {draft.giveAsset === 'BTC' ? 'in sats' : 'in atomic units'}
+                  Amount ({draft.giveAsset === 'BTC' ? 'sats' : 'base units'})
                 </label>
                 <Input
                   id="give-amount"
-                  className="draft-amount-input"
                   value={draft.giveAmount}
                   onChange={(event) => updateDraft({ giveAmount: event.target.value })}
                   inputMode="numeric"
@@ -1105,18 +1104,17 @@ function App() {
               </div>
               <AssetSelect
                 id="receive-asset"
-                label="Receive"
+                label="You receive"
                 value={draft.receiveAsset}
                 balances={visibleBalances}
                 onChange={(receiveAsset) => updateDraft({ receiveAsset })}
               />
               <div>
                 <label className="field-label" htmlFor="receive-amount">
-                  At least {draft.receiveAsset === 'BTC' ? 'sats' : 'atomic units'}
+                  Minimum amount ({draft.receiveAsset === 'BTC' ? 'sats' : 'base units'})
                 </label>
                 <Input
                   id="receive-amount"
-                  className="draft-amount-input"
                   value={draft.minReceiveAmount}
                   onChange={(event) => updateDraft({ minReceiveAmount: event.target.value })}
                   inputMode="numeric"
@@ -1124,7 +1122,7 @@ function App() {
               </div>
               <div>
                 <label className="field-label" htmlFor="max-fee">
-                  Maximum order fee, sats
+                  Order fee limit (sats)
                 </label>
                 <Input
                   id="max-fee"
@@ -1135,7 +1133,7 @@ function App() {
               </div>
               <div>
                 <label className="field-label" htmlFor="expires">
-                  Expires in, minutes
+                  Expires in (minutes)
                 </label>
                 <Input
                   id="expires"
@@ -1149,13 +1147,13 @@ function App() {
               <div className="policy-block">
                 <div className="policy-heading">
                   <Icon name="shield" size={17} />
-                  <strong>Private policy</strong>
-                  <span>not visible to market</span>
+                  <strong>Your wallet limits</strong>
+                  <span>Private</span>
                 </div>
                 <div className="draft-grid">
                   <div>
                     <label className="field-label" htmlFor="policy-fee">
-                      Policy fee limit, sats
+                      Wallet fee limit (sats)
                     </label>
                     <Input
                       id="policy-fee"
@@ -1164,46 +1162,51 @@ function App() {
                       inputMode="numeric"
                     />
                   </div>
-                  <label className="policy-toggle">
-                    <Input
-                      type="checkbox"
-                      role="switch"
-                      checked={policy.allowBtcSale}
-                      onChange={(event) => updatePolicy({ allowBtcSale: event.target.checked })}
-                    />
-                    <span>Allow BTC sale</span>
-                  </label>
-                </div>
-                <div className="policy-reserves">
-                  <span className="field-label">Protected balance after swap, base units</span>
-                  {policyAssets.map((asset) => (
-                    <label key={asset.key}>
-                      <span className="policy-asset">
-                        <AssetIcon code={asset.label} />
-                        {asset.label}
-                      </span>
+                  <div>
+                    <span className="field-label">Bitcoin permission</span>
+                    <label className="policy-toggle">
                       <Input
-                        value={policy.protectedBalances[asset.key] ?? '0'}
-                        onChange={(event) =>
-                          updatePolicy({
-                            protectedBalances: {
-                              ...policy.protectedBalances,
-                              [asset.key]: event.target.value,
-                            },
-                          })
-                        }
-                        inputMode="numeric"
+                        type="checkbox"
+                        role="switch"
+                        checked={policy.allowBtcSale}
+                        onChange={(event) => updatePolicy({ allowBtcSale: event.target.checked })}
                       />
+                      <span>Allow BTC sale</span>
                     </label>
-                  ))}
+                  </div>
                 </div>
+                <fieldset className="policy-reserves">
+                  <legend>Keep after swap (base units)</legend>
+                  <div className="draft-grid">
+                    {policyAssets.map((asset) => (
+                      <label className="reserve-field" key={asset.key}>
+                        <span className="policy-asset field-label">
+                          <AssetIcon code={asset.label} />
+                          {asset.label}
+                        </span>
+                        <Input
+                          value={policy.protectedBalances[asset.key] ?? '0'}
+                          onChange={(event) =>
+                            updatePolicy({
+                              protectedBalances: {
+                                ...policy.protectedBalances,
+                                [asset.key]: event.target.value,
+                              },
+                            })
+                          }
+                          inputMode="numeric"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               </div>
             )}
             <div className="draft-note">
               <Icon name="shield" size={17} />
               {ready
-                ? 'Policy, balances, and network are checked locally. Policy changes apply on publication.'
-                : 'Wallet balances and policy are unavailable. This form cannot publish an order.'}
+                ? 'Checked locally. Your wallet limits update when you publish.'
+                : 'Connect your wallet to check limits and publish.'}
             </div>
             <div className="modal-actions">
               <Button
