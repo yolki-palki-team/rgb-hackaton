@@ -7,6 +7,7 @@ import { MatrixRain } from './components/ui/matrix-rain';
 import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './model';
 import type { Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
+import { requestGoalReview } from './goal-review';
 import { TradeWorkflow, tradeProgress } from './workflow';
 import type { PrivatePolicy } from '@rgb-exchange/contracts';
 
@@ -194,6 +195,37 @@ function App() {
   }, [client]);
 
   useEffect(() => {
+    if (!client) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refreshModel = async () => {
+      try {
+        const health = await client.qvacHealth();
+        if (active)
+          setStatus((current) =>
+            current
+              ? {
+                  ...current,
+                  qvacAvailable: health.available,
+                  qvacState: health.state,
+                  qvacReason: health.reason,
+                }
+              : current,
+          );
+      } catch {
+        // A transport failure is not evidence that the model is unavailable.
+      } finally {
+        if (active) timer = setTimeout(() => void refreshModel(), 10_000);
+      }
+    };
+    void refreshModel();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [client]);
+
+  useEffect(() => {
     if (!desktop || desktopConnectStarted.current) return;
     desktopConnectStarted.current = true;
     void connect();
@@ -243,40 +275,38 @@ function App() {
       });
       return;
     }
-    if (!status?.qvacAvailable) {
-      setDraftOpen(true);
-
-      setNotice({
-        tone: 'info',
-        text: `QVAC unavailable: ${status?.qvacReason ?? 'The local model is not ready.'} Use the manual form.`,
-      });
-      return;
-    }
     setBusy('interpret');
-    setNotice(null);
     try {
-      const result = await client.interpret(goal);
-      if (result.draft) setDraft(result.draft);
-      setDraftOpen(true);
-
-      setNotice(
-        result.draft
-          ? {
+      await requestGoalReview(
+        (text) => client.interpret(text),
+        goal,
+        (review) => {
+          setDraftOpen(review.state === 'review');
+          if (review.state === 'loading') {
+            setDraft({ ...initialDraft });
+            setNotice(null);
+            return;
+          }
+          if (review.state === 'error') {
+            setNotice({ tone: 'error', text: `Could not interpret the goal: ${review.message}` });
+            return;
+          }
+          setStatus((current) =>
+            current
+              ? { ...current, qvacAvailable: true, qvacState: 'ready', qvacReason: undefined }
+              : current,
+          );
+          if (review.state === 'review') {
+            setDraft(review.draft);
+            setNotice({
               tone: 'success',
               text: 'QVAC interpreted the goal locally. Review and confirm the order terms.',
-            }
-          : {
-              tone: 'info',
-              text:
-                result.clarification ?? 'The goal needs clarification. Fill in the terms manually.',
-            },
+            });
+          } else {
+            setNotice({ tone: 'info', text: review.message });
+          }
+        },
       );
-    } catch (error) {
-      setDraftOpen(true);
-      setNotice({
-        tone: 'error',
-        text: `QVAC unavailable: ${messageOf(error)}. Use the manual form.`,
-      });
     } finally {
       setBusy(null);
     }
@@ -477,12 +507,20 @@ function App() {
                 <div className="composer-heading">
                   <h1 id="goal-heading">What would you like to swap?</h1>
                   <StatusBadge className="ai-status">
-                    QVAC · {status?.qvacAvailable ? 'LOCAL' : connected ? 'UNAVAILABLE' : 'OFFLINE'}
+                    QVAC ·{' '}
+                    {status?.qvacAvailable
+                      ? 'LOCAL'
+                      : status?.qvacState === 'loading'
+                        ? 'LOADING'
+                        : connected
+                          ? 'UNAVAILABLE'
+                          : 'OFFLINE'}
                   </StatusBadge>
                 </div>
                 {connected && !status?.qvacAvailable && (
                   <p className="qvac-reason" role="status">
-                    {status?.qvacReason ?? 'Local model unavailable.'} Use the manual form.
+                    {status?.qvacReason ??
+                      'Local model unavailable. Retry the goal or fill in the terms manually.'}
                   </p>
                 )}
                 <ChatInput
@@ -504,8 +542,14 @@ function App() {
                       className="text-button"
                       disabled={busy !== null}
                       onClick={() => {
-                        if (connected || samplePreview) setDraftOpen(true);
-                        else
+                        if (connected || samplePreview) {
+                          setDraft({
+                            ...initialDraft,
+                            giveAsset: visibleBalances[0]?.code ?? 'X',
+                            receiveAsset: visibleBalances[1]?.code ?? 'DUSD',
+                          });
+                          setDraftOpen(true);
+                        } else
                           setNotice({
                             tone: 'info',
                             text: 'Pair a local wallet before creating an order.',

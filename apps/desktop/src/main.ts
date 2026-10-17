@@ -171,7 +171,7 @@ async function requestLocal(
     body: payload,
     redirect: 'error',
     // The local adapter can spend up to 60 seconds checking the shared chain.
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(path === '/api/interpret' ? 240_000 : 90_000),
   }).catch(() => {
     throw new Error('Local wallet service is unavailable');
   });

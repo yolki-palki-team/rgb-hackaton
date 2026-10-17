@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { MarketStore } from '../../market/src/store.ts';
-import { PublicOrderSchema } from '@rgb-exchange/contracts';
+import { PublicOrderSchema, assetKey } from '@rgb-exchange/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MockWalletAdapter } from '../src/wallet.ts';
@@ -85,7 +85,7 @@ test('unpaired wallet starts with no synthetic balances, orders, or network', ()
   try {
     const html = renderToStaticMarkup(createElement(App));
     assert.match(html, /Local wallet unavailable/);
-    assert.match(html, /NETWORK UNAVAILABLE/);
+    assert.match(html, /No wallet connected/);
     assert.match(html, /Preview sample data/);
     assert.match(html, /Order book/);
     assert.match(html, /Your assets/);
@@ -291,6 +291,72 @@ test('wallet balance failure keeps the matched trade available for explicit reco
     );
   } finally {
     market.close();
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('desktop can retry inference after loading health and refresh QVAC without wallet calls', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const wallet = new MockWalletAdapter('A');
+  const state = await wallet.state();
+  const calls: string[] = [];
+  const policy = {
+    allowedAssetKeys: state.balances.map(({ asset }) => assetKey(asset)),
+    protectedBalances: {},
+    maxFeeSats: '1000',
+    allowBtcSale: false,
+  };
+  const bridge: DesktopBridge = {
+    connect: async () => ({
+      ownerId: 'A',
+      network: 'regtest',
+      mode: 'mock',
+      wallet: await wallet.capabilities(),
+      qvac: { available: false, state: 'loading' },
+    }),
+    request: async (_method, path) => {
+      calls.push(path);
+      if (path === '/api/qvac/health') return { available: true, state: 'ready' };
+      if (path === '/api/interpret')
+        return {
+          draft: {
+            giveAsset: state.balances[1].asset,
+            giveAmount: '10',
+            receiveAsset: state.balances[0].asset,
+            minReceiveAmount: '10000',
+            maxFeeSats: '1000',
+            expiresAt: Date.now() + 1800000,
+          },
+          policy,
+          clarification: null,
+        };
+      throw new Error('Unexpected wallet or publication request');
+    },
+    approveTrade: async () => {
+      throw new Error('Must not sign');
+    },
+    getPendingOffer: async () => null,
+    onOfferSelected: () => () => {},
+    openPublicMarket: async () => {},
+  };
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { palkaWallet: bridge },
+  });
+  try {
+    const client = new LocalClient();
+    assert.equal((await client.connect()).qvacState, 'loading');
+    const { draft } = await client.interpret(
+      'Sell exactly 10 X for at least 10000 sats of BTC. Maximum transaction fee: 1000 sats.',
+    );
+    assert.equal(draft?.giveAsset, 'X');
+    assert.equal(draft?.receiveAsset, 'BTC');
+    assert.equal(draft?.giveAmount, '10');
+    assert.equal(draft?.minReceiveAmount, '10000');
+    assert.equal((await client.qvacHealth()).state, 'ready');
+    assert.deepEqual(calls, ['/api/interpret', '/api/qvac/health']);
+  } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');
   }

@@ -188,3 +188,73 @@ test('model loading does not prevent pairing and the manual form', async () => {
     market.close();
   }
 });
+
+test('QVAC readiness can recover independently without probing the wallet during a trade', async () => {
+  const wallet = new MockWalletAdapter('A');
+  wallet.capabilities = async () => {
+    throw new Error('Must not probe the active wallet');
+  };
+  let ready = false;
+  const store = new LocalStore(':memory:');
+  const market = new MarketClient('http://127.0.0.1:4100', 'test-token');
+  const service = new LocalService('A', wallet, market, store, {
+    health: async () => ({ available: ready, model: 'test', state: ready ? 'ready' : 'loading' }),
+    interpret: async () => {
+      throw new Error('not used');
+    },
+  });
+  try {
+    assert.equal((await service.qvacHealth()).state, 'loading');
+    ready = true;
+    assert.equal((await service.qvacHealth()).available, true);
+  } finally {
+    store.close();
+    market.close();
+  }
+});
+
+test('interpretation distinguishes model failure from invalid precision and leaves no order', async () => {
+  const { QvacUnavailableError } = await import('../src/qvac.ts');
+  const { LocalError } = await import('../src/service.ts');
+  const wallet = new MockWalletAdapter('A');
+  const state = await wallet.state();
+  const store = new LocalStore(':memory:');
+  const market = new MarketClient('http://127.0.0.1:4100', 'test-token');
+  let unavailable = true;
+  const service = new LocalService('A', wallet, market, store, {
+    health: async () => ({ available: true, model: 'test' }),
+    interpret: async () => {
+      if (unavailable) throw new QvacUnavailableError();
+      return {
+        output: {
+          giveAssetKey: assetKey(state.balances[1].asset),
+          giveAmount: '10.5',
+          receiveAssetKey: assetKey(state.balances[0].asset),
+          minReceiveAmount: '0.0001',
+          maxFeeSats: '1000',
+          allowBtcSale: false,
+          protectedBalances: [],
+          clarification: null,
+        },
+        diagnostics: {},
+      };
+    },
+  });
+  try {
+    await assert.rejects(
+      service.interpret({ goal: 'test' }),
+      (error: unknown) =>
+        error instanceof LocalError && error.status === 503 && error.code === 'QVAC_UNAVAILABLE',
+    );
+    unavailable = false;
+    await assert.rejects(
+      service.interpret({ goal: 'test' }),
+      (error: unknown) =>
+        error instanceof LocalError && error.status === 422 && error.code === 'INTENT_INVALID',
+    );
+    assert.equal(store.get('policy'), null);
+  } finally {
+    store.close();
+    market.close();
+  }
+});

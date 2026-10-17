@@ -31,6 +31,7 @@ export type ClientStatus = {
   wallet: WalletCapabilities;
   qvacAvailable: boolean;
   qvacReason?: string;
+  qvacState?: 'loading' | 'ready' | 'unavailable';
 };
 
 export type LocalHealth = {
@@ -38,7 +39,7 @@ export type LocalHealth = {
   network: string;
   mode: 'mock' | 'real';
   wallet: WalletCapabilities | null;
-  qvac: { available: boolean; reason?: string };
+  qvac: { available: boolean; reason?: string; state?: 'loading' | 'ready' | 'unavailable' };
   blockedReason?: string;
 };
 export type DesktopBridge = {
@@ -133,8 +134,13 @@ export class LocalClient {
       wallet: health.wallet,
       qvacAvailable: Boolean(health.qvac?.available),
       qvacReason: health.qvac?.reason,
+      qvacState: health.qvac?.state,
     };
     return this.status;
+  }
+
+  async qvacHealth(): Promise<LocalHealth['qvac']> {
+    return this.request('GET', '/api/qvac/health');
   }
 
   supportsTrade(trade: Trade) {
@@ -432,11 +438,11 @@ export class LocalClient {
     if (this.bridge) return (await this.bridge.request(method, path, body)) as T;
     const controller = new AbortController();
     const timeoutMs =
-      path === '/api/interpret' ||
-      path.startsWith('/api/funding') ||
-      /\/(prepare|preview|sync|approve)$/.test(path)
-        ? 90_000
-        : 15_000;
+      path === '/api/interpret'
+        ? 240_000
+        : path.startsWith('/api/funding') || /\/(prepare|preview|sync|approve)$/.test(path)
+          ? 90_000
+          : 15_000;
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
