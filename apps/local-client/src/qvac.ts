@@ -99,6 +99,26 @@ export function parseQvacOutput(text: string): AiIntent {
   }
 }
 
+/** Model aliases never become asset identities: resolve against this call's verified catalog. */
+export function resolveQvacAssetKeys(intent: AiIntent, assets: QvacAsset[]): AiIntent {
+  const keys = new Map(assets.map((asset, index) => [`asset${index}`, asset.key]));
+  const resolve = (key: string | null): string | null => {
+    if (key === null) return null;
+    const value = keys.get(key);
+    if (!value) throw new QvacInvalidOutputError();
+    return value;
+  };
+  return {
+    ...intent,
+    giveAssetKey: resolve(intent.giveAssetKey),
+    receiveAssetKey: resolve(intent.receiveAssetKey),
+    protectedBalances: intent.protectedBalances.map((balance) => ({
+      ...balance,
+      assetKey: resolve(balance.assetKey)!,
+    })),
+  };
+}
+
 /** Some small models copy the entire goal into clarification despite extracting a complete fixed order. */
 export function discardEchoedClarification(intent: AiIntent, goal: string): AiIntent {
   const hasFixedOrder = Boolean(
@@ -171,12 +191,15 @@ export class QvacInterpreter {
     if (!supportsNode()) throw new QvacUnavailableError('Node.js 22.17 or newer is required');
     const started = Date.now();
     const modelId = await this.ensureModel();
+    // Long RGB IDs are hard for a small model to associate with symbols. Keep
+    // identity resolution deterministic and give inference only short local aliases.
+    const modelAssets = assets.map((asset, index) => ({ ...asset, key: `asset${index}` }));
     const run = completion({
       modelId,
-      history: [{ role: 'user', content: localPrompt(goal, assets) }],
+      history: [{ role: 'user', content: localPrompt(goal, modelAssets) }],
       responseFormat: {
         type: 'json_schema',
-        json_schema: { name: 'rgb_trade_intent', schema: intentSchemaFor(assets) },
+        json_schema: { name: 'rgb_trade_intent', schema: intentSchemaFor(modelAssets) },
       },
       generationParams: { temp: 0, predict: 512 },
       captureThinking: true,
@@ -187,7 +210,10 @@ export class QvacInterpreter {
     );
     if (final.stopReason === 'length' || final.stopReason === 'cancelled')
       throw new QvacInvalidOutputError();
-    const output = discardEchoedClarification(parseQvacOutput(final.contentText), goal);
+    const output = discardEchoedClarification(
+      resolveQvacAssetKeys(parseQvacOutput(final.contentText), assets),
+      goal,
+    );
     if (/%/.test(goal) && !output.protectedBalances.some((balance) => balance.minPercent !== null))
       throw new QvacInvalidOutputError();
     return {
