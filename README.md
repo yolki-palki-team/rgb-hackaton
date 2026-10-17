@@ -1,4 +1,4 @@
-# palka
+# palka.
 
 A non-custodial A2A marketplace prototype for BTC and RGB assets, designed for direct swaps between two users and atomic ring swaps between three users.
 
