@@ -727,7 +727,7 @@ function App() {
                             </div>
                             <div className="offer-amounts">
                               <div>
-                                <small>Gives</small>
+                                <small>{order.fillSummary ? 'Total offer' : 'Gives'}</small>
                                 <strong>
                                   {order.giveAmount}{' '}
                                   {order.giveAsset !== 'BTC' ? order.giveAsset : ''}
@@ -735,7 +735,11 @@ function App() {
                               </div>
                               <Icon name="arrow" size={20} />
                               <div>
-                                <small>Receives at least</small>
+                                <small>
+                                  {order.fillSummary
+                                    ? 'Total receive at least'
+                                    : 'Receives at least'}
+                                </small>
                                 <strong>
                                   {order.minReceiveAmount}{' '}
                                   {order.receiveAsset !== 'BTC' &&
@@ -745,6 +749,13 @@ function App() {
                                 </strong>
                               </div>
                             </div>
+                            {order.fillSummary && (
+                              <p className="order-fill-progress">
+                                {order.fillSummary}
+                                <br />
+                                Minimum fill {order.minimumFill}
+                              </p>
+                            )}
                           </article>
                         ))
                       ) : connected && marketLoading ? (
@@ -778,7 +789,10 @@ function App() {
                       <p>
                         Status: {myOrder.status}. Publishing an order does not authorize signing.
                       </p>
-                      {myOrder.status === 'Open' ? (
+                      {myOrder.fillSummary && (
+                        <p className="order-fill-progress">{myOrder.fillSummary}</p>
+                      )}
+                      {['Open', 'Partially filled'].includes(myOrder.status) ? (
                         <Button
                           type="button"
                           className="outline-button"
@@ -787,7 +801,7 @@ function App() {
                           loading={busy === 'cancel'}
                           loadingText="Canceling order…"
                         >
-                          Cancel order
+                          {myOrder.fillSummary ? 'Cancel remaining order' : 'Cancel order'}
                         </Button>
                       ) : (
                         <Button
@@ -1179,7 +1193,7 @@ function App() {
             {initialLoading
               ? 'Loading local wallet…'
               : connected
-                ? `Bitcoin ${status?.network} · ${status?.mode.toUpperCase()} wallet`
+                ? `Bitcoin ${status?.network}${isMock ? ' · MOCK wallet' : ''}`
                 : 'No wallet connected'}
           </span>
         </footer>
@@ -1323,7 +1337,7 @@ function App() {
               </div>
               <div>
                 <label className="field-label" htmlFor="max-fee">
-                  Order fee limit (sats)
+                  {draft.allowPartial ? 'Total order fee budget (sats)' : 'Order fee limit (sats)'}
                 </label>
                 <Input
                   id="max-fee"
@@ -1343,6 +1357,35 @@ function App() {
                   inputMode="numeric"
                 />
               </div>
+              <label className="partial-fill-toggle">
+                <input
+                  type="checkbox"
+                  checked={draft.allowPartial}
+                  onChange={(event) => updateDraft({ allowPartial: event.target.checked })}
+                />
+                Allow partial fills (direct swaps)
+              </label>
+              {draft.allowPartial && (
+                <>
+                  <div>
+                    <label className="field-label" htmlFor="minimum-fill">
+                      Minimum fill (
+                      {draft.giveAsset === 'BTC' ? 'sats' : `${draft.giveAsset} base units`})
+                    </label>
+                    <Input
+                      id="minimum-fill"
+                      value={draft.minGiveAmount}
+                      onChange={(event) => updateDraft({ minGiveAmount: event.target.value })}
+                      inputMode="numeric"
+                      required
+                    />
+                  </div>
+                  <p className="partial-fill-help">
+                    Each fill is a separate atomic swap with its own approval. The total fee budget
+                    is split by fill size. The final fill may be below your minimum.
+                  </p>
+                </>
+              )}
             </div>
             <div className="draft-note">
               {ready
@@ -1368,17 +1411,22 @@ function App() {
   );
 
   function updateDraft(change: Partial<Draft>) {
-    setDraft((current) => ({ ...current, ...change }));
+    setDraft((current) => ({
+      ...current,
+      ...(change.giveAsset && change.giveAsset !== current.giveAsset ? { minGiveAmount: '' } : {}),
+      ...change,
+    }));
   }
 }
 
-function validateDraftShape(draft: Draft, policy: PrivatePolicy | null) {
+export function validateDraftShape(draft: Draft, policy: PrivatePolicy | null) {
   if (draft.giveAsset === draft.receiveAsset) throw new Error('Assets must differ.');
   for (const [name, value] of Object.entries({
     'Amount to give': draft.giveAmount,
     'Minimum to receive': draft.minReceiveAmount,
     Fee: draft.maxFeeSats,
     Expiry: draft.expiresMinutes,
+    ...(draft.allowPartial ? { 'Minimum fill': draft.minGiveAmount } : {}),
   })) {
     if (!/^(0|[1-9][0-9]*)$/.test(value))
       throw new Error(`${name}: enter an integer in base units.`);
@@ -1391,6 +1439,11 @@ function validateDraftShape(draft: Draft, policy: PrivatePolicy | null) {
     BigInt(draft.expiresMinutes) === 0n
   )
     throw new Error('Amounts and expiry must be greater than zero.');
+  if (
+    draft.allowPartial &&
+    (BigInt(draft.minGiveAmount) === 0n || BigInt(draft.minGiveAmount) > BigInt(draft.giveAmount))
+  )
+    throw new Error('Minimum fill must be greater than zero and no larger than the total offer.');
   if (policy) {
     for (const [name, value] of Object.entries({
       'Policy fee limit': policy.maxFeeSats,

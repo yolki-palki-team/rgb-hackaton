@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import type { PublicMarketHistory, PublicMarketOrder } from '@rgb-exchange/contracts';
 import { getPublicHistory } from './api';
 import { MorphingSquare } from './components/ui/morphing-square';
-import { assetIdentity, formatAsset, mergeHistory, orderStatusLabel, shortId } from './model';
+import {
+  assetIdentity,
+  formatAsset,
+  mergeHistory,
+  orderFillSummary,
+  orderStatusLabel,
+  executionLabels,
+  shortId,
+} from './model';
 
 export function PublicHistory({ activity }: { activity: PublicMarketOrder[] }) {
   const [history, setHistory] = useState<PublicMarketHistory>({ orders: [], nextCursor: null });
@@ -102,6 +110,12 @@ export function PublicHistory({ activity }: { activity: PublicMarketOrder[] }) {
               </strong>
             </div>
             <span className="history-status">{orderStatusLabel(entry)}</span>
+            {entry.order.partialFill && (
+              <p className="history-fill-progress">
+                {orderFillSummary(entry.order)} · {entry.order.fillProgress?.fillCount ?? 0}{' '}
+                completed {entry.order.fillProgress?.fillCount === 1 ? 'fill' : 'fills'}
+              </p>
+            )}
             <div className="history-meta">
               <time dateTime={new Date(entry.order.createdAt).toISOString()}>
                 {new Date(entry.order.createdAt).toLocaleString()}
@@ -109,7 +123,12 @@ export function PublicHistory({ activity }: { activity: PublicMarketOrder[] }) {
               <span>{entry.order.network}</span>
               <span title={entry.order.id}>Order {shortId(entry.order.id)}</span>
               {entry.execution && (
-                <span>{entry.execution.participants === 3 ? '3-party ring' : 'Direct swap'}</span>
+                <span>
+                  {entry.execution.participants === 3 ? '3-party ring' : 'Direct swap'}
+                  {entry.order.partialFill
+                    ? ` · Latest fill: ${executionLabels[entry.execution.status]}`
+                    : ''}
+                </span>
               )}
             </div>
           </li>

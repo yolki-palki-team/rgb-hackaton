@@ -52,6 +52,16 @@ export const assetKey = (asset: AssetRef): string =>
 export const sameAsset = (a: AssetRef, b: AssetRef): boolean =>
   assetKey(a) === assetKey(b) && a.precision === b.precision;
 export const OrderStatusSchema = z.enum(['OPEN', 'RESERVED', 'FILLED', 'CANCELLED', 'EXPIRED']);
+export const PartialFillSchema = z.object({ minGiveAmount: PositiveAmountSchema }).strict();
+export const OrderFillProgressSchema = z
+  .object({
+    filledGiveAmount: AtomicAmountSchema,
+    receivedAmount: AtomicAmountSchema,
+    feeBudgetUsedSats: AtomicAmountSchema,
+    fillCount: z.number().int().nonnegative().safe(),
+  })
+  .strict();
+export type OrderFillProgress = z.infer<typeof OrderFillProgressSchema>;
 export const PublicOrderSchema = z
   .object({
     id: IdSchema,
@@ -63,6 +73,8 @@ export const PublicOrderSchema = z
     receiveAsset: AssetRefSchema,
     minReceiveAmount: PositiveAmountSchema,
     maxFeeSats: AtomicAmountSchema,
+    partialFill: PartialFillSchema.optional(),
+    fillProgress: OrderFillProgressSchema.optional(),
     createdAt: z.number().int().nonnegative(),
     expiresAt: z.number().int().positive(),
     status: OrderStatusSchema,
@@ -74,8 +86,56 @@ export const PublicOrderSchema = z
     if (sameAsset(v.giveAsset, v.receiveAsset))
       ctx.addIssue({ code: 'custom', message: 'Cannot exchange the same asset' });
     if (v.expiresAt <= v.createdAt) ctx.addIssue({ code: 'custom', message: 'Invalid expiry' });
+    if (v.partialFill && BigInt(v.partialFill.minGiveAmount) > BigInt(v.giveAmount))
+      ctx.addIssue({ code: 'custom', message: 'Minimum fill exceeds the order amount' });
+    if (v.fillProgress) {
+      const progress = v.fillProgress;
+      const filled = BigInt(progress.filledGiveAmount);
+      if (
+        !v.partialFill ||
+        filled > BigInt(v.giveAmount) ||
+        BigInt(progress.feeBudgetUsedSats) >
+          (BigInt(v.maxFeeSats) * filled) / BigInt(v.giveAmount) ||
+        BigInt(progress.receivedAmount) * BigInt(v.giveAmount) <
+          filled * BigInt(v.minReceiveAmount) ||
+        (progress.fillCount === 0) !== (filled === 0n) ||
+        (filled === 0n && progress.receivedAmount !== '0')
+      )
+        ctx.addIssue({ code: 'custom', message: 'Invalid confirmed fill progress' });
+    }
   });
 export type PublicOrder = z.infer<typeof PublicOrderSchema>;
+export function orderRemainingGive(order: PublicOrder): bigint {
+  return BigInt(order.giveAmount) - BigInt(order.fillProgress?.filledGiveAmount ?? '0');
+}
+export function orderFillFeeSats(order: PublicOrder, giveAmount: string): string {
+  if (!order.partialFill) return order.maxFeeSats;
+  const filled = BigInt(order.fillProgress?.filledGiveAmount ?? '0');
+  // Charge confirmed fill caps, not unverified reports of actual fees.
+  return (
+    (BigInt(order.maxFeeSats) * (filled + BigInt(giveAmount))) / BigInt(order.giveAmount) -
+    BigInt(order.fillProgress?.feeBudgetUsedSats ?? '0')
+  ).toString();
+}
+export function isOrderFillValid(
+  order: PublicOrder,
+  giveAmount: string,
+  receiveAmount: string,
+): boolean {
+  const give = BigInt(giveAmount);
+  const receive = BigInt(receiveAmount);
+  if (!order.partialFill)
+    return give === BigInt(order.giveAmount) && receive >= BigInt(order.minReceiveAmount);
+  const remaining = orderRemainingGive(order);
+  return (
+    give > 0n &&
+    give <= remaining &&
+    receive > 0n &&
+    BigInt(order.fillProgress?.receivedAmount ?? '0') + receive <= MAX_ATOMIC &&
+    (give >= BigInt(order.partialFill.minGiveAmount) || give === remaining) &&
+    receive * BigInt(order.giveAmount) >= give * BigInt(order.minReceiveAmount)
+  );
+}
 export const PrivatePolicySchema = z
   .object({
     // A newly funded wallet may only know BTC; assertPolicy still checks both swap assets.
@@ -93,9 +153,15 @@ export const OrderDraftSchema = z
     receiveAsset: AssetRefSchema,
     minReceiveAmount: PositiveAmountSchema,
     maxFeeSats: AtomicAmountSchema,
+    partialFill: PartialFillSchema.optional(),
     expiresAt: z.number().int().positive(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (draft) =>
+      !draft.partialFill || BigInt(draft.partialFill.minGiveAmount) <= BigInt(draft.giveAmount),
+    'Minimum fill exceeds the order amount',
+  );
 export type OrderDraft = z.infer<typeof OrderDraftSchema>;
 export const BalanceSchema = z
   .object({ asset: AssetRefSchema, amount: AtomicAmountSchema })

@@ -303,13 +303,6 @@ a {
   font-size: clamp(38px, 4vw, 56px);
   margin: 12px 0 0;
 }
-.book-heading h1 span {
-  vertical-align: top;
-  color: #666666;
-  font-size: 17px;
-  margin-left: 6px;
-  letter-spacing: -0.02em;
-}
 .refresh-button {
   border: 0;
   background: none;
@@ -464,6 +457,18 @@ a {
   padding-top: 16px;
   font-size: 11px;
   color: #888888;
+}
+.order-fill-progress,
+.history-fill-progress {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.history-fill-progress {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 .market-message {
   display: flex;

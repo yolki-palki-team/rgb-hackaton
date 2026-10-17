@@ -1,7 +1,9 @@
+import { orderRemainingGive } from '@rgb-exchange/contracts';
 import type {
   AssetRef,
   PublicMarketHistory,
   PublicMarketOrder,
+  PublicOrder,
   TradeStatus,
 } from '@rgb-exchange/contracts';
 
@@ -33,6 +35,14 @@ export function mergeHistory(
 }
 
 export function orderStatusLabel(entry: PublicMarketOrder): string {
+  if (entry.order.partialFill) {
+    if (entry.order.status === 'OPEN')
+      return BigInt(entry.order.fillProgress?.filledGiveAmount ?? '0') > 0n
+        ? 'Partially filled'
+        : 'Waiting';
+    if (entry.order.status !== 'RESERVED')
+      return { FILLED: 'Filled', CANCELLED: 'Cancelled', EXPIRED: 'Expired' }[entry.order.status];
+  }
   if (entry.execution) return executionLabels[entry.execution.status];
   return {
     OPEN: 'Waiting',
@@ -41,6 +51,14 @@ export function orderStatusLabel(entry: PublicMarketOrder): string {
     CANCELLED: 'Cancelled',
     EXPIRED: 'Expired',
   }[entry.order.status];
+}
+
+export function orderFillSummary(order: PublicOrder): string | undefined {
+  if (!order.partialFill) return undefined;
+  const filled = formatAsset(order.giveAsset, order.fillProgress?.filledGiveAmount ?? '0');
+  const total = formatAsset(order.giveAsset, order.giveAmount);
+  const remaining = formatAsset(order.giveAsset, orderRemainingGive(order).toString());
+  return `Filled ${filled} / ${total} · Remaining ${remaining}`;
 }
 
 export function formatAssetAmount(asset: AssetRef, atomic: string): string {

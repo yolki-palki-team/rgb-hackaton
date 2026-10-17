@@ -8,6 +8,7 @@ import {
   marketLoadFailed,
   mergeHistory,
   orderStatusLabel,
+  orderFillSummary,
 } from '../model';
 import type {
   AssetRef,
@@ -24,6 +25,51 @@ const rgb: AssetRef = {
   contractId: 'contract-x',
   precision: 2,
 };
+
+test('partial parent status and remaining amounts do not inherit completion from its latest fill', () => {
+  const order: PublicOrder = {
+    id: 'partial-order',
+    ownerId: 'owner',
+    revision: 2,
+    network: 'regtest',
+    giveAsset: btc,
+    giveAmount: '100000000',
+    receiveAsset: rgb,
+    minReceiveAmount: '100',
+    maxFeeSats: '1000',
+    createdAt: 1,
+    expiresAt: 2,
+    status: 'OPEN',
+    partialFill: { minGiveAmount: '25000000' },
+    fillProgress: {
+      filledGiveAmount: '25000000',
+      receivedAmount: '25',
+      feeBudgetUsedSats: '250',
+      fillCount: 1,
+    },
+  };
+  const entry: PublicMarketOrder = { order, execution: { status: 'CONFIRMED', participants: 2 } };
+  assert.equal(orderStatusLabel(entry), 'Partially filled');
+  assert.equal(orderFillSummary(order), 'Filled 0.25 BTC / 1 BTC · Remaining 0.75 BTC');
+  assert.equal(
+    orderStatusLabel({ ...entry, order: { ...order, status: 'CANCELLED' } }),
+    'Cancelled',
+  );
+  assert.equal(orderStatusLabel({ ...entry, order: { ...order, status: 'EXPIRED' } }), 'Expired');
+  assert.equal(orderStatusLabel({ ...entry, order: { ...order, status: 'FILLED' } }), 'Filled');
+  assert.equal(
+    orderStatusLabel({
+      ...entry,
+      order: { ...order, status: 'RESERVED' },
+      execution: { status: 'AWAITING_APPROVAL', participants: 2 },
+    }),
+    'Awaiting approval',
+  );
+  assert.equal(
+    orderFillSummary({ ...order, partialFill: undefined, fillProgress: undefined }),
+    undefined,
+  );
+});
 
 test('public client reads only the same-origin order book without credentials or stale orders', async () => {
   const now = Date.now();

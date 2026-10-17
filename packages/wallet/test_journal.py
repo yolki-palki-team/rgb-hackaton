@@ -122,6 +122,31 @@ class JournalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.j.reserve_plan("next", plan, ["next:0"])
 
+    def test_sequential_fills_need_confirmed_receipt_and_fresh_approval_after_restart(self):
+        self.j.begin_signing("t", self.h, True)
+        self.j.record_signature("t", "first-fill-signature")
+        self.j.broadcast_result("t", "first-fill-txid", True)
+        self.j.receipt("t", True, False)
+        next_plan = {"network": "regtest", "tradeId": "next", "counterparty": "carol"}
+        with self.assertRaisesRegex(ValueError, "another active"):
+            self.j.reserve_plan("next", next_plan, ["first-fill-change:0"])
+        self.j.receipt("t", True, True)
+        self.j.db.close()
+        self.j = Journal(self.path)
+        self.j.reserve_plan("next", next_plan, ["first-fill-change:0"])
+        next_intent = {**self.intent, "revision": 3, "unsignedTx": "next-fill-bytes"}
+        next_digest = self.j.bind_approval("next", next_plan, next_intent)
+        for approval, confirmed in [(self.h, True), (next_digest, False)]:
+            with self.assertRaisesRegex(ValueError, "explicit current approval"):
+                self.j.begin_signing("next", approval, confirmed)
+        self.assertEqual(self.j.snapshot("next")["state"], "AWAITING_APPROVAL")
+        self.j.begin_signing("next", next_digest, True)
+        self.assertEqual(self.j.snapshot("t")["state"], "CONFIRMED")
+        self.assertEqual(
+            dict(self.j.db.execute("SELECT outpoint,trade_id FROM reservations")),
+            {"funding:0": "t", "first-fill-change:0": "next"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
