@@ -40,6 +40,7 @@ export class HttpWalletAdapter implements WalletAdapter {
   async prepare(plan: TradePlan, materials: Array<{ownerId:string;material:unknown}>) { return PrepareResultSchema.parse(await this.call('prepare', {plan,materials})); }
   async validate(pkg: SettlementPackage, plan: TradePlan) { return WalletPreviewSchema.parse(await this.call('validate', {package:pkg,plan})); }
   async sign(pkg: SettlementPackage, approval: Approval) { return SignatureResultSchema.parse(await this.call('sign', {package:pkg,approval})); }
+  async recoverSignature(pkg: SettlementPackage) { return SignatureResultSchema.parse(await this.call('recoverSignature', {package:pkg})); }
   async finalize(pkg: SettlementPackage, signatures: Array<{ownerId:string;signature:unknown}>) { return ReceiptSchema.parse(await this.call('finalize', {package:pkg,signatures})); }
   async sync(tradeId: string) { return ReceiptSchema.parse(await this.call('sync', {tradeId})); }
 }

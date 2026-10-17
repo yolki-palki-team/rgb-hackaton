@@ -124,6 +124,8 @@ export interface WalletAdapter {
   prepare(plan: TradePlan, materials: Array<{ownerId:string; material:unknown}>): Promise<PrepareResult>;
   validate(pkg: SettlementPackage, plan: TradePlan): Promise<WalletPreview>;
   sign(pkg: SettlementPackage, approval: Approval): Promise<SignatureResult>;
+  /** Read an existing signature for the exact package; this operation must never sign. */
+  recoverSignature?(pkg: SettlementPackage): Promise<SignatureResult>;
   finalize(pkg: SettlementPackage, signatures: Array<{ownerId:string; signature:unknown}>): Promise<Receipt>;
   sync(tradeId: string): Promise<Receipt>;
 }

@@ -1,0 +1,1 @@
+{"alice":{"backendState":"CANCELLED","reservedInputs":0},"bob":{"backendState":"CANCELLED","reservedInputs":0},"carol":{"backendState":"CANCELLED","reservedInputs":0},"clientRecoveryImplemented":true,"fault":"pre-sign peer rejection","mode":"real","offlinePeerRecovered":"carol","signed":false,"testOnlyUnsignedBackendCleanup":false,"tradeId":"5c66a691-241a-45e0-ab6e-ccb28c9ea8ba"}

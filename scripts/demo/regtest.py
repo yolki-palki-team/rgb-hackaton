@@ -46,7 +46,14 @@ def setup():
         for p in profiles:
             for key in ("btcAddress", "rgbAddress"):
                 blocks.extend(rpc("generatetoaddress", 1, p[key]))
-        blocks.extend(rpc("generatetoaddress", 101, profiles[-1]["btcAddress"]))
+        # Maturation blocks belong to a separate miner. Otherwise each newly
+        # mined swap block also changes Carol's settled balance independently.
+        miners=rpc("listwallets")
+        if "regtest-miner" not in miners:
+            existing={w["name"] for w in rpc("listwalletdir")["wallets"]}
+            rpc("loadwallet" if "regtest-miner" in existing else "createwallet", "regtest-miner")
+        miner=rpc("-rpcwallet=regtest-miner", "getnewaddress")
+        blocks.extend(rpc("generatetoaddress", 101, miner))
         marker.write_text(json.dumps({"network":"regtest", "blocks":blocks}, indent=2))
     # Electrs readiness is verified by querying SDK state, not by sleeping a fixed duration.
     for p in profiles:

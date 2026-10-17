@@ -91,6 +91,14 @@ def execute(trade_id,approved):
             approval={"protocolVersion":1,"approvalId":approved+"-"+p,"walletId":preview["walletId"],"ownerId":p,"network":"regtest",
                       "tradeId":trade_id,"planRevision":plan["revision"],"approvedAt":int(time.time()*1000),
                       **{k:package[k] for k in ("packageId","planDigest","unsignedTxDigest","commitmentDigest")}}
+            # Exact replay of a completed/uncertain signing request. The backend
+            # treats the original Approval, including its timestamp, as immutable.
+            authorization=STATE/p/"trades"/sha(trade_id.encode())/"user-approval.json"
+            if authorization.exists():
+                original=read(authorization)
+                if any(original.get(k)!=v for k,v in approval.items() if k!="approvedAt"):
+                    raise ValueError("saved approval differs from this reviewed CLI authorization")
+                approval=original
             signed=wallets[p]("sign",{"package":package,"approval":approval})
             signatures.append({"ownerId":p,"signature":signed["signature"]})
         save(directory/"signatures.json",signatures)

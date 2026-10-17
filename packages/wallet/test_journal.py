@@ -34,6 +34,11 @@ class JournalTests(unittest.TestCase):
 
     def test_cancel_then_no_reopen(self):
         self.j.release("t")
+        self.j.db.close()
+        self.j=Journal(self.path)
+        self.j.release("t")
+        self.assertEqual(self.j.snapshot("t")["state"],"CANCELLED")
+        self.assertEqual(self.j.db.execute("SELECT COUNT(*) FROM reservations WHERE trade_id='t'").fetchone()[0],0)
         with self.assertRaises(ValueError): self.j.reserve("t",self.intent,["funding:0"])
 
     def test_restart_after_signing_pins_inputs(self):

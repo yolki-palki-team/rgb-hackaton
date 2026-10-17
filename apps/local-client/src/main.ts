@@ -37,5 +37,14 @@ server.listen(port,host,()=>{
   market.connect();
   console.log(`Local profile ${owner}: http://127.0.0.1:${port}; wallet=${mode}; pairing token: ${process.env.LOCAL_SESSION_TOKEN ? 'provided through LOCAL_SESSION_TOKEN' : tokenPath}`);
 });
-const close=()=>{market.close();server.close(()=>{void qvac.dispose().finally(()=>{store.close();process.exit(0);});});};
+// Only unsigned cancellation cleanup runs in the background. Signing recovery
+// remains an explicit sync operation using an already persisted authorization.
+let checkingCancellation=false;
+const cancellationTimer=setInterval(()=>{
+  if (checkingCancellation) return;
+  checkingCancellation=true;
+  void service.exclusive(()=>service.snapshot()).catch(()=>undefined).finally(()=>{checkingCancellation=false;});
+},5000);
+cancellationTimer.unref();
+const close=()=>{clearInterval(cancellationTimer);market.close();server.close(()=>{void qvac.dispose().finally(()=>{store.close();process.exit(0);});});};
 process.once('SIGINT',close); process.once('SIGTERM',close);
