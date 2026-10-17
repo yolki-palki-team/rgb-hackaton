@@ -7,10 +7,13 @@ import hashlib
 import json
 import os
 import secrets
+import signal
+import sqlite3
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -73,10 +76,10 @@ def settings(config_path, root=ROOT):
     return config, state, url.port
 
 
-def native(state, operation):
+def native(state, operation, **kwargs):
     result = subprocess.run(
         ["rtk", "proxy", str(BIN)],
-        input=json.dumps({"op": operation, "stateDir": str(state), "profile": SLOT}),
+        input=json.dumps({"op": operation, "stateDir": str(state), "profile": SLOT, **kwargs}),
         text=True,
         capture_output=True,
         check=False,
@@ -167,27 +170,192 @@ def start(config_path):
         "RGB_DEMO_STATE": str(state),
         "WALLET_RPC_TOKEN": config["walletRpcToken"],
     }
-    os.execve(
+    arguments = [
         sys.executable,
-        [
-            sys.executable,
-            str(ROOT / "packages/wallet/server.py"),
-            "--profile",
-            SLOT,
-            "--owner",
-            config["ownerId"],
-            "--port",
-            str(port),
-        ],
-        environment,
-    )
+        str(ROOT / "packages/wallet/server.py"),
+        "--profile",
+        SLOT,
+        "--owner",
+        config["ownerId"],
+        "--port",
+        str(port),
+    ]
+    shared = state / "shared-network.json"
+    if not shared.exists():
+        os.execve(sys.executable, arguments, environment)
+    from chain_transport import Adapters, Client
+    from chain_transport import environment as chain_environment
+
+    client = Client(read_private(shared))
+    client.health()
+    adapters = Adapters(client)
+    child = None
+    try:
+        child = subprocess.Popen(arguments, env={**environment, **chain_environment(shared)})
+        signal.signal(signal.SIGTERM, lambda *_: child.terminate())
+        raise SystemExit(child.wait())
+    except KeyboardInterrupt:
+        if child:
+            child.terminate()
+            child.wait(timeout=15)
+    finally:
+        adapters.close()
+
+
+def idle_wallet(state):
+    journal = state / SLOT / "journal.sqlite"
+    if journal.exists():
+        with sqlite3.connect(f"file:{journal}?mode=ro", uri=True) as db:
+            if db.execute(
+                "SELECT 1 FROM trades WHERE state NOT IN ('CONFIRMED','CANCELLED') LIMIT 1"
+            ).fetchone():
+                raise ValueError("Finish or reconcile the active trade first")
+
+
+def network_command(config_path, args):
+    from chain_transport import Adapters, Client, environment
+
+    config, state, _ = settings(config_path)
+    metadata = read_private(state / "desktop-wallet.json")
+    if (
+        not metadata.get("initialized")
+        or metadata.get("ownerId") != config["ownerId"]
+        or metadata.get("walletRpcToken") != config.get("walletRpcToken")
+        or native(state, "identity")["fingerprint"] != metadata["fingerprint"]
+    ):
+        raise ValueError("Initialize and verify this independent wallet first")
+    shared = state / "shared-network.json"
+    if args.command == "fund" and args.wdk_address:
+        client = Client(read_private(shared))
+        client.health()
+        print(
+            json.dumps(
+                client.request(
+                    "/fund",
+                    {
+                        "ownerId": config["ownerId"],
+                        "purpose": "wdk",
+                        "address": args.wdk_address,
+                    },
+                )
+            )
+        )
+        return
+    if args.command == "desktop":
+        Client(read_private(shared)).health()
+        os.execvpe(
+            "npm",
+            ["npm", "run", "dev:desktop"],
+            {
+                **os.environ,
+                **environment(shared),
+                "PALKA_DESKTOP_DATA_DIR": str(config_path.parent),
+            },
+        )
+    with (state / SLOT / ".coordinator.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError(
+                "Stop the sidecar before connect/fund/issue/sync; keep desktop closed"
+            ) from error
+        idle_wallet(state)
+        if args.command == "connect":
+            if not args.invite:
+                raise ValueError("Pass --invite with the private server invitation file")
+            invitation = read_private(args.invite.expanduser().resolve())
+            client = Client(invitation)
+            info = client.health()
+            if shared.exists():
+                if read_private(shared)["chainId"] != invitation["chainId"]:
+                    raise ValueError("Cannot switch an existing shared wallet to another chain")
+            else:
+                # Inspect local records without requiring a local node on a new computer.
+                previous = native(state, "offline-state")
+                if previous["unspents"] or previous["assets"]["nia"]:
+                    raise ValueError(
+                        "Existing funded/imported wallets cannot migrate chains; use a new desktop profile"
+                    )
+            save_private(shared, invitation)
+            print(json.dumps({"connected": True, **info, "ownerId": config["ownerId"]}))
+            return
+        client = Client(read_private(shared))
+        client.health()
+        os.environ.update(environment(shared))
+        adapters = Adapters(client)
+        try:
+            if args.command == "fund":
+                addresses = json.loads((state / SLOT / "addresses.json").read_text())
+                recipients = (
+                    [("wdk", args.wdk_address)]
+                    if args.wdk_address
+                    else [("btc", addresses["btcAddress"]), ("rgb", addresses["rgbAddress"])]
+                )
+                for purpose, address in recipients:
+                    print(
+                        json.dumps(
+                            client.request(
+                                "/fund",
+                                {
+                                    "ownerId": config["ownerId"],
+                                    "purpose": purpose,
+                                    "address": address,
+                                },
+                            )
+                        )
+                    )
+            elif args.command == "issue":
+                if args.asset not in ("X", "DUSD"):
+                    raise ValueError("Pass --asset X or --asset DUSD")
+                client.request("/catalog", {"ticker": args.asset, "ownerId": config["ownerId"]})
+                # Wait for the confirmed colored funding output to reach electrs.
+                for _attempt in range(30):
+                    raw = native(state, "state")
+                    if any(u["utxo"]["colorable"] for u in raw["unspents"]):
+                        break
+                    time.sleep(1)
+                else:
+                    raise ValueError(
+                        "Run fund first and wait for the RGB funding output to be indexed"
+                    )
+                asset = native(state, "issue", ticker=args.asset, amount="1000")
+                contract_id = asset["asset_id"]
+                exported = native(state, "catalog-export", contractId=contract_id)
+                client.request(
+                    "/catalog",
+                    {
+                        "ticker": args.asset,
+                        "ownerId": config["ownerId"],
+                        "contractId": contract_id,
+                        "contract": exported["contract"],
+                    },
+                )
+                print(
+                    json.dumps({"issued": args.asset, "amount": "1000", "contractId": contract_id})
+                )
+            elif args.command != "sync":
+                raise ValueError("Unknown network command")
+            for ticker, entry in client.request("/catalog", {}).items():
+                if "contract" not in entry:
+                    continue
+                result = native(state, "catalog-import", contract=entry["contract"])
+                if result["contractId"] != entry["contractId"]:
+                    raise ValueError("Imported contract ID differs from the shared catalog")
+                print(json.dumps({"verifiedAsset": ticker, "contractId": result["contractId"]}))
+        finally:
+            adapters.close()
 
 
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["init", "start"])
+    parser.add_argument(
+        "command", choices=["init", "start", "connect", "fund", "issue", "sync", "desktop"]
+    )
     parser.add_argument("--desktop-data-dir", required=True, type=Path)
+    parser.add_argument("--invite", type=Path)
+    parser.add_argument("--asset", choices=["X", "DUSD"])
+    parser.add_argument("--wdk-address")
     args = parser.parse_args()
     config_path = args.desktop_data_dir.expanduser().resolve() / "desktop-config.json"
     if args.command == "init":
@@ -202,8 +370,10 @@ def main():
                 }
             )
         )
-    else:
+    elif args.command == "start":
         start(config_path)
+    else:
+        network_command(config_path, args)
 
 
 if __name__ == "__main__":

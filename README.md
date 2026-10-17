@@ -42,8 +42,9 @@ For a separate VM running **only public web and market**, use
 preserve SQLite and private credentials, register new desktops automatically,
 and leave desktop/QVAC/wallets on users' computers. The default profile serves HTTP;
 [the owlpeer.com HTTPS profile](deploy/HTTPS.md) enables direct desktop HTTPS/WSS
-access after DNS and firewall setup. It does not yet
-provision shared regtest infrastructure or independent wallets on multiple machines.
+access after DNS and firewall setup. The optional [shared regtest profile](deploy/NETWORK.md)
+adds persistent chain infrastructure, HTTPS desktop access, participant funding,
+RGB contract distribution and WDK funding on the same network.
 
 ## Run with Docker
 

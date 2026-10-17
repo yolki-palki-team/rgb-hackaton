@@ -5,15 +5,14 @@ the participant ID/token. The steps below create one new, empty **real regtest**
 wallet on this computer and attach its authenticated loopback sidecar to that ID.
 They do not fund it, issue RGB, copy another user's keys, or change existing wallets.
 
-The current native backend requires local regtest Core/electrs/proxy. Starting an
-independent chain on a second computer does **not** enable cross-computer swaps:
-both wallets must share a chain and RGB contract IDs. Shared infrastructure,
-remote RPC transport, funding, and catalog distribution remain separate work;
-see [the multi-computer guide](../docs/usage.md#shared-network-and-real-assets-remaining-work).
+For the shared Oracle network, use [NETWORK.md](NETWORK.md). It provides HTTPS
+chain access, per-participant test funding, shared RGB contracts and WDK funding
+without local Docker or SSH tunnels. Independent local chains cannot trade with
+each other merely by connecting to the same market.
 
 ## First setup on macOS
 
-Required: Git, Node 22.17+, uv/Python 3.12+, Rust 1.94, RTK, and Docker with Compose.
+Required: Git, Node 22.17+, uv/Python 3.12+, Rust 1.94, RTK. Docker is needed only for the optional local-chain workflow.
 The native wallet helpers use RTK internally even when the commands below do not
 have an RTK prefix. Keep all wallet state on its owner's computer.
 
@@ -40,21 +39,6 @@ npm run dev:desktop
 Close desktop before the next step. At this stage, “configure WALLET_RPC_URL and
 WALLET_RPC_TOKEN” is expected because the sidecar is not configured yet.
 
-For a machine with **no existing regtest chain**, start local infrastructure:
-
-```bash
-docker compose -f infra/compose.yaml up -d
-uv run --locked python scripts/demo/chain-volumes.py pin
-```
-
-For an existing chain, use its saved volumes as described in
-[the infrastructure guide](../docs/usage.md#infrastructure-initial-setup-and-restarts).
-Do not reset a chain to make a wallet connect. Wait for readiness:
-
-```bash
-uv run --locked python scripts/demo/doctor.py
-```
-
 Create the independent wallet once, with desktop closed:
 
 ```bash
@@ -77,7 +61,10 @@ Alice from the old demo sets. No Alice/Bob/Carol multi-wallet setup is run.
 
 ## Normal startup
 
-Keep regtest infrastructure running. In terminal 1, start the sidecar:
+For the deployed shared chain, continue with [NETWORK.md](NETWORK.md) after
+initialization; its desktop launcher also configures WDK for that chain.
+
+For an optional local-only chain, keep `infra/compose.yaml` infrastructure running. In terminal 1, start the sidecar:
 
 ```bash
 uv run --locked python scripts/demo/desktop_wallet.py start \

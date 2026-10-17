@@ -190,6 +190,7 @@ function startBackend(): void {
     'LC_ALL',
     'SSL_CERT_FILE',
     'NODE_EXTRA_CA_CERTS',
+    'WDK_ELECTRUM_PORT',
   ])
     if (process.env[key]) environment[key] = process.env[key];
   Object.assign(environment, {

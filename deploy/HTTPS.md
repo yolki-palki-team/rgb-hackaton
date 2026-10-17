@@ -153,3 +153,6 @@ rate limits, backups, or token revocation management; this profile is for a demo
 Official references: [Caddy HTTPS](https://caddyserver.com/docs/quick-starts/https),
 [WebSocket proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy),
 and [Oracle security rules](https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/securityrules.htm).
+
+For shared Bitcoin/RGB infrastructure and test funding, continue with
+[NETWORK.md](NETWORK.md).
