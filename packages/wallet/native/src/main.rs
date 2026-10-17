@@ -75,6 +75,15 @@ fn open_wallet(root: &std::path::Path, init: bool) -> Result<Wallet> {
         )?;
     }
     let keys: SinglesigKeys = serde_json::from_slice(&fs::read(path)?)?;
+    // The SDK waits up to an hour for this file after an interrupted process.
+    // Do not remove it automatically: another SDK client may still own it.
+    if root
+        .join(&keys.master_fingerprint)
+        .join("rgb_runtime.lock")
+        .exists()
+    {
+        return Err("RGB runtime lock exists; stop wallet processes and verify the lock is stale before recovery".into());
+    }
     Ok(Wallet::new(
         WalletData {
             data_dir: root.to_string_lossy().into(),
