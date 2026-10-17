@@ -981,7 +981,7 @@ function App() {
           )}
         </main>
         <footer className="footer">
-          <span>palka.</span>
+          <span>palka</span>
           <span>
             {connected
               ? `Bitcoin ${status?.network} · ${status?.mode.toUpperCase()} wallet`
