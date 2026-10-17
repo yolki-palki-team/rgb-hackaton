@@ -7,6 +7,15 @@ import {
   type EventEnvelope,
 } from '@rgb-exchange/contracts';
 
+class MarketHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 export class MarketClient {
   connected = false;
   sequence = 0;
@@ -37,9 +46,28 @@ export class MarketClient {
   }
   async request(path: string, method = 'GET', body?: unknown): Promise<unknown> {
     await this.ensureEnrollment();
-    const result = await this.send(path, method, body);
-    this.connected = true;
-    return result;
+    try {
+      const result = await this.send(path, method, body);
+      this.connected = true;
+      return result;
+    } catch (error) {
+      this.connected = false;
+      if (!(error instanceof MarketHttpError) || error.status !== 401 || !this.registrationOwnerId)
+        throw error;
+      this.enrolled = false;
+      await this.ensureEnrollment();
+      this.sequence = 0;
+      this.seen.clear();
+      // A rejected write may have an uncertain outcome; only reads are safe to replay.
+      if (method !== 'GET')
+        throw new Error('Market session restored. Review and retry the operation.', {
+          cause: error,
+        });
+      const retryPath = path.startsWith('/snapshot?') ? '/snapshot?afterSequence=0' : path;
+      const result = await this.send(retryPath, method);
+      this.connected = true;
+      return result;
+    }
   }
   private async ensureEnrollment(): Promise<void> {
     if (!this.registrationOwnerId || this.enrolled) return;
@@ -73,7 +101,7 @@ export class MarketClient {
     });
     if (!response.ok) {
       const error = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new Error(error.error || `Market HTTP ${response.status}`);
+      throw new MarketHttpError(error.error || `Market HTTP ${response.status}`, response.status);
     }
     return response.json();
   }
@@ -154,8 +182,13 @@ export class MarketClient {
     this.ws.on('error', () => {
       this.connected = false;
     });
-    this.ws.on('close', () => {
+    this.ws.on('close', (code, reason) => {
       this.connected = false;
+      if (code === 1008 && reason.toString() === 'INVALID_AUTH' && this.registrationOwnerId) {
+        this.enrolled = false;
+        this.sequence = 0;
+        this.seen.clear();
+      }
       this.scheduleReconnect();
     });
   }

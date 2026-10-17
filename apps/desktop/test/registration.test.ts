@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
+import { participantId } from '@rgb-exchange/contracts/participant';
 import { MarketStore } from '../../market/src/store.ts';
 import { createMarketServer } from '../../market/src/server.ts';
 import { MarketClient } from '../../local-client/src/market-client.ts';
@@ -55,5 +57,75 @@ test('desktop enrolls before HTTP/WS access and reuses saved credentials after a
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     store.close();
+  }
+});
+
+test('automatic market identity recovers after authorization loss without replaying writes', async () => {
+  const token = 'a'.repeat(64);
+  const owner = participantId(token);
+  let enrolled = false;
+  let enrollments = 0;
+  let writes = 0;
+  let afterSequence = '';
+  let rejectReads = false;
+  let reads = 0;
+  const server = createServer((request, response) => {
+    response.setHeader('Content-Type', 'application/json');
+    if (request.url === '/participants' && request.method === 'POST') {
+      enrolled = true;
+      enrollments++;
+      response.end(JSON.stringify({ ownerId: owner }));
+      return;
+    }
+    if (request.method === 'GET') reads++;
+    if (rejectReads) {
+      response.writeHead(401);
+      response.end(JSON.stringify({ error: 'UNAUTHORIZED' }));
+      return;
+    }
+    if (!enrolled) {
+      response.writeHead(401);
+      response.end(JSON.stringify({ error: 'UNAUTHORIZED' }));
+      return;
+    }
+    if (request.url?.startsWith('/snapshot?')) {
+      afterSequence =
+        new URL(request.url, 'http://127.0.0.1').searchParams.get('afterSequence') ?? '';
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (request.url === '/orders' && request.method === 'POST') writes++;
+    response.end(JSON.stringify({ ok: true }));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const client = new MarketClient(`http://127.0.0.1:${address.port}`, token, undefined, owner);
+  try {
+    await client.request('/snapshot?afterSequence=9');
+    assert.equal(enrollments, 1);
+    enrolled = false;
+    await client.request('/snapshot?afterSequence=9');
+    assert.equal(afterSequence, '0');
+    assert.equal(enrollments, 2);
+    enrolled = false;
+    await assert.rejects(client.request('/orders', 'POST', { id: 'one' }), /Review and retry/);
+    assert.equal(enrollments, 3);
+    assert.equal(writes, 0);
+    await client.request('/orders', 'POST', { id: 'one' });
+    assert.equal(writes, 1);
+    enrolled = false;
+    const manual = new MarketClient(`http://127.0.0.1:${address.port}`, 'manual-token');
+    await assert.rejects(manual.request('/snapshot?afterSequence=0'), /UNAUTHORIZED/);
+    assert.equal(enrollments, 3);
+    rejectReads = true;
+    const before = reads;
+    await assert.rejects(client.request('/snapshot?afterSequence=0'), /UNAUTHORIZED/);
+    assert.equal(reads - before, 2, 'a persistent 401 gets one read retry');
+    assert.equal(enrollments, 4);
+  } finally {
+    client.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
