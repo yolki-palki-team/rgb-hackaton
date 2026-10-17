@@ -204,3 +204,10 @@ loopback-портах. HTTP smoke проверил public web, read-only proxy, 
 Доступ через Oracle firewall, HTTPS/WSS и settlement на разных компьютерах
 остаются отдельными проверками. CI также собирает и запускает серверный профиль
 на Linux runner; это не проверка внешнего сервера пользователя.
+
+Авторегистрация дополнительно проверена полным JS-набором (86 тестов), 7 deploy
+тестами, проверками TypeScript/ESLint/Prettier/Ruff и сборками web/local/desktop.
+Два теста регистрации прошли внутри ARM64 market-образа: повторная регистрация,
+хранение hash, сохранение после рестарта, legacy-auth и лимиты. Desktop integration
+проверяет сохранённые credentials, потерянный ответ и HTTP/WebSocket-подключение.
+Эти проверки не включают ручной запуск Electron и реальный RGB settlement.
