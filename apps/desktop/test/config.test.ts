@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -80,4 +88,24 @@ test('bad config, changed market, or partial automatic identity override cannot 
   writeFileSync(path, '{broken');
   assert.throws(() => loadDesktopConfig(dir, {}), /not replaced/);
   assert.equal(readFileSync(path, 'utf8'), '{broken');
+});
+
+test('missing desktop config cannot silently assign a new identity to existing wallet state', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'palka-missing-config-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const state = join(dir, 'state');
+  mkdirSync(state);
+  writeFileSync(join(state, 'local.sqlite'), 'synthetic existing state marker');
+  assert.throws(() => loadDesktopConfig(dir, {}), /original owner/);
+  assert.equal(existsSync(join(dir, 'desktop-config.json')), false);
+  assert.equal(
+    readFileSync(join(state, 'local.sqlite'), 'utf8'),
+    'synthetic existing state marker',
+  );
+  const another = join(dir, 'fresh');
+  assert.throws(
+    () => loadDesktopConfig(another, { PALKA_WALLET_RPC_TOKEN: 'existing-sidecar-token' }),
+    /original owner/,
+  );
+  assert.equal(existsSync(join(another, 'desktop-config.json')), false);
 });

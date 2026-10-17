@@ -1,5 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { participantId } from '@rgb-exchange/contracts/participant';
 
@@ -101,6 +108,19 @@ export function loadDesktopConfig(
     const manual = env.PALKA_OWNER_ID !== undefined || env.PALKA_MARKET_TOKEN !== undefined;
     if (manual && (!env.PALKA_OWNER_ID || !env.PALKA_MARKET_TOKEN))
       throw new Error('Provide both owner ID and market token for an existing wallet');
+    const stateDirectories = [join(userData, 'state'), env.PALKA_LOCAL_STATE_DIR].filter(
+      (directory): directory is string => Boolean(directory),
+    );
+    if (
+      !manual &&
+      (env.PALKA_WALLET_RPC_TOKEN ||
+        stateDirectories.some(
+          (directory) => existsSync(directory) && readdirSync(directory).length > 0,
+        ))
+    )
+      throw new Error(
+        'Existing wallet state requires its original owner ID and market token; restore the desktop configuration',
+      );
     // Persist before the first network request. A lost registration response reuses this token.
     const token = manual ? env.PALKA_MARKET_TOKEN! : randomBytes(32).toString('hex');
     const initial = resolveConfig(

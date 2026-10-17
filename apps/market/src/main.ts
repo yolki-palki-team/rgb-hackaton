@@ -6,17 +6,13 @@ import { createMarketServer } from './server.ts';
 const selfRegistration = process.env.MARKET_SELF_REGISTRATION === 'true';
 
 function tokenMap(raw: string | undefined): Map<string, string> {
-  if (!raw && selfRegistration) return new Map();
-  if (!raw)
-    throw new Error(
-      'MARKET_TOKENS_JSON is required (JSON object mapping bearer tokens to owner IDs)',
-    );
+  // Persisted participants remain usable even when new registration is disabled.
+  if (!raw) return new Map();
   const parsed: unknown = JSON.parse(raw);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
     throw new Error('MARKET_TOKENS_JSON must be a JSON object');
   const entries = Object.entries(parsed);
   if (
-    (entries.length === 0 && !selfRegistration) ||
     entries.some(
       ([token, owner]) =>
         !token || typeof owner !== 'string' || !/^[a-zA-Z0-9:._-]{1,200}$/.test(owner),

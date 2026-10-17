@@ -5,13 +5,14 @@ This service stores public orders and private trade plans in SQLite. It accepts 
 Run from the repository root:
 
 ```sh
-MARKET_TOKENS_JSON='{"local-token-a":"a","local-token-b":"b","local-token-c":"c"}' npm run dev:market
+MARKET_SELF_REGISTRATION=true npm run dev:market
 ```
 
-Defaults: `MARKET_HOST=127.0.0.1`, `MARKET_PORT=4100`, `MARKET_DB_PATH=./.state/market.sqlite`. Use distinct secret tokens outside a disposable local demo. The mapping is token to owner ID and stays on the server. Do not put the token in a browser URL or public repository.
+Defaults: `MARKET_HOST=127.0.0.1`, `MARKET_PORT=4100`, `MARKET_DB_PATH=./.state/market.sqlite`. Self-registration is disabled unless explicitly enabled. Existing named wallets can retain `MARKET_TOKENS_JSON` (token to owner ID); this optional mapping stays on the server. Use distinct secret tokens outside a disposable local demo. Do not put the token in a browser URL or public repository.
 
 HTTP:
 
+- `POST /participants` accepts an empty JSON object and a client-generated 64-character hex bearer token when `MARKET_SELF_REGISTRATION=true`. It returns a stable `ownerId` derived from that secret, stores only its hash in SQLite, and is idempotent across restarts/lost replies. It cannot assign a requested name or overwrite an existing owner. Existing credentials work even when new registration is disabled. Creation is bounded to 60/minute per process and 10000 participants; existing logins bypass creation limits. Browser Origin requests are rejected. The public web proxy does not expose this route.
 - `GET /health` and `GET /orders` are public. The latter returns only open orders.
 - `POST /orders` accepts a full contract `PublicOrder`, with caller-owned `ownerId`, unique client-generated `id`, `revision: 0`, and `status: "OPEN"`. The server verifies `Bearer` authorization, time bounds, and one active order per owner. Retrying the same ID with identical content returns the existing order; different content returns 409.
 - `POST /orders/:id/cancel` accepts `{ "revision": 0 }` and requires the owner. Reserved orders cannot be cancelled through this endpoint.

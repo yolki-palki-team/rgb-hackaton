@@ -273,7 +273,7 @@ rtk proxy npm run smoke:qvac
 ## Облако и несколько компьютеров
 
 Для первого server-only запуска используйте [deploy/README.md](../deploy/README.md):
-Compose, настройка произвольных participant IDs, постоянные токены и команды
+Compose, автоматическая регистрация desktop, постоянные токены и команды
 обновления уже находятся в Git. Этот HTTP-профиль запускает web + market;
 приватный market доступен через SSH-туннель. TLS и распределённая Bitcoin/RGB
 инфраструктура остаются отдельными этапами, описанными ниже.
@@ -284,24 +284,31 @@ Root Compose нельзя целиком выдавать за облачную 
 запускает local wallet. Ни wallet RPC, ни pairing/API bearer нельзя публиковать.
 
 Готово в коде: `MARKET_HOST`, `MARKET_PORT`, `MARKET_DB_PATH`, статическая карта
-`MARKET_TOKENS_JSON` (token → owner); local client принимает `MARKET_URL`,
+`MARKET_TOKENS_JSON` (token → owner) для прежних профилей и регистрация новых через
+`POST /participants` при `MARKET_SELF_REGISTRATION=true`; local client принимает `MARKET_URL`,
 `MARKET_TOKEN`; HTTPS автоматически превращается в WSS для `/events`.
 Desktop принимает `PALKA_MARKET_URL=https://market.example.org` (корневой origin,
-без path/query), `PALKA_MARKET_TOKEN` и
+без path/query) и
 `PALKA_PUBLIC_MARKET_URL=https://palka.example.org/market`.
+Новый desktop сам сохраняет ID и токен в приватный `desktop-config.json` до первого
+подключения. Повторные запуски используют те же credentials; старые конфиги не
+переписываются. `PALKA_OWNER_ID` и `PALKA_MARKET_TOKEN` нужны для ручного подключения
+прежнего профиля. Регистрация не создаёт и не пополняет wallet sidecar.
 Токен WebSocket идёт первым сообщением, не в URL. Public web credentials не получает.
 
 План первого облачного развёртывания (ещё не выполнялся):
 
 1. Один сервер Node 22.17 с постоянным диском под SQLite, process supervisor,
-   отдельный market origin и TLS reverse proxy. Создать случайный отдельный
-   market bearer для каждой identity (alice/bob/carol) и передать только владельцу.
-   Карта credentials — серверный secret, не Vite env и не Git. Нет регистрации,
-   токен refresh/отзыва через UI или привязки owner к криптографической identity;
-   токены сейчас provisioned оператором. До публичного запуска нужны rate limits,
+   отдельный market origin и TLS reverse proxy. Включить регистрацию новых desktop;
+   сохранить прежнюю карту credentials для существующих кошельков. Сервер хранит
+   хеши новых токенов, ID детерминированно связан с токеном. Нет refresh/отзыва
+   токенов через UI и доказательства владения Bitcoin-ключами при регистрации.
+   Регистрация ограничена 60 новыми участниками в минуту и 10000 всего.
+   До публичного запуска нужны общие API rate limits,
    лимиты соединений, журналирование без credentials и эксплуатационный backup.
 2. Запустить `npm run dev:market` с `MARKET_HOST=127.0.0.1`, нужным портом,
-   `MARKET_DB_PATH` и `MARKET_TOKENS_JSON` из private service environment. Разрешить
+   `MARKET_DB_PATH`, `MARKET_SELF_REGISTRATION=true` и при необходимости прежним
+   `MARKET_TOKENS_JSON` из private service environment. Разрешить
    снаружи только TLS reverse proxy. Проксировать HTTP API и `/events`, сохраняя
    Authorization; для WS нужны HTTP/1.1, Upgrade и Connection. Пример фрагмента:
 
@@ -324,7 +331,9 @@ location / {
    по образцу `docker/nginx.conf`. Private market API не проксируется через
    эти публичные пути. `VITE_LOCAL_WALLET_PORT` задаётся при build, обычно 4101.
 4. На каждой машине отдельно запустить local client/desktop и sidecar, задать
-   уникальную identity и её market bearer. `service-profile.py up` — однохостовый
+   market URL; новый desktop получит постоянную identity автоматически. Sidecar
+   настраивается отдельно с тем же owner ID; существующему кошельку owner не менять.
+   `service-profile.py up` — однохостовый
    fixture launcher, не распределённый provisioner. Для cloud используйте env
    `LOCAL_OWNER_ID`, `LOCAL_STATE_DIR`, `LOCAL_PORT`, `MARKET_URL`, `MARKET_TOKEN`,
    `WALLET_MODE=real`, `WALLET_RPC_URL`, `WALLET_RPC_TOKEN` либо desktop equivalents.
