@@ -17,6 +17,16 @@ SPEC.loader.exec_module(gateway)
 
 
 class GatewayTests(unittest.TestCase):
+    def test_automatic_roles_are_persistent_and_do_not_replace_issuers(self):
+        first = "participant-" + "1" * 64
+        second = "participant-" + "2" * 64
+        third = "participant-" + "3" * 64
+        self.assertEqual(self.network.assignment(first), "X")
+        self.assertEqual(self.network.assignment(first), "X")
+        self.assertEqual(self.network.assignment(second), "DUSD")
+        self.assertIsNone(self.network.assignment(third))
+        self.assertEqual(self.network.catalog({})["X"]["ownerId"], first)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

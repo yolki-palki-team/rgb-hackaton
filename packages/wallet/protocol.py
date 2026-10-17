@@ -151,6 +151,28 @@ class Backend:
         self.root = STATE / profile
         self.identity = native("identity", profile)
         self.wallet_id = "rgb-" + self.identity["fingerprint"]
+        self.catalog_checked = 0
+
+    def sync_shared_catalog(self):
+        if not os.environ.get("PALKA_CHAIN_CONFIG") or time.monotonic() - self.catalog_checked < 15:
+            return
+        journal = Journal(self.root / "journal.sqlite")
+        try:
+            if journal.db.execute(
+                "SELECT 1 FROM trades WHERE state NOT IN ('CONFIRMED','CANCELLED') LIMIT 1"
+            ).fetchone():
+                return
+        finally:
+            journal.db.close()
+        from chain_transport import Client
+
+        known = {a["asset_id"] for a in self.call_native("offline-state")["assets"]["nia"]}
+        for entry in Client.from_env().request("/catalog", {}).values():
+            if "contract" in entry and entry["contractId"] not in known:
+                imported = self.call_native("catalog-import", contract=entry["contract"])
+                if imported["contractId"] != entry["contractId"]:
+                    raise ValueError("Shared catalog contract mismatch")
+        self.catalog_checked = time.monotonic()
 
     def folder(self, trade):
         return self.root / "trades" / sha(trade.encode())
@@ -161,6 +183,7 @@ class Backend:
         return native(op, self.profile, **kwargs)
 
     def state(self):
+        self.sync_shared_catalog()
         self.call_native("check-index")
         raw = self.call_native("state")
         balances = [

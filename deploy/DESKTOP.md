@@ -1,5 +1,51 @@
 # Independent desktop wallet for owlpeer
 
+## Automatic shared-network startup (recommended)
+
+The operator runs `bash deploy/server.sh network` after updating the server.
+On each computer with Git, Node 22.17+, uv, Rust 1.94 and RTK installed:
+
+```bash
+git pull --ff-only
+bash deploy/desktop.sh
+```
+
+For a new checkout, clone the repository first. The script installs locked
+dependencies and builds the local wallet; subsequent launches can use
+`npm run dev:desktop`. No local Docker, invitation copy, manual init/fund/issue/sync,
+or second terminal is needed. Close any manually started sidecar before switching.
+
+Fresh desktop profiles default to owlpeer.com. Existing profiles keep their
+market, identity, keys and state. Automatic startup applies only to automatic
+real-mode profiles on HTTPS markets; manual and local-only profiles keep their
+existing workflow. Set `PALKA_AUTO_WALLET=false` to operate sidecars manually.
+
+Desktop enrolls with the market, obtains the shared-chain settings over HTTPS,
+creates its local wallet, and receives test BTC. The first participant becomes
+the X issuer, the second the DUSD issuer (1,000 units each); later participants
+receive BTC. Existing catalog issuers are preserved. Verified public contracts
+sync automatically while the wallet is idle, including contracts published after
+it started. Restart uses the existing wallet and can recover an active trade.
+
+Opening **Top up** creates the local WDK account and automatically requests its
+one-time test BTC allowance. Moving those funds into the RGB wallet still requires
+reviewing the amount/fee and approving. Trade signatures always require approval.
+
+This is the repository development launcher. A standalone distributable still
+needs the Python/native wallet runtime bundled; the old packaged app is not
+automatically upgraded by this script. The first dependency/native build and
+first QVAC model download can take time.
+
+Validation: an isolated ARM64 HTTPS deployment with the real market, Core,
+indexer and RGB proxy onboarded three independent participants automatically.
+All three received BTC; the first two issued X/DUSD; the third imported both
+contracts. Every participant restarted successfully with the same identity.
+Reproduce with `uv run --locked python scripts/demo/automatic-desktop-smoke.py --execute`.
+This validates the setup helper and real services, not clicks in three physical
+desktop windows or a new end-to-end atomic swap.
+
+## Manual setup and diagnostics
+
 Market registration and wallet initialization are separate. Registration creates
 the participant ID/token. The steps below create one new, empty **real regtest**
 wallet on this computer and attach its authenticated loopback sidecar to that ID.

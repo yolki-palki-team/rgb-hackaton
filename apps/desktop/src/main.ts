@@ -44,10 +44,70 @@ if (process.env.PALKA_DESKTOP_DATA_DIR) {
 const appRoot = app.getAppPath();
 let window: BrowserWindow | null = null;
 let backend: ChildProcess | null = null;
+let walletSidecar: ChildProcess | null = null;
+let fundedWdkAddress = '';
+let wdkFaucet: Promise<void> | null = null;
 let pendingOffer: string | null = null;
 let backendToken = '';
 let config: DesktopConfig;
 let startupStage = 'configuration';
+
+async function startSharedWallet(): Promise<void> {
+  if (
+    config.marketRegistration !== 'automatic' ||
+    !config.marketUrl.startsWith('https://') ||
+    config.walletMode !== 'real' ||
+    process.env.PALKA_AUTO_WALLET === 'false'
+  )
+    return;
+  const python = join(appRoot, '.venv', 'bin', 'python');
+  const helper = join(appRoot, 'scripts', 'demo', 'desktop_wallet.py');
+  if (!existsSync(python) || !existsSync(helper))
+    throw new Error('Local wallet runtime missing. Run the desktop dependency setup first.');
+  process.env.WDK_ELECTRUM_PORT = '51001';
+  walletSidecar = spawn(python, [helper, 'auto', '--desktop-data-dir', app.getPath('userData')], {
+    cwd: appRoot,
+    env: process.env,
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  let failed = false;
+  walletSidecar.on('error', () => {
+    failed = true;
+  });
+  // Drain diagnostics without passing private filesystem or credential data to the UI.
+  walletSidecar.stderr?.on('data', () => {});
+  for (let attempt = 0; attempt < 180; attempt++) {
+    if (failed || walletSidecar.exitCode !== null)
+      throw new Error(
+        'Automatic wallet setup failed. Stop any manually started sidecar; check server network readiness. Existing wallets were preserved.',
+      );
+    config = loadDesktopConfig(app.getPath('userData'));
+    if (config.walletRpcToken) {
+      try {
+        const response = await fetch(config.walletRpcUrl + '/rpc', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.walletRpcToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            protocolVersion: 1,
+            requestId: 'desktop-startup',
+            method: 'capabilities',
+            params: {},
+          }),
+          signal: AbortSignal.timeout(3000),
+        });
+        const body = await response.json();
+        if (response.ok && body.result?.mode === 'real' && body.result?.signing === true) return;
+      } catch {
+        /* Setup and indexing are still in progress. */
+      }
+    }
+    await delay(1000);
+  }
+  throw new Error('Shared wallet startup timed out; retry after checking server connectivity.');
+}
 
 function rejectSecrets(value: unknown): unknown {
   const serialized = JSON.stringify(value);
@@ -296,7 +356,16 @@ else {
   app
     .whenReady()
     .then(async () => {
+      if (
+        !existsSync(join(app.getPath('userData'), 'desktop-config.json')) &&
+        !process.env.PALKA_MARKET_URL
+      ) {
+        process.env.PALKA_MARKET_URL = 'https://api.owlpeer.com';
+        process.env.PALKA_PUBLIC_MARKET_URL = 'https://owlpeer.com/market';
+      }
       config = loadDesktopConfig(app.getPath('userData'));
+      startupStage = 'connecting and funding the shared regtest wallet';
+      await startSharedWallet();
       startupStage = 'registering the local UI protocol';
       protocol.handle('palka-app', (request) => bundledUi(request.url));
       session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
@@ -349,7 +418,45 @@ else {
     async (event, method: unknown, path: unknown, input: unknown) => {
       validatedSender(event);
       if (!validateWalletRequest(method, path)) throw new Error('Unsupported wallet operation');
-      return requestLocal(method as 'GET' | 'POST', path as string, input);
+      const result = await requestLocal(method as 'GET' | 'POST', path as string, input);
+      if (walletSidecar && (path === '/api/funding' || path === '/api/funding/create')) {
+        const status = result as FundingStatus;
+        if (status.available && status.address && status.address !== fundedWdkAddress) {
+          if (!wdkFaucet) {
+            const address = status.address;
+            wdkFaucet = new Promise<void>((resolveFunding, rejectFunding) => {
+              const child = spawn(
+                join(appRoot, '.venv', 'bin', 'python'),
+                [
+                  join(appRoot, 'scripts', 'demo', 'desktop_wallet.py'),
+                  'fund',
+                  '--desktop-data-dir',
+                  app.getPath('userData'),
+                  '--wdk-address',
+                  address,
+                ],
+                { cwd: appRoot, env: process.env, stdio: 'ignore' },
+              );
+              child.on('error', rejectFunding);
+              child.on('exit', (code) => {
+                if (code === 0) {
+                  fundedWdkAddress = address;
+                  resolveFunding();
+                } else
+                  rejectFunding(
+                    new Error(
+                      'Test WDK funding unavailable; retry after checking the shared network.',
+                    ),
+                  );
+              });
+            }).finally(() => {
+              wdkFaucet = null;
+            });
+          }
+          await wdkFaucet;
+        }
+      }
+      return result;
     },
   );
   ipcMain.handle('wallet:approve', async (event, tradeId: unknown, approvalToken: unknown) => {
@@ -416,6 +523,7 @@ else {
   });
   app.on('before-quit', () => {
     backend?.kill('SIGTERM');
+    walletSidecar?.kill('SIGTERM');
   });
   app.on('window-all-closed', () => app.quit());
 }

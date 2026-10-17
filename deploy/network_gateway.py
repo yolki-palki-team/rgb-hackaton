@@ -140,6 +140,20 @@ def electrum(request):
 
 
 class Network:
+    def assignment(self, owner):
+        path = self.state / "catalog.json"
+        with self.lock:
+            entries = json.loads(path.read_text()) if path.exists() else {}
+            for ticker, entry in entries.items():
+                if entry["ownerId"] == owner:
+                    return ticker
+            for ticker in ("X", "DUSD"):
+                if ticker not in entries:
+                    entries[ticker] = {"ownerId": owner}
+                    atomic(path, entries)
+                    return ticker
+            return None
+
     def __init__(self, state):
         self.state = state
         state.mkdir(parents=True, exist_ok=True)
@@ -278,6 +292,9 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(503, {"error": "Chain unavailable"})
 
     def do_POST(self):
+        if self.path == "/bootstrap":
+            self.bootstrap()
+            return
         token = os.environ["CHAIN_TOKEN"]
         if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + token):
             self.reply(401, {"error": "Invalid network invitation"})
@@ -327,6 +344,52 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(400, {"error": str(error)})
         except Exception:
             self.reply(502, {"error": "Upstream unavailable; do not repeat an uncertain payment"})
+
+    def bootstrap(self):
+        # Explicit demo enrollment: reuse the participant's market identity, not wallet keys.
+        token = self.headers.get("Authorization", "").removeprefix("Bearer ")
+        if not re.fullmatch(r"[0-9a-f]{64}", token) or self.headers.get("Origin"):
+            self.reply(401, {"error": "Participant credential required"})
+            return
+        if self.headers.get("Content-Length") != "2":
+            self.reply(400, {"error": "Empty JSON object required"})
+            return
+        if self.rfile.read(2) != b"{}":
+            self.reply(400, {"error": "Empty JSON object required"})
+            return
+        conn = http.client.HTTPConnection("runtime", 4100, timeout=15)
+        try:
+            conn.request(
+                "POST",
+                "/participants",
+                b"{}",
+                {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json",
+                },
+            )
+            response = conn.getresponse()
+            registration = json.loads(response.read(4096))
+            owner = (
+                "participant-"
+                + hashlib.sha256(("palka-participant-v1:" + token).encode()).hexdigest()
+            )
+            if response.status not in (200, 201) or registration.get("ownerId") != owner:
+                self.reply(403, {"error": "Market registration rejected"})
+                return
+            self.reply(
+                200,
+                {
+                    "network": "regtest",
+                    "chainId": self.server.network.chain_id,
+                    "token": os.environ["CHAIN_TOKEN"],
+                    "asset": self.server.network.assignment(owner),
+                },
+            )
+        except Exception:
+            self.reply(503, {"error": "Market enrollment unavailable"})
+        finally:
+            conn.close()
 
 
 def main():
