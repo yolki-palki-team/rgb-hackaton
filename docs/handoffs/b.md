@@ -133,8 +133,7 @@ remain deliberately pinned; use `service-ring-clean` for future desktop work.
   replay and independent BTC credit regression. Full service evidence is real;
   the unit fixtures and response-loss injection are explicitly test-only.
 
-Boundaries remain regtest, precision-0 NIA, SegWit v0, distinct contributing
-contracts, deterministic test blinding/nonce and 1000-sat estimated fees. No
+Boundaries remain regtest, precision-0 NIA, SegWit v0, deterministic test blinding/nonce and 1000-sat estimated fees. No
 mainnet, general fee bumping, reorg handling or production privacy is claimed.
 
 If a native process is forcibly killed while rgb-lib holds `rgb_runtime.lock`,
@@ -208,6 +207,6 @@ A must retain the approval binding and relay the same cached signature; do not
 release orders or create a different package. Sidecar restart after signature
 delivery was tested. No new QVAC/browser end-to-end claim is made by B.
 
-Regtest NIA precision 0 / SegWit v0 only; same-contract multi-sender inputs rejected.
+Regtest NIA precision 0 / SegWit v0 only. Shared-contract inputs require the updated Python adapter and native binary on every participant; see [settlement scope](../settlement.md#shared-contract-inputs).
 Deterministic test blinding, fixed fee estimates and anonymous Docker chain volumes
 remain documented limitations. Never commit or upload ignored wallet state/backups.

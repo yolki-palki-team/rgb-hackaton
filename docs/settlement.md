@@ -515,10 +515,35 @@ later transactions change these wallets. Use independent state for a fresh smoke
 
 Support remains intentionally bounded to regtest, NIA precision 0, SegWit v0,
 direct/two-party and three-party cycles, one outgoing and one incoming leg per
-participant, and distinct contributing contracts. Same-contract multi-sender
-inputs are rejected. Estimated fees use a deterministic 1000-sat split within
+participant. Shared-contract inputs use separate proof outputs as described below.
+Estimated fees use a deterministic 1000-sat split within
 each participant's cap; final plans use their explicit fee split. General fee
 bumping, reorg recovery and mainnet are outside this MVP.
+
+### Shared-contract inputs
+
+A prior swap can leave outgoing change and received RGB on the same Bitcoin
+output. A later ring can therefore consume one contract from multiple wallets,
+even when every participant offers a different asset. The adapter now isolates
+coloring to each wallet's owned inputs and gives each sender/contract/recipient
+its own RGB output. This preserves proof routing without consuming another
+wallet's known contract history. Signing checks require the exact local
+consumers and transitions inside the combined bundle. Unordered SDK transition
+sets are sorted for deterministic package comparison.
+
+The confirmed SQL index records net incoming amounts even when the wallet also
+spends collateral of that contract; validated RGB stock remains authoritative.
+The isolated regtest run confirmed a direct swap, a three-party ring with two
+shared contributing contracts, then a direct re-spend requiring the ring's
+received RGB. Each restarted all sidecars after signing and checked exact final
+BTC/RGB balances. See [recorded receipts](../scripts/demo/evidence/shared-contract-ring.json).
+This verifies the adapter locally, not coordination between three updated remote
+desktop installations.
+
+All participants must update both the Python adapter and compiled native binary.
+Historical transactions with distinct contributing contracts keep their original
+output layout. Each separate RGB output holds 1000 sats, charged to its owner;
+insufficient Bitcoin change is rejected. No extra signing authority is granted.
 
 Public contract import validates genesis/schema/network; it does not create an
 owned allocation. Pending ordinary SDK transfers can make inputs unavailable.

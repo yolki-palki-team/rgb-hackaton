@@ -131,16 +131,14 @@ impl Wallet {
             txn.check_asset_exists(id.clone())?;
             let inputs = consumed.get(&id).cloned().unwrap_or_default();
             let outputs = received.get(&id).cloned().unwrap_or_default();
-            let incoming = inputs.is_empty();
             let sum_in = inputs.iter().try_fold(0u64, |s, (_, n)| {
                 s.checked_add(*n).ok_or(Error::InvalidConsignment)
             })?;
             let sum_out = outputs.iter().try_fold(0u64, |s, (_, _, n)| {
                 s.checked_add(*n).ok_or(Error::InvalidConsignment)
             })?;
-            if !incoming && sum_out > sum_in {
-                return Err(Error::InvalidConsignment);
-            }
+            // A shared-contract swap can return collateral and receive more of the same asset.
+            let incoming = sum_out > sum_in;
             let batch = txn.set_batch_transfer(DbBatchTransferActMod {
                 txid: ActiveValue::Set(Some(txid.clone())),
                 status: ActiveValue::Set(TransferStatus::Settled),
@@ -182,7 +180,11 @@ impl Wallet {
                 txn.set_transfer(DbTransferActMod {
                     asset_transfer_idx: ActiveValue::Set(at),
                     requested_assignment: ActiveValue::Set(Some(Assignment::Fungible(
-                        if incoming { sum_out } else { sum_in - sum_out },
+                        if incoming {
+                            sum_out - sum_in
+                        } else {
+                            sum_in - sum_out
+                        },
                     ))),
                     recipient_id: ActiveValue::Set(Some(format!("cooperative:{txid}:{id}"))),
                     recipient_type: ActiveValue::Set(if incoming {

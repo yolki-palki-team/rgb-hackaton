@@ -1,0 +1,118 @@
+{
+  "network": "regtest",
+  "isolatedWallets": true,
+  "userWalletsTouched": false,
+  "cases": [
+    {
+      "scenario": "direct",
+      "tradeId": "same-contract-isolated-seed",
+      "txid": "c10abc328819254b9555fe885aa43f806bb85c768039db6f72680d8007ed1383",
+      "restartAfterSignature": true,
+      "sdkAllocationIndexSynchronized": true,
+      "actualDeltas": {
+        "alice": {
+          "regtest:btc:btc": "-500",
+          "regtest:rgb:rgb:TM6YiuoM-5s4nqYX-bIIRl2a-lYenTTJ-m1FIzRu-ovAu4BM": "0",
+          "regtest:rgb:rgb:aTw17eDi-rt1aiLw-D2pNdeT-rQaFqZL-7aWqr5l-C987U84": "10",
+          "regtest:rgb:rgb:tF4h2Enn-OSq5ijc-Vkv8MJ2-mpEPD1g-eyhMCWI-MycMwwE": "-10"
+        },
+        "bob": {
+          "regtest:btc:btc": "-500",
+          "regtest:rgb:rgb:TM6YiuoM-5s4nqYX-bIIRl2a-lYenTTJ-m1FIzRu-ovAu4BM": "0",
+          "regtest:rgb:rgb:aTw17eDi-rt1aiLw-D2pNdeT-rQaFqZL-7aWqr5l-C987U84": "-10",
+          "regtest:rgb:rgb:tF4h2Enn-OSq5ijc-Vkv8MJ2-mpEPD1g-eyhMCWI-MycMwwE": "10"
+        }
+      },
+      "receipts": {
+        "alice": {
+          "state": "confirmed",
+          "chainConfirmed": true,
+          "rgbAccepted": true
+        },
+        "bob": {
+          "state": "confirmed",
+          "chainConfirmed": true,
+          "rgbAccepted": true
+        }
+      }
+    },
+    {
+      "scenario": "ring",
+      "tradeId": "same-contract-isolated-ring",
+      "txid": "7c9b4ce48c44ba51f76ecb25be5964476c4415f59610409ff9a9a01da123135a",
+      "restartAfterSignature": true,
+      "sdkAllocationIndexSynchronized": true,
+      "actualDeltas": {
+        "alice": {
+          "regtest:btc:btc": "-333",
+          "regtest:rgb:rgb:TM6YiuoM-5s4nqYX-bIIRl2a-lYenTTJ-m1FIzRu-ovAu4BM": "0",
+          "regtest:rgb:rgb:aTw17eDi-rt1aiLw-D2pNdeT-rQaFqZL-7aWqr5l-C987U84": "-1",
+          "regtest:rgb:rgb:tF4h2Enn-OSq5ijc-Vkv8MJ2-mpEPD1g-eyhMCWI-MycMwwE": "2"
+        },
+        "bob": {
+          "regtest:btc:btc": "9667",
+          "regtest:rgb:rgb:TM6YiuoM-5s4nqYX-bIIRl2a-lYenTTJ-m1FIzRu-ovAu4BM": "0",
+          "regtest:rgb:rgb:aTw17eDi-rt1aiLw-D2pNdeT-rQaFqZL-7aWqr5l-C987U84": "0",
+          "regtest:rgb:rgb:tF4h2Enn-OSq5ijc-Vkv8MJ2-mpEPD1g-eyhMCWI-MycMwwE": "-2"
+        },
+        "carol": {
+          "regtest:btc:btc": "-10334",
+          "regtest:rgb:rgb:TM6YiuoM-5s4nqYX-bIIRl2a-lYenTTJ-m1FIzRu-ovAu4BM": "0",
+          "regtest:rgb:rgb:aTw17eDi-rt1aiLw-D2pNdeT-rQaFqZL-7aWqr5l-C987U84": "1",
+          "regtest:rgb:rgb:tF4h2Enn-OSq5ijc-Vkv8MJ2-mpEPD1g-eyhMCWI-MycMwwE": "0"
+        }
+      },
+      "receipts": {
+        "alice": {
+          "state": "confirmed",
+          "chainConfirmed": true,
+          "rgbAccepted": true
+        },
+        "bob": {
+          "state": "confirmed",
+          "chainConfirmed": true,
+          "rgbAccepted": true
+        },
+        "carol": {
+          "state": "confirmed",
+          "chainConfirmed": true,
+          "rgbAccepted": true
+        }
+      },
+      "sharedContributingContracts": 2
+    },
+    {
+      "scenario": "direct",
+      "tradeId": "same-contract-isolated-respend",
+      "txid": "043a8fa5164867311f3c81b63d16b8a177fc60d21bbe7f4886b248bdde3d22af",
+      "restartAfterSignature": true,
+      "sdkAllocationIndexSynchronized": true,
+      "actualDeltas": {
+        "alice": {
+          "regtest:btc:btc": "-500",
+          "regtest:rgb:rgb:TM6YiuoM-5s4nqYX-bIIRl2a-lYenTTJ-m1FIzRu-ovAu4BM": "0",
+          "regtest:rgb:rgb:aTw17eDi-rt1aiLw-D2pNdeT-rQaFqZL-7aWqr5l-C987U84": "1",
+          "regtest:rgb:rgb:tF4h2Enn-OSq5ijc-Vkv8MJ2-mpEPD1g-eyhMCWI-MycMwwE": "-90"
+        },
+        "bob": {
+          "regtest:btc:btc": "-500",
+          "regtest:rgb:rgb:TM6YiuoM-5s4nqYX-bIIRl2a-lYenTTJ-m1FIzRu-ovAu4BM": "0",
+          "regtest:rgb:rgb:aTw17eDi-rt1aiLw-D2pNdeT-rQaFqZL-7aWqr5l-C987U84": "-1",
+          "regtest:rgb:rgb:tF4h2Enn-OSq5ijc-Vkv8MJ2-mpEPD1g-eyhMCWI-MycMwwE": "90"
+        }
+      },
+      "receipts": {
+        "alice": {
+          "state": "confirmed",
+          "chainConfirmed": true,
+          "rgbAccepted": true
+        },
+        "bob": {
+          "state": "confirmed",
+          "chainConfirmed": true,
+          "rgbAccepted": true
+        }
+      }
+    }
+  ]
+}

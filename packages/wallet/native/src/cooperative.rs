@@ -154,12 +154,24 @@ pub fn public_operation(req: &Value) -> Result<Value> {
         base
     };
     psbt.set_as_unmodifiable();
+    let mut fascia = serde_json::to_value(final_fascia)?;
+    if let Some(bundles) = fascia.get_mut("bundles").and_then(Value::as_object_mut) {
+        for bundle in bundles.values_mut() {
+            if let Some(transitions) = bundle
+                .get_mut("knownTransitions")
+                .and_then(Value::as_array_mut)
+            {
+                // The SDK serializes this set in random order; package equality must be stable.
+                transitions.sort_by_cached_key(ToString::to_string);
+            }
+        }
+    }
     Ok(
         json!({"psbt":psbt.to_string(),"candidateTxid":psbt.unsigned_tx.compute_txid().to_string(),
         "unsignedTxHex":rgb_lib::bitcoin::consensus::encode::serialize_hex(&psbt.unsigned_tx),
         "commitmentScripts":psbt.unsigned_tx.output.iter().filter(|o|o.script_pubkey.is_op_return()).map(|o|o.script_pubkey.to_hex_string()).collect::<Vec<_>>(),
         "signed":false,"broadcast":false,"feeSats":psbt.fee()?.to_sat().to_string(),
-        "fascia":final_fascia,
+        "fascia":fascia,
         "contracts":psbt.rgb_contract_ids()?.iter().map(ToString::to_string).collect::<Vec<_>>() }),
     )
 }
@@ -279,8 +291,19 @@ pub fn sign(
             &json!({"psbt":base.to_string(),"assignments":intent["assignments"]}),
         )?;
         let own = parse_psbt(&own["psbt"])?;
+        let combined = psbt.rgb_bundles()?;
         for (id, bundle) in own.rgb_bundles()? {
-            if psbt.rgb_bundles()?.get(&id) != Some(&bundle) {
+            let actual = combined.get(&id).ok_or("outgoing RGB contract missing")?;
+            // Other senders may contribute this contract, but cannot replace our consumers or transitions.
+            if bundle
+                .input_map
+                .iter()
+                .any(|(input, opid)| actual.input_map.get(input) != Some(opid))
+                || bundle
+                    .known_transitions
+                    .iter()
+                    .any(|expected| !actual.known_transitions.contains(expected))
+            {
                 return Err("outgoing RGB transition changed".into());
             }
         }
@@ -464,6 +487,7 @@ pub fn color(wallet: &mut Wallet, req: &Value) -> Result<Value> {
     let on = online(wallet)?;
     let utxos = wallet.list_unspents(Some(on), false, false)?;
     let mut owned = BTreeMap::<String, u64>::new();
+    let mut owned_points = std::collections::HashSet::new();
     for u in utxos {
         if !psbt.unsigned_tx.input.iter().any(|i| {
             i.previous_output.txid.to_string() == u.utxo.outpoint.txid
@@ -471,6 +495,10 @@ pub fn color(wallet: &mut Wallet, req: &Value) -> Result<Value> {
         }) {
             continue;
         }
+        owned_points.insert(OutPoint {
+            txid: u.utxo.outpoint.txid.parse()?,
+            vout: u.utxo.outpoint.vout,
+        });
         if u.pending_blinded != 0 {
             return Err("pending blind allocation on selected input".into());
         }
@@ -519,14 +547,32 @@ pub fn color(wallet: &mut Wallet, req: &Value) -> Result<Value> {
             "all consumed allocations must be conserved, including unrelated assets".into(),
         );
     }
+    let mut local = psbt.clone();
+    for index in (0..local.inputs.len()).rev() {
+        if !owned_points.contains(&local.unsigned_tx.input[index].previous_output) {
+            local.inputs.remove(index);
+            local.unsigned_tx.input.remove(index);
+        }
+    }
+    // This input-filtered copy only builds RGB transitions. The original PSBT retains all prevouts.
+    // The SDK explicitly supports missing input values for non-standard coloring templates.
+    for input in &mut local.inputs {
+        input.witness_utxo = None;
+        input.non_witness_utxo = None;
+    }
     let (fascia, _) = wallet.color_psbt(
-        &mut psbt,
+        &mut local,
         ColoringInfo {
             asset_info_map,
             static_blinding: Some(777),
             nonce: Some(1),
         },
     )?;
+    for (_, bundle) in local.rgb_bundles()? {
+        for known in bundle.known_transitions {
+            psbt.push_rgb_transition(known.transition)?;
+        }
+    }
     Ok(
         json!({"psbt":psbt.to_string(),"bundleCount":fascia.bundles().len(),"signed":false,
         "conservedAllocations":owned.iter().map(|(k,v)|(k,v.to_string())).collect::<BTreeMap<_,_>>() }),

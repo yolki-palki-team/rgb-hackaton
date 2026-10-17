@@ -409,53 +409,69 @@ class Backend:
     def skeleton(self, plan, funding):
         fees = plan_check(plan, self.owner)
         people = plan["participants"]
-        inputs = []
+        contracts = [contract for p in people for contract in funding[p]["allocations"]]
+        separate = len(contracts) != len(set(contracts))
+        inputs = [item for p in people for item in funding[p]["inputs"]]
         outputs = []
+        output_owners = []
         assignments = {p: {} for p in people}
         receivers = []
-        seen_contracts = set()
+        # Preserve historical skeletons; shared contracts need isolated proof endpoints.
+        if not separate:
+            for p in people:
+                outputs.append({"address": funding[p]["rgbAddress"], "amountSats": "1000"})
+                output_owners.append(p)
         for p in people:
-            f = funding[p]
-            inputs += f["inputs"]
-            outputs.append({"address": f["rgbAddress"], "amountSats": "1000"})
-        for p in people:
-            own = sum(units(i["amountSats"]) for i in funding[p]["inputs"])
-            change = own + self.btc_delta(plan, p, fees) - 1000
-            if change < 546 or change > MAX:
-                raise ValueError("invalid change")
-            outputs.append({"address": funding[p]["btcAddress"], "amountSats": str(change)})
             give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == p)
             if (
                 give["asset"]["kind"] == "rgb"
                 and give["asset"]["contractId"] not in funding[p]["allocations"]
             ):
                 raise ValueError("missing outgoing allocation")
-            for contract, s in funding[p]["allocations"].items():
-                if contract in seen_contracts:
-                    raise ValueError("same-contract multi-sender inputs unsupported")
-                seen_contracts.add(contract)
-                amount = units(s)
+            allocation_keys = (
+                sorted(funding[p]["allocations"]) if separate else funding[p]["allocations"]
+            )
+            for contract in allocation_keys:
+                amount = units(funding[p]["allocations"][contract])
                 assigned = {}
+
+                def assign(receiver, value, assigned=assigned):
+                    if separate:
+                        index = len(outputs)
+                        outputs.append(
+                            {"address": funding[receiver]["rgbAddress"], "amountSats": "1000"}
+                        )
+                        output_owners.append(receiver)
+                    else:
+                        index = people.index(receiver)
+                    assigned[str(index)] = str(value)
+
                 if give["asset"]["kind"] == "rgb" and give["asset"]["contractId"] == contract:
                     send = units(give["amount"])
                     if send > amount:
                         raise ValueError("RGB overspend")
-                    assigned[str(people.index(give["toOwnerId"]))] = str(send)
+                    assign(give["toOwnerId"], send)
                     amount -= send
                 if amount:
-                    assigned[str(people.index(p))] = str(amount)
+                    assign(p, amount)
                 assignments[p][contract] = assigned
                 for vout, n in assigned.items():
                     receivers.append(
                         {
                             "sender": p,
-                            "receiver": people[int(vout)],
+                            "receiver": output_owners[int(vout)],
                             "contractId": contract,
                             "vout": int(vout),
                             "amount": n,
                             "address": outputs[int(vout)]["address"],
                         }
                     )
+        for p in people:
+            own = sum(units(i["amountSats"]) for i in funding[p]["inputs"])
+            change = own + self.btc_delta(plan, p, fees) - 1000 * output_owners.count(p)
+            if change < 546 or change > MAX:
+                raise ValueError("invalid change")
+            outputs.append({"address": funding[p]["btcAddress"], "amountSats": str(change)})
         base = native("build", inputs=inputs, outputs=outputs)
         return {
             "inputs": inputs,
