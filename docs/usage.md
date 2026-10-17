@@ -272,6 +272,12 @@ rtk proxy npm run smoke:qvac
 
 ## Облако и несколько компьютеров
 
+Для первого server-only запуска используйте [deploy/README.md](../deploy/README.md):
+Compose, настройка произвольных participant IDs, постоянные токены и команды
+обновления уже находятся в Git. Этот HTTP-профиль запускает web + market;
+приватный market доступен через SSH-туннель. TLS и распределённая Bitcoin/RGB
+инфраструктура остаются отдельными этапами, описанными ниже.
+
 Public web и market можно вынести в облако. Local client, QVAC, sidecar, ключи,
 private policy и wallet state должны остаться **на машине каждого участника**.
 Root Compose нельзя целиком выдавать за облачную архитектуру: его runtime также

@@ -39,7 +39,8 @@
     "format:check:rust": "cargo fmt --manifest-path packages/wallet/native/Cargo.toml --check && rustfmt --edition 2024 --check packages/wallet/native/extension.rs",
     "test:python": "uv run --locked python -m unittest discover -s packages/wallet -p \"test_*.py\"",
     "test:wallet": "node --test packages/wallet/adapter.test.mjs",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:wallet && npm run test:python && npm run build",
+    "test:deploy": "uv run --locked python -m unittest discover -s deploy -p \"test_*.py\"",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:wallet && npm run test:python && npm run test:deploy && npm run build",
     "lint:css": "stylelint \"**/*.css\" --max-warnings 0",
     "lint:fix": "npm run lint:js -- --fix && npm run lint:css -- --fix && npm run lint:python -- --fix"
   },

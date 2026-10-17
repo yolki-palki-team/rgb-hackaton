@@ -1,0 +1,61 @@
+name: palka-demo
+
+services:
+  runtime:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: market
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file:
+      - ./.state/market.env
+    environment:
+      MARKET_HOST: '0.0.0.0'
+      MARKET_PORT: '4100'
+      MARKET_DB_PATH: /app/.state/market.sqlite
+    ports:
+      - '127.0.0.1:44100:4100'
+    volumes:
+      - market-state:/app/.state
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: web
+    restart: unless-stopped
+    depends_on:
+      runtime:
+        condition: service_healthy
+    ports:
+      - '80:8080'
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--spider', 'http://127.0.0.1:8080/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  market-state:
