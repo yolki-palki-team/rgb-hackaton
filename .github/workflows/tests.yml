@@ -1,0 +1,54 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript:
+    name: Application and wallet adapter tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.17.0'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Contracts, market, local client, web and desktop tests
+        run: npm test
+      - name: Wallet adapter tests
+        run: npm run test:wallet
+
+  python:
+    name: Wallet protocol and recovery tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.17.0'
+      - name: Install RTK used by the protocol digest helper
+        run: cargo install --locked --git https://github.com/rtk-ai/rtk --rev 8a7106c8f2996ebc75b38a71c5f342f17811ce39 rtk
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.3'
+          python-version: '3.12'
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Wallet journal, protocol and recovery tests
+        run: uv run --locked python -m unittest discover -s packages/wallet -p 'test_*.py' -v

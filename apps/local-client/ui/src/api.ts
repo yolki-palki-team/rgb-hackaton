@@ -45,9 +45,31 @@ export type DesktopBridge = {
   connect(): Promise<LocalHealth>;
   request(method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown>;
   approveTrade(tradeId: string, approvalToken: string): Promise<unknown>;
+  approveFunding?(operationId: string): Promise<unknown>;
   getPendingOffer(): Promise<string | null>;
   onOfferSelected(callback: (orderId: string) => void): () => void;
   openPublicMarket(): Promise<void>;
+};
+export type FundingOperation = {
+  id: string;
+  status: 'PREVIEW' | 'SIGNING' | 'SIGNED' | 'BROADCAST' | 'CONFIRMED' | 'RECONCILING';
+  network: 'regtest';
+  address: string;
+  amountSats: string;
+  feeSats: string;
+  maxFeeSats: string;
+  expiresAt: number;
+  txid?: string;
+  reason?: string;
+};
+
+export type FundingStatus = {
+  available: boolean;
+  reason?: string;
+  network: 'regtest';
+  address?: string;
+  balanceSats?: string;
+  operation?: FundingOperation | null;
 };
 declare global {
   interface Window {
@@ -256,6 +278,33 @@ export class LocalClient {
     await this.request('POST', `/api/orders/${encodeURIComponent(id)}/cancel`, {
       revision: order.revision,
     });
+  }
+
+  async fundingStatus(): Promise<FundingStatus> {
+    return this.request<FundingStatus>('GET', '/api/funding');
+  }
+
+  async createFundingAccount(): Promise<FundingStatus> {
+    return this.request<FundingStatus>('POST', '/api/funding/create', { confirmed: true });
+  }
+
+  async previewFunding(amountSats: string): Promise<FundingOperation> {
+    return this.request<FundingOperation>('POST', '/api/funding/preview', { amountSats });
+  }
+
+  async approveFunding(operationId: string): Promise<FundingOperation> {
+    if (this.bridge) {
+      if (!this.bridge.approveFunding) throw new Error('Desktop funding approval is unavailable.');
+      return (await this.bridge.approveFunding(operationId)) as FundingOperation;
+    }
+    return this.request<FundingOperation>('POST', '/api/funding/approve', {
+      operationId,
+      confirmed: true,
+    });
+  }
+
+  async syncFunding(): Promise<FundingStatus> {
+    return this.request<FundingStatus>('POST', '/api/funding/sync', {});
   }
 
   async prepare(tradeId: string): Promise<string> {

@@ -16,6 +16,49 @@ from server import create_server
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_funding_target_is_owned_vanilla_regtest_address(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = Backend.__new__(Backend)
+            backend.root = Path(tmp)
+            backend.owner = "alice"
+            backend.wallet_id = "rgb-test-wallet"
+            address = "bcrt1q" + "a" * 38
+            with patch.object(
+                backend, "call_native", return_value={"btcAddress": address, "rgbAddress": "hidden"}
+            ) as native_call:
+                self.assertEqual(
+                    backend.handle("fundingTarget", {}),
+                    {
+                        "walletId": "rgb-test-wallet",
+                        "ownerId": "alice",
+                        "network": "regtest",
+                        "address": address,
+                    },
+                )
+                native_call.assert_called_once_with("addresses")
+            with self.assertRaises(TypeError):
+                backend.handle("fundingTarget", {"tradeId": "unexpected"})
+
+    def test_funding_target_refuses_active_trade_and_non_regtest_address(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = Backend.__new__(Backend)
+            backend.root = Path(tmp)
+            backend.owner = "alice"
+            backend.wallet_id = "rgb-test-wallet"
+            journal = Journal(backend.root / "journal.sqlite")
+            journal.reserve("unit", {"network": "regtest"}, ["synthetic:0"])
+            journal.db.close()
+            with patch.object(backend, "call_native") as native_call:
+                with self.assertRaisesRegex(ValueError, "active trade"):
+                    backend.fundingTarget()
+                native_call.assert_not_called()
+            journal = Journal(backend.root / "journal.sqlite")
+            journal.release("unit")
+            journal.db.close()
+            with patch.object(backend, "call_native", return_value={"btcAddress": "bc1qwrong"}):
+                with self.assertRaisesRegex(ValueError, "regtest BTC address"):
+                    backend.fundingTarget()
+
     def plan(self):
         p = {
             "protocolVersion": 1,

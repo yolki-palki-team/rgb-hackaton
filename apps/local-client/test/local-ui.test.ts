@@ -20,7 +20,44 @@ test('unpaired wallet starts with no synthetic balances, orders, or network', ()
     assert.match(html, /Local wallet unavailable/);
     assert.match(html, /NETWORK UNAVAILABLE/);
     assert.match(html, /Preview sample data/);
+    assert.match(html, /Connect a real regtest wallet to use WDK funding/);
+    assert.doesNotMatch(html, /Create WDK account/);
     assert.doesNotMatch(html, /0\.00250000|DEMO-A1|BITCOIN REGTEST/);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('desktop funding approval uses the privileged bridge instead of a generic request', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  let approvedId: string | null = null;
+  const bridge: DesktopBridge = {
+    connect: async () => {
+      throw new Error('Unexpected connection');
+    },
+    request: async () => {
+      throw new Error('Generic request must not approve funding');
+    },
+    approveTrade: async () => {
+      throw new Error('Unexpected trade approval');
+    },
+    approveFunding: async (id) => {
+      approvedId = id;
+      return { id, status: 'SIGNED', network: 'regtest' };
+    },
+    getPendingOffer: async () => null,
+    onOfferSelected: () => () => {},
+    openPublicMarket: async () => {},
+  };
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { palkaWallet: bridge },
+  });
+  try {
+    const operation = await new LocalClient().approveFunding('operation-1');
+    assert.equal(approvedId, 'operation-1');
+    assert.equal(operation.status, 'SIGNED');
   } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');

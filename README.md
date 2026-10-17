@@ -139,6 +139,13 @@ previous bootstrap, use `--refresh` as described in [settlement.md](docs/settlem
 Code style is enforced locally and by `.github/workflows/quality.yml` on pushes
 and pull requests:
 
+The separate **Tests** workflow (`.github/workflows/tests.yml`) also runs on pushes,
+pull requests, and manual launches. Its JavaScript and Python jobs run independently
+of the native RGB/SDK build: application and wallet-adapter tests cover the client boundary,
+while Python tests cover wallet journals, protocol validation and crash recovery.
+These are isolated tests with synthetic fixtures; they do not perform real transfers
+or download QVAC model weights. The full quality workflow retains its existing tests.
+
 | Code | Linter | Formatter |
 | --- | --- | --- |
 | TypeScript, TSX, JavaScript, MJS (including tests and scripts) | ESLint, typescript-eslint, React Hooks rules | Prettier |

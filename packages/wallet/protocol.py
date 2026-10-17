@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import time
@@ -211,6 +212,31 @@ class Backend:
             "broadcast": ready,
             "adapterVersion": FORMAT,
             "reason": reason,
+        }
+
+    def fundingTarget(self):
+        """Return only this wallet's vanilla regtest BTC receive address."""
+        journal_path = self.root / "journal.sqlite"
+        if journal_path.exists():
+            db = sqlite3.connect(f"file:{journal_path}?mode=ro", uri=True)
+            try:
+                active = db.execute(
+                    "SELECT 1 FROM trades WHERE state NOT IN ('CONFIRMED','CANCELLED') LIMIT 1"
+                ).fetchone()
+            finally:
+                db.close()
+            if active:
+                raise ValueError("finish or reconcile the active trade before funding")
+        address = self.call_native("addresses")["btcAddress"]
+        if not isinstance(address, str) or not re.fullmatch(
+            r"bcrt1[ac-hj-np-z02-9]{8,87}", address
+        ):
+            raise ValueError("native wallet did not return a regtest BTC address")
+        return {
+            "walletId": self.wallet_id,
+            "ownerId": self.owner,
+            "network": "regtest",
+            "address": address,
         }
 
     def reserve(self, plan):
@@ -872,6 +898,7 @@ class Backend:
         if method not in (
             "capabilities",
             "state",
+            "fundingTarget",
             "reserve",
             "release",
             "prepare",
