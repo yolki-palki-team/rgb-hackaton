@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { HistoryCursorSchema, MarketHistorySchema } from '@rgb-exchange/contracts';
 import { z } from 'zod';
 import { LocalError, LocalService } from './service.ts';
 import { serveLocalUi } from './ui.ts';
@@ -89,8 +90,32 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
       const actual = Buffer.from(request.headers.authorization ?? '');
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
         throw new LocalError('Local pairing required', 401);
-      const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+      const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const path = url.pathname;
       if (request.method === 'GET') {
+        if (path === '/api/history') {
+          if (
+            [...url.searchParams.keys()].some((key) => key !== 'cursor') ||
+            url.searchParams.getAll('cursor').length > 1
+          )
+            throw new LocalError('Invalid history cursor', 400);
+          const cursor = HistoryCursorSchema.optional().parse(
+            url.searchParams.get('cursor') ?? undefined,
+          );
+          const query = cursor ? `?cursor=${cursor}` : '';
+          const cacheKey = `history:${JSON.stringify([service.market.url, service.ownerId, cursor ?? null])}`;
+          let result: unknown;
+          try {
+            result = await service.market.request(`/history/me${query}`);
+          } catch (error) {
+            const cached = service.store.get(cacheKey);
+            if (!cached) throw error;
+            return json(response, 200, { ...MarketHistorySchema.parse(cached), stale: true });
+          }
+          const history = MarketHistorySchema.parse(result);
+          service.store.set(cacheKey, history);
+          return json(response, 200, history);
+        }
         if (path === '/api/funding') {
           if (!options.funding)
             return json(response, 200, {
@@ -108,11 +133,9 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
         if (path === '/api/health') return json(response, 200, await service.health());
         if (path === '/api/state') return json(response, 200, await service.state());
         if (path === '/api/policy') return json(response, 200, await service.policy());
-        if (path === '/api/snapshot')
-          return json(response, 200, await service.exclusive(() => service.snapshot()));
+        if (path === '/api/snapshot') return json(response, 200, await service.market.snapshot());
         const progress = /^\/api\/trades\/([a-zA-Z0-9:._-]+)\/progress$/.exec(path);
-        if (progress)
-          return json(response, 200, await service.exclusive(() => service.progress(progress[1])));
+        if (progress) return json(response, 200, await service.progress(progress[1]));
         const trade = /^\/api\/trades\/([a-zA-Z0-9:._-]+)$/.exec(path);
         if (trade) return json(response, 200, await service.trade(trade[1]));
       }

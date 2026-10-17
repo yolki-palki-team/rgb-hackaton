@@ -628,6 +628,56 @@ export class LocalService {
     )
       throw new LocalError('No chain confirmation or RGB acceptance', 409);
   }
+  async recoverCommitted(): Promise<boolean> {
+    const errors: unknown[] = [];
+    let hasPending = false;
+    for (const { key, value } of this.store.entries<Operation>('operation:')) {
+      if (!unsafeStates.includes(value.state) || value.state === 'CONFIRMED') continue;
+      const id = key.slice('operation:'.length);
+      try {
+        const trade = await this.trade(id);
+        this.ownPublication(trade);
+        const pkg = trade.settlementPackage;
+        const bound =
+          this.store.get<SigningIntent>(`signing:${id}`)?.package ??
+          this.store.get<SettlementPackage>(`recovered-package:${id}`);
+        if (
+          !pkg ||
+          !bound ||
+          pkg.tradeId !== id ||
+          pkg.planRevision !== trade.plan.revision ||
+          pkg.planDigest !== trade.plan.digest ||
+          pkg.network !== trade.plan.network ||
+          digestValue(pkg) !== digestValue(SettlementPackageSchema.parse(bound))
+        )
+          throw new LocalError('Recovery package differs from the approved package', 409);
+        const prior = this.store.get<unknown>(`receipt:${id}`);
+        const knownReceipts = trade.messages
+          .filter((item) => ['broadcast', 'receipt'].includes(item.message.type))
+          .map((item) => ReceiptSchema.parse(item.message.payload));
+        if (prior) knownReceipts.push(ReceiptSchema.parse(prior));
+        for (const known of knownReceipts) this.checkReceipt(id, known);
+        // Capability and balance checks can fail on our spent inputs until sync repairs the wallet.
+        // This path only observes an existing transaction; it never resumes signing or finalization.
+        const receipt = ReceiptSchema.parse(await this.wallet.sync(id));
+        this.checkReceipt(id, receipt);
+        if (
+          receipt.mode !== 'real' ||
+          knownReceipts.some((known) => known.txid && known.txid !== receipt.txid)
+        )
+          throw new LocalError('Recovery receipt does not match the existing transaction', 409);
+        this.store.set(`receipt:${id}`, receipt);
+        if (trade.status !== 'CONFIRMED') await this.message(trade, 'receipt', receipt);
+        if (receipt.state === 'confirmed')
+          this.store.set(`operation:${id}`, { state: 'CONFIRMED' });
+        else hasPending = true;
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Committed trade recovery is pending');
+    return hasPending;
+  }
   async sync(id: string): Promise<ReturnType<typeof ReceiptSchema.parse>> {
     let trade = await this.trade(id);
     if (await this.releaseCancelled(trade))
