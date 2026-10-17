@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler",
+    "strict": true, "noEmit": true, "skipLibCheck": true, "esModuleInterop": true,
+    "resolveJsonModule": true, "jsx": "react-jsx", "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/contracts/**/*.ts"],
+  "exclude": ["node_modules", "front", "tools", "apps/web/dist"]
+}

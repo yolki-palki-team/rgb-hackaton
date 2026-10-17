@@ -1,0 +1,47 @@
+name: rgb-exchange
+
+services:
+  runtime:
+    build:
+      context: .
+      target: runtime
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    # Only the demo's paired local APIs are published. Market stays inside
+    # this container, so its HTTP credentials never cross a Docker network.
+    ports:
+      - "127.0.0.1:4101:4101"
+      - "127.0.0.1:4102:4102"
+      - "127.0.0.1:4103:4103"
+    volumes:
+      - exchange-state:/app/.state
+      - qvac-models:/home/node/.qvac
+    healthcheck:
+      # Readiness checks all APIs without downloading/loading three models.
+      test: ["CMD", "node", "--import", "tsx", "apps/local-client/scripts/docker-healthcheck.ts"]
+      interval: 20s
+      timeout: 10s
+      start_period: 5m
+      start_interval: 5s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    depends_on:
+      runtime:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5173:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  exchange-state:
+  qvac-models:
