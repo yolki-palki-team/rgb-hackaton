@@ -57,6 +57,20 @@ Open **http://127.0.0.1:5173/** for the public landing page or **http://127.0.0.
 
 `web` serves the public Vite build through Nginx. It can proxy only `GET /market-api/health` and `GET /market-api/orders`; the proxy strips incoming authentication headers, cookies, request bodies and queries. `runtime` supervises the market and one real-mode local client by default. That client serves its private wallet UI on the same origin as its API. Published ports bind to `127.0.0.1`; the market port is not published and remains available only on the Docker bridge. The Compose file retains loopback mappings for 4102/4103 for the opt-in mock demo, but those profiles are not started by default. Pairing/Origin/Host checks remain enabled. Missing wallet RPC credentials leave the real client visibly unavailable; they do not select a synthetic wallet. The retained telephony/Face ID utilities are not started.
 
+The browser wallet on **4101** and desktop share `apps/local-client/ui`. Docker
+keeps its own built copy: rebuilding desktop or the public `web` service does not
+update the browser wallet. After UI changes, rebuild the `runtime` service and
+reload the browser tab:
+
+```sh
+rtk proxy docker compose up -d --build --no-deps runtime
+```
+
+This briefly restarts the Docker market/local APIs and preserves their data and
+model-cache volumes. Keep the same environment/mode settings used at startup.
+The browser profile remains separate from the desktop wallet; matching appearance
+does not connect it to the desktop's keys or balances.
+
 Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. The real-default path does not preload QVAC; first actual AI use downloads about 1.06 GB of public model weights, then loads them locally. Docker runs Linux CPU inference. Model readiness is shown in the local UI. Allow enough disk space and memory for the model; inference speed depends on the machine.
 
 To run the explicit synthetic three-profile demonstration instead:
