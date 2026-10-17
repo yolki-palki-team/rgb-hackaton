@@ -86,6 +86,10 @@ def native(state, operation, **kwargs):
         check=False,
     )
     if result.returncode:
+        if "RGB runtime lock exists" in result.stderr:
+            raise RuntimeError(
+                "RGB_RUNTIME_LOCK: Stop wallet processes and recover the stale runtime lock before restarting"
+            )
         raise RuntimeError("Native wallet operation failed; no replacement keys were requested")
     return json.loads(result.stdout)
 

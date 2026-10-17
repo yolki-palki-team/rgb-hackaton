@@ -71,14 +71,25 @@ async function startSharedWallet(): Promise<void> {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let failed = false;
+  let runtimeLocked = false;
   walletSidecar.on('error', () => {
     failed = true;
   });
   // Drain diagnostics without passing private filesystem or credential data to the UI.
-  walletSidecar.stderr?.on('data', () => {});
+  let diagnosticTail = '';
+  walletSidecar.stderr?.on('data', (chunk: Buffer) => {
+    diagnosticTail = (diagnosticTail + chunk.toString()).slice(-4096);
+    if (diagnosticTail.includes('RGB_RUNTIME_LOCK')) runtimeLocked = true;
+  });
   const deadline = Date.now() + 180_000;
   console.log('palka. Connecting to the shared wallet and checking the indexer…');
   while (Date.now() < deadline) {
+    if (runtimeLocked) {
+      console.error(
+        'palka. RGB runtime lock remains from a previous run. Stop wallet processes and recover the stale lock; do not delete wallet data.',
+      );
+      throw new Error('RGB runtime is locked');
+    }
     if (failed || walletSidecar.exitCode !== null)
       throw new Error(
         'Automatic wallet setup failed. Stop any manually started sidecar; check server network readiness. Existing wallets were preserved.',
