@@ -1,4 +1,117 @@
-# B handoff — real WalletAdapter protocol v1
+# B service integration handoff — 17 October 2026
+
+Real service integration now passes direct and three-party atomic ring, plus
+reverse/re-spend of received RGB after profile restart, through A's actual
+market/local-client APIs. This is **not** desktop/UI completion. A-owned apps,
+contracts, manifests and lockfiles were not changed. The current checkout lacks
+A code, so the tested service source is an unmodified Git archive of
+`8098d1a90f79f4dffc1d38d7c64f93f143e52219` (`origin/main` when testing).
+37 A source/contract files were compared byte-for-byte with that Git ref.
+
+| Scenario | Confirmed Bitcoin txid |
+| --- | --- |
+| Direct | `491306e9519b2a8ebf451c11ae8e0e7ae18bce73914f8bf8ddb9939af37c65e7` |
+| Direct received-asset re-spend | `8107877ac11f9ebf0d1519a5958c406866240826c947cddc5ee7c3a1852ff289` |
+| Ring | `6aff9e46090594661565cc2cef38e8b2c78e81b84fcc88e274e23a6dc349520d` |
+| Ring received-asset re-spend | `a0578b5771804b591f4041de1bb883ddd293a7bc9420bebeae6111c43b09396b` |
+
+Every swap has one transaction, fee 1000 sats, actual BTC/RGB balances matching
+the final previews, all recipient RGB acceptance, market CONFIRMED, and KEEP
+unchanged. See `scripts/demo/evidence/service-{direct,ring}{,-repeat}.json` and
+the current section of [settlement.md](../settlement.md) for actual deltas.
+Funding/colored/proofs rounds and immutable plan/tx/commitment agreement are
+checked before signing. Manual explicit approvals go through A's product checks.
+
+Actual QVAC also passed `/api/interpret` with verified real asset IDs and a valid
+draft; five policy negatives passed. That inference check is separate from the
+manual-draft settlement scenarios; no full AI-to-desktop success is claimed.
+
+## A dependencies: exact recovery reproducer
+
+`scripts/demo/service-recovery.py --source SOURCE --fault lost-sign-response --scenario direct`
+on a separately initialized fixture closes the real wallet HTTP connection only
+after the genuine signature has been durably saved. Local-client restart + sync
+cannot deliver it at the tested ref: `approve()` nulled `approval:<tradeId>` before
+wallet.sign; local `signature:<tradeId>` is absent; `sync()` only obtains a receipt.
+Backend original-approval replay returns the identical signature. Market remains
+RECONCILING, inputs/orders stay reserved, and TTL advanced eight days cannot free
+them. No manual relay was used to conceal this client recovery gap.
+
+A needs to persist the original Approval + exact package through SIGNING and
+RECONCILING, recover from wallet.sign with that immutable authorization, save and
+re-send the same signature message, then finalize the same package when all
+signatures exist. Market must allow bound signature recovery in RECONCILING;
+currently only AWAITING_APPROVAL/SIGNING accepts it. `approvedAt`/approvalId cannot
+be minted anew: backend now explicitly rejects replacement user approval.
+
+No cross-chat messages were sent. The user must pass these changes to A or
+authorize edits to that area. Final desktop check remains pending A's readiness.
+
+Two more service recovery findings are reproduced:
+
+- **Broadcast accepted, response lost:** real Core accepted
+  `a19a012071f946aa2b934098d4f041ace161e43571683fac79d9f4b04aca5fee`;
+  a test-only RPC wrapper discarded the response and next lookup. Restart kept
+  RECONCILING, the signature hash and reserved inputs. Existing local-client sync
+  found it and all three wallets reached CONFIRMED after mining. Recovery must
+  remain reachable even when ordinary balance reads temporarily fail because a
+  mempool input is spent but RGB has not yet reconciled. Launcher now does so.
+- **Broadcast never submitted:** `--fault broadcast-not-submitted` retains all
+  real signatures and finalized tx but A sync never retries finalize. The same
+  trade stays RECONCILING after restart/TTL+8 days. A must reuse the exact package
+  and signature set for idempotent wallet.finalize, and preserve the receipt's
+  uncertain status instead of calling it BROADCAST merely because it has a txid.
+- **Reject before signing:** `service-presign-reject.py` shows that peer wallets
+  remain PREPARING/reserved after the market becomes REJECTED. A's later reject
+  hits TRADE_TERMINAL before wallet.release. Process terminal pre-sign snapshots
+  to clean up local unsigned reserves; do not apply that cleanup after signing.
+  Test-only cleanup used backend release only after verifying no signature.
+
+Public results are `service-broadcast-accepted.json`,
+`service-broadcast-not-submitted.json`, `service-presign-reject.json` under
+`scripts/demo/evidence`. `service-order-negatives.py` also passed actual API checks
+for the impossible 101-DUSD ring, cancellation/publication replay and concurrent
+same-owner publication. Signed fault fixtures `service-direct` and `service-ring`
+remain deliberately pinned; use `service-ring-clean` for future desktop work.
+
+## Backend/infrastructure delivered
+
+- Immutable approval persisted before signing; RECONCILING persisted before
+  broadcast RPC; exact original signature/finalized tx preserved on uncertain results.
+- BTC total deviations from unrelated coinbase maturity no longer misreport RGB
+  acceptance failure. Exact signed tx identity and RGB balances remain checked.
+  New fixtures mine maturity blocks to a separate miner. The affected old ring
+  was resumed to CONFIRMED with its original txid, no replacement signature.
+- Persistent launcher: `service-profile.py configure|market|run|health`. Private
+  config/tokens, local SQLite and wallet/RGB state are reused across restart.
+  Ordinary startup cannot initialize/fund/issue. Separate setup/catalog commands
+  and per-profile ports are documented in settlement.md.
+- `chain-volumes.py pin|verify` records existing chain/indexer volume names and
+  a chain checkpoint, generating an ignored external-volume Compose override.
+  Use that override for future `up`; never down-v/prune. Electrs waits for Core
+  health and Compose services have restart policies.
+  Actual Compose recreation with those existing volumes passed: volume names
+  unchanged, original height-430 block preserved at height 650; doctor passed
+  after Core/electrs startup. See `evidence/chain-volumes.json`.
+- 16 wallet journal/protocol tests passed, including immutable original-approval
+  replay and independent BTC credit regression. Full service evidence is real;
+  the unit fixtures and response-loss injection are explicitly test-only.
+
+Boundaries remain regtest, precision-0 NIA, SegWit v0, distinct contributing
+contracts, deterministic test blinding/nonce and 1000-sat estimated fees. No
+mainnet, general fee bumping, reorg handling or production privacy is claimed.
+
+If a native process is forcibly killed while rgb-lib holds `rgb_runtime.lock`,
+upstream's empty marker survives and can wait an hour on next open. Stop that
+profile first; `recover-sdk-lock.py --profile NAME` exclusively holds both project
+locks, archives the stale marker and checks wallet identity plus SQL/stock. Use
+only when all SDK access obeys this project's instance lock. It never removes
+journal, approval, signature or RGB stock; corruption still requires a real
+backup restore. Normal restart after completed RPCs was tested separately.
+
+---
+
+# Earlier B handoff — real WalletAdapter protocol v1
 
 Current: the full authenticated HTTP WalletAdapter v1 from A's merged PR #1 is
 implemented in `packages/wallet/server.py` / `protocol.py`. No A-owned files or

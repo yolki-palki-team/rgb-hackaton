@@ -1,3 +1,280 @@
+# Service integration — 17 October 2026
+
+This section supersedes integration/recovery limitations below where explicitly
+verified. Historical evidence is retained. Desktop/UI integration is still A's
+work and is not certified by these service checks.
+
+The current checkout lacks A's apps/contracts. Integration uses an unmodified
+Git archive of `origin/main` at `8098d1a90f79f4dffc1d38d7c64f93f143e52219`, with
+its locked npm dependencies, in `/private/tmp/rgb-service-source-8098d1a`.
+No branch/worktree switch, merge, A source edit, or root lockfile edit was made.
+These results must be rerun against A's later recovery/desktop changes.
+
+`service-smoke.py` drives authenticated local-client HTTP APIs, the actual market
+HTTP/WebSocket coordinator, and the real HTTP wallet. It validates/publishes
+explicitly confirmed private policy + public orders, gets the market's match,
+relays all funding/colored/proofs rounds, checks a common final commitment,
+requests immutable previews, confirms approvals, then verifies actual signatures,
+one Bitcoin tx, mining, all RGB acceptance reports, final market CONFIRMED, and
+exact actual balances. `--repeat` restarts all profiles and reverses the trade to
+spend received RGB through that same service path. It never constructs a fake
+market, signs through a mock, or replaces a ring with sequential transfers.
+
+Confirmed direct: `491306e9519b2a8ebf451c11ae8e0e7ae18bce73914f8bf8ddb9939af37c65e7`.
+Confirmed direct repeat: `8107877ac11f9ebf0d1519a5958c406866240826c947cddc5ee7c3a1852ff289`.
+Both paid 1000 sats and matched the complete previews; see
+[direct service evidence](../scripts/demo/evidence/service-direct.json) and
+[repeat](../scripts/demo/evidence/service-direct-repeat.json).
+
+Confirmed clean ring: `6aff9e46090594661565cc2cef38e8b2c78e81b84fcc88e274e23a6dc349520d`.
+Confirmed ring repeat: `a0578b5771804b591f4041de1bb883ddd293a7bc9420bebeae6111c43b09396b`.
+Both had all three funding/colored/proofs contributions, one common commitment,
+three real signatures, one Bitcoin transaction, exact actual balances and all
+RGB acceptances. No direct pair existed. The repeat spent received RGB outputs
+at both Alice and Carol. Original ring BTC deltas: Alice −333, Bob +99666,
+Carol −100333 sats; Alice −100 X/+100 DUSD, Bob −100 DUSD, Carol +100 X.
+All 7 KEEP remained at Alice. Evidence:
+[ring](../scripts/demo/evidence/service-ring.json),
+[repeat](../scripts/demo/evidence/service-ring-repeat.json).
+`service-evidence-audit.py --scenario direct|ring` independently checks actual
+confirmed witness transactions, exact input sets, fee and prior received RGB
+outpoints against Core plus saved reviews. Actual sizes: direct 313/449 vB,
+ring 443/646 vB; every fee 1000 sats.
+
+`service-local-checks.py` separately exercised real on-device QVAC through
+`POST /api/interpret` with actual verified contract metadata. A valid 10 X →
+10 DUSD draft, no BTC sale, and 1000-sat cap passed deterministic validation.
+Provider QVAC / QWEN3_1_7B_INST_Q4, actual inference duration 50516 ms (including
+remaining model preparation). This draft was not published: the settlement
+fixtures use explicit manual drafts. The same API rejected excessive fees,
+protected-balance violation, forbidden BTC sale, expired order and unknown RGB
+contract. See [local checks](../scripts/demo/evidence/service-local-checks.json).
+This is real inference plus real manual settlement, not a claim of a single
+QVAC-to-settlement/UI journey.
+
+## Reproducible service setup and persistent profiles
+
+Python 3.12+, the built native backend, pinned Docker images and A's npm runtime
+are required. If A is missing locally, export a ref without disturbing the checkout:
+
+```sh
+rtk proxy python3 scripts/demo/service-source.py --ref 8098d1a90f79f4dffc1d38d7c64f93f143e52219 --output /private/tmp/rgb-service-source-new
+rtk proxy npm ci --prefix /private/tmp/rgb-service-source-new --no-audit --no-fund
+```
+
+Shared infrastructure and initialization are separate from normal profile startup.
+For an existing chain first pin its actual mounts, then use the external-volume
+override on future Compose up operations. The pin command refuses mismatched
+existing metadata, never migrates or deletes data, and verifies a saved block hash.
+
+```sh
+rtk proxy python3 scripts/demo/chain-volumes.py pin
+rtk proxy docker compose -f infra/compose.yaml -f infra/state/chain-volumes.compose.json up -d
+rtk proxy python3 scripts/demo/chain-volumes.py verify
+rtk proxy python3 scripts/demo/doctor.py
+```
+
+On a brand-new host first run `rtk proxy docker compose -f infra/compose.yaml up -d`,
+then pin those created volumes. Never use `down -v` or prune the chain volumes.
+The ignored override gives explicit external names to the *existing* anonymous
+volumes. Electrs now waits for bitcoind health; all services have restart policies.
+
+Select one persistent `RGB_DEMO_STATE` under `packages/wallet/state`, e.g.
+`$PWD/packages/wallet/state/my-service-direct`. Use that same environment value
+for every command below. A separate state directory is required for the initial
+ring fixture because the direct exchange changes asset ownership.
+
+```sh
+rtk proxy python3 scripts/demo/regtest.py setup
+rtk proxy python3 scripts/demo/catalog.py
+rtk proxy python3 scripts/demo/service-profile.py configure --source /private/tmp/rgb-service-source-new --base-port 43100
+rtk proxy python3 scripts/demo/service-smoke.py --source /private/tmp/rgb-service-source-new --base-port 43100 --scenario direct --repeat
+```
+
+For ring use a fresh state directory, the same setup/catalog commands, base port
+43200 and `--scenario ring --repeat`. Setup mines maturation blocks to the
+separate `regtest-miner`, not a participant: coinbase maturity must not be mistaken
+for swap income. Funding/issuance are memoized and are not normal startup actions.
+
+For persistent desktop-ready processes run these in separate terminals (same state):
+
+```sh
+rtk proxy python3 scripts/demo/service-profile.py market
+rtk proxy python3 scripts/demo/service-profile.py run --profile alice
+rtk proxy python3 scripts/demo/service-profile.py run --profile bob
+rtk proxy python3 scripts/demo/service-profile.py run --profile carol
+rtk proxy python3 scripts/demo/service-profile.py health --profile alice
+```
+
+At base port 43100, market is 43100, local clients 43101–43103, wallet RPC
+43111–43113. `services/config.json` under the selected ignored state directory
+holds private wallet/market/pairing tokens and source path; mode 0600. Each local
+profile has its own persistent SQLite directory and wallet keys/RGB state.
+Normal restart reuses all of them and refuses missing keys; it cannot fund,
+issue, or recreate a wallet. Use the paired Origin `http://127.0.0.1:5173` and
+local token for local-client APIs; wallet Bearer stays server-to-server.
+Health returns actual wallet capabilities and QVAC availability. A desktop can
+connect to this API; its integration and final UX checks remain separate.
+
+## Recovery findings and backend fixes
+
+`service-recovery.py --fault lost-sign-response --scenario direct --source SOURCE`
+uses a **real HTTP socket close after the backend saved its actual signature**.
+The same fixture trade, native signature and two reserved inputs survived both
+sidecar and local-client restart. Original backend approval replay returned the
+identical saved signature. Release, prepare and preview were rejected; advancing
+the real market's expiry clock by eight days did not release signed orders or
+create another trade. Market DB field audit found no private policy, protected
+balances, prompt, seed or private-key fields. Evidence:
+[lost response](../scripts/demo/evidence/service-lost-sign-response.json).
+
+**A blocker, reproduced at the pinned ref:** `LocalService.approve` sets
+`approval:<tradeId>` to null before `wallet.sign`. When the HTTP response is lost,
+the wallet has the signature but the local client has neither the original
+approval nor a signature. `sync` only calls wallet.sync and sends a receipt;
+it cannot recover/re-send the signature. It leaves the market RECONCILING.
+Required A change: durably keep the exact package/approval and signing intent;
+on recovery retry wallet.sign with that same authorization, save the returned
+signature before relay, retry the content-derived signature message, and gather
+the existing signatures to finalize that same package. Market currently only
+accepts signature messages in AWAITING_APPROVAL/SIGNING, so replay in RECONCILING
+also needs an explicitly bound recovery transition. Do not create another order,
+change the transaction, reset approval, or free inputs on TTL. No A files were edited.
+
+Backend changes in this integration:
+
+The `broadcast-accepted` recovery test sent the genuine transaction to Core,
+then deliberately discarded that RPC response and failed the next lookup in a
+test-only RPC wrapper. Backend persisted RECONCILING and the exact finalized tx.
+Restart retained the same signature hash and reserved inputs; the local-client
+sync API found the existing mempool tx, then all recipients confirmed after
+mining. Txid `a19a012071f946aa2b934098d4f041ace161e43571683fac79d9f4b04aca5fee`.
+Evidence: [broadcast accepted](../scripts/demo/evidence/service-broadcast-accepted.json).
+This is an injected loss at the RPC boundary with real Core/crypto, not a claim
+of an actual TCP outage between Docker and bitcoind. The first harness attempt
+incorrectly waited for full wallet.state after restart: pending mempool spends
+can temporarily fail rgb-lib's ordinary consistency check. The launcher now
+keeps sync available independently of balance readiness. The same saved trade
+was resumed using `--resume-trade`; no re-signing or replacement order occurred.
+
+The real no-match/cancel/concurrent-publication API checks passed:
+[order negatives](../scripts/demo/evidence/service-order-negatives.json).
+Requiring 101 DUSD prevents the ring; cancelled publication retries keep the same
+cancelled IDs; simultaneous publications from one owner accept exactly one.
+
+**Additional A blocker:** rejection before signing cancels the market trade but
+does not release the other participants' wallet reservations. Their subsequent
+local reject hits `TRADE_TERMINAL` before `wallet.release`. Reproducer:
+`service-presign-reject.py` on a fresh/restored initial ring fixture. It observed
+Alice CANCELLED/zero reserves while Bob and Carol remained PREPARING/two inputs
+each. A must process terminal pre-sign snapshots and release local reserves only
+after proving no participant began signing; terminal signed/reconciling cases
+must remain pinned. The test explicitly cleaned up only the verified unsigned
+backend reservations, and does not count that cleanup as successful product
+recovery. Evidence: [pre-sign reject](../scripts/demo/evidence/service-presign-reject.json).
+
+Implementation changes:
+
+The complementary `broadcast-not-submitted` injection prevented the send from
+reaching Core while reporting an uncertain RPC result. All three real signatures
+and finalized tx `eab1d2e8319528f30785c5a8a0a200996b78d53048d23a84ffd7aa258558ecf0`
+remain durable. After restart local-client sync stays RECONCILING: it does not
+retry finalize even though the exact package and all signatures are available.
+This is another **A recovery dependency**, not a completed broadcast. The
+backend correctly refuses release/new preparation and keeps the same signature
+and inputs; market TTL+8 days leaves all orders reserved. A should call
+wallet.finalize on the existing immutable package/signature set after checking
+the current receipt; backend already queries by txid and reuses the saved bytes.
+Market should also preserve a reconciling broadcast receipt as RECONCILING,
+instead of labeling every receipt with a txid BROADCAST before chain knowledge.
+Evidence: [not submitted](../scripts/demo/evidence/service-broadcast-not-submitted.json).
+
+The old `service-direct` and `service-ring` private fixtures deliberately retain
+these signed recovery cases. Do not reset them or reuse their reserved inputs.
+`service-ring-clean` has both successful settlements and completed unsigned
+negative-case cleanup, and remains the available profile fixture. Harnesses stop
+their own processes on exit; wallet/market/token state is preserved.
+
+Actual full-service command runs (all with `rtk proxy`; the source was the pinned
+archive above):
+
+```sh
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-direct" python3 scripts/demo/service-smoke.py --source /private/tmp/rgb-service-source-8098d1a --scenario direct --repeat
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-ring-clean" python3 scripts/demo/service-smoke.py --source /private/tmp/rgb-service-source-8098d1a --base-port 43300 --scenario ring --repeat
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-direct" python3 scripts/demo/service-local-checks.py
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-direct" python3 scripts/demo/service-recovery.py --source /private/tmp/rgb-service-source-8098d1a --fault lost-sign-response --scenario direct
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-ring" python3 scripts/demo/service-recovery.py --source /private/tmp/rgb-service-source-8098d1a --base-port 43200 --fault broadcast-accepted --scenario ring --reverse --resume-trade 61e5c080-5d62-4b01-bc19-3445903d03f7
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-ring" python3 scripts/demo/service-recovery.py --source /private/tmp/rgb-service-source-8098d1a --base-port 43200 --fault broadcast-not-submitted --scenario ring
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-ring-clean" python3 scripts/demo/service-order-negatives.py
+rtk proxy env RGB_DEMO_STATE="$PWD/packages/wallet/state/service-ring-clean" python3 scripts/demo/service-presign-reject.py
+rtk proxy python3 -m unittest discover -s packages/wallet -p 'test_*.py'
+```
+
+Setup/catalog were run separately for each fresh fixture. Normal smoke commands
+create trades and are not idempotent transaction recovery commands; use existing
+trade sync/resume for a saved signed fixture. 16 Python tests passed; new/modified
+Python scripts compiled. The four main txs passed independent Core witness/input/
+fee checks and wallet identities matched across restart. Public evidence field
+scan passed (no keys/tokens/PSBT/consignments/full balances/private policy).
+
+Infrastructure was actually recreated with the external-volume override via
+`docker compose ... up -d`, then `chain-volumes.py verify` confirmed unchanged
+bitcoind/electrs volume names and the original height-430 block hash at height
+650. After Core health/electrs startup completed, `doctor.py` passed all pinned
+image, Core 30.2, indexer and RGB proxy checks. The first immediate doctor during
+startup correctly failed while electrs was not yet started; it did not signal
+lost chain data. See [volume evidence](../scripts/demo/evidence/chain-volumes.json).
+
+For durable deployment beyond this integration session, export the service
+source into a persistent ignored directory (for example
+`packages/wallet/state/service-source-8098d1a`) rather than `/private/tmp`, install
+its locked dependencies and configure the profile against that path. The code
+snapshot is not a Git worktree; wallet/profile data remain separate. A's eventual
+real checkout can be used as the source once present. Do not commit the private
+state/config or copied dependencies.
+
+The earlier ring `40673d08a73a976954deec8d8f9aa12ad07e0db538a99860068d276329eccc3a`
+was resumed with the same signatures and txid to market CONFIRMED; see
+[resume evidence](../scripts/demo/evidence/service-resumed.json). Its large BTC
+deviation is separately recorded as unrelated legacy coinbase maturation and is
+not counted as swap income. A forcibly interrupted diagnostic native call exposed
+an upstream empty `rgb_runtime.lock` marker that survives process death. It was
+archived only after holding both coordinator and instance locks; identity and
+SQL/stock checks then passed. `recover-sdk-lock.py --profile NAME` implements this
+explicit recovery for a stopped profile. It requires all SDK access to obey the
+project instance lock and never removes keys, journal, signature or RGB stock.
+Stock corruption is not repaired by removing a marker; use the real backup
+restore workflow if validation fails.
+
+Backend implementation changes:
+
+- Save original protocol Approval durably before crypto; reject changes to it
+  during replay, including a different approvalId/approvedAt. A must retain those
+  exact values instead of minting replacement authorization.
+- Save RECONCILING before external broadcast RPC, retaining the finalized bytes,
+  txid, reservations and signature on failures/process interruption.
+- Keep native exact-tx confirmation/RGB acceptance separate from independent BTC
+  deposits/coinbase maturity. Record BTC deviation from total preview privately;
+  retain exact RGB balance checks and report private sync errors for diagnosis.
+  The confirmed txid is bound to the BTC delta already independently validated
+  before signing. This is not a waiver of the signed amounts or fees.
+- Fix regtest setup to use a separate miner for maturity blocks. The original
+  full ring exposed this issue: Carol's RGB was accepted but unrelated coinbase
+  maturity made the total BTC equality check fail. The saved transaction is
+  reconciled via `service-resume.py --trade-id ID`; no replacement trade/signature.
+
+Fixed fee estimation remains a deliberately bounded regtest policy: 1000 sats
+split deterministically within each published cap; final previews recheck the
+actual allocation and Core checks mempool acceptance. No dynamic fee selection,
+RBF/CPFP, mainnet, arbitrary schemas or production privacy is claimed. Native
+blinding/entropy 777 and nonce 1 remain deterministic test-only settings. They
+are unsuitable for mainnet/privacy; changing them needs coordinated persisted
+per-trade randomness and common commitment construction, not independent random
+values at every prepare/validate call. All tested runtime is explicitly regtest.
+
+---
+
+
 # Protocol-v1 wallet sidecar and real settlement
 
 The authenticated loopback sidecar now implements A's complete WalletAdapter v1:

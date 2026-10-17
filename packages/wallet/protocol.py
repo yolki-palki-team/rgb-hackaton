@@ -321,12 +321,17 @@ class Backend:
                   **{k:package[k] for k in ("packageId","planDigest","unsignedTxDigest","commitmentDigest")}}
         if any(approval.get(k)!=v for k,v in expected.items()) or not approval.get("approvalId") or not isinstance(approval.get("approvedAt"),int):
             raise ValueError("stale or foreign approval")
+        # Recovery must replay the original authorization, not invent another approval
+        # after an uncertain response. Persist it before crypto can begin.
+        authorization=folder/"user-approval.json"
+        if authorization.exists() and read(authorization)!=approval:
+            raise ValueError("saved user approval is immutable; replay the original authorization")
+        if not authorization.exists(): save(authorization,approval)
         intent=read(folder/"approval-intent.json"); h=approval_digest(intent)
         j=Journal(self.root/"journal.sqlite")
         try:
             signed=j.begin_signing(trade,h,True)
             if signed is None:
-                save(folder/"user-approval.json",approval)
                 signed=self.call_native("sign",trade,approved=True,approvalDigest=h)["signedPsbt"]
                 j.record_signature(trade,signed)
             return {"status":"signed","signature":{"ownerId":self.owner,"packageId":package["packageId"],"psbt":signed}}
@@ -351,6 +356,9 @@ class Backend:
                 if not final["complete"] or rpc("decoderawtransaction",final["hex"])["txid"]!=package["packageId"]: raise ValueError("incomplete/changed transaction")
                 save(folder/"finalized.json",{"hex":final["hex"],"txid":package["packageId"]})
             final=read(folder/"finalized.json")
+            # Persist ambiguity before any external RPC. A process kill/network failure
+            # cannot leave an apparently cancellable operation behind.
+            if row["state"]!="CONFIRMED": j.broadcast_result(trade,final["txid"],False)
             try: known=rpc("getrawtransaction",final["txid"],True)
             except RuntimeError: known=None
             if known is None:
@@ -386,8 +394,17 @@ class Backend:
                 result=self.call_native("sync-confirmed",tradeId,rawTx=chain["hex"])
                 state=self.state(); expected=read(folder/"preview.json")["balancesAfter"]
                 actual={asset_key(b["asset"]):b["amount"] for b in state["balances"]}
-                if any(actual.get(asset_key(b["asset"]))!=b["amount"] for b in expected): raise ValueError("actual settled balances differ from preview")
-            except Exception:
+                # Native validation binds the exact confirmed tx to the signed BTC
+                # delta. Other deposits/coinbase maturation can change total BTC
+                # independently; they must not be reported as RGB acceptance failure.
+                if result.get("txid")!=txid or not result.get("rgbAccepted") or not result.get("chainConfirmed"):
+                    raise ValueError("native confirmation/acceptance incomplete")
+                if any(actual.get(asset_key(b["asset"]))!=b["amount"] for b in expected if b["asset"]["kind"]=="rgb"):
+                    raise ValueError("actual settled RGB balances differ from preview")
+                expected_btc=next(b["amount"] for b in expected if b["asset"]["kind"]=="btc")
+                result["btcBalanceDifferenceFromPreviewSats"]=str(int(actual[asset_key(BTC)])-int(expected_btc))
+            except Exception as error:
+                save(folder/"last-sync-error.json",{"type":type(error).__name__,"message":str(error)})
                 j.receipt(tradeId,True,False)
                 return self.receipt(tradeId,"reconciling",True,False,txid)
             j.receipt(tradeId,True,True)
