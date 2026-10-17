@@ -1,89 +1,141 @@
-.funding-panel {
-  padding: 24px;
+.funding-section {
+  width: min(100%, 520px);
+  margin: 48px auto 0;
 }
-.funding-intro,
-.funding-actions {
+.funding-heading {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.funding-heading h1 {
+  font-size: 36px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+.funding-heading p {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+.funding-panel {
+  padding: 28px;
+  border-radius: 24px;
+}
+.funding-topline,
+.funding-review-heading,
+.funding-token {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
-.funding-intro p,
-.funding-step p,
-.funding-message {
-  margin: 0;
+.funding-token {
+  font-size: 14px;
+}
+.funding-token svg {
+  color: #e3ad52;
+}
+.funding-topline .ui-status {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.65;
+  font-size: 9px;
 }
-.funding-intro .ui-status {
-  flex: none;
-}
-.funding-step,
-.funding-review {
-  display: grid;
-  gap: 14px;
-  margin-top: 22px;
-  padding-top: 22px;
-  border-top: 1px solid var(--line);
-}
-.funding-accounts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 22px;
-}
-.funding-accounts > div {
+.funding-balance {
   display: grid;
   gap: 8px;
-  min-width: 0;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #080808;
+  margin: 28px 0 20px;
 }
-.funding-accounts strong,
-.funding-review h3 {
-  font-size: 14px;
+.funding-balance > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.funding-balance strong {
+  font-size: clamp(24px, 5vw, 32px);
   font-weight: 500;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
-.funding-accounts code,
+.funding-receive {
+  font-size: 12px;
+}
+.funding-receive summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  cursor: pointer;
+  padding: 5px 0;
+}
+.funding-receive p {
+  margin: 12px 0 8px;
+  color: var(--muted);
+}
+.funding-receive code {
+  display: block;
+  padding: 12px;
+  background: #080808;
+  border-radius: 10px;
+}
+.funding-receive code,
 .funding-address {
   overflow-wrap: anywhere;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }
-.funding-accounts span:last-child,
-.funding-label,
-.funding-review dt {
+.funding-step,
+.funding-review {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.funding-step .field-label {
+  margin-bottom: 0;
+  font-size: 12px;
   color: var(--muted);
-  font-size: 11px;
 }
-.funding-actions {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-}
-.funding-actions .ui-input {
-  width: min(240px, 100%);
-  min-height: 42px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+.funding-step .funding-amount {
+  padding: 16px;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  border-color: var(--line);
+  border-radius: 12px;
   background: #080808;
-  color: #eee;
 }
-.funding-review h3 {
+.funding-step p,
+.funding-message {
   margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.funding-panel > .funding-message {
+  margin-top: 24px;
+}
+.funding-review h2 {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+.funding-review .ui-status {
+  font-size: 9px;
+  color: var(--muted);
 }
 .funding-review dl {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin: 0;
 }
 .funding-review dl > div {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
   gap: 12px;
+}
+.funding-review dt {
+  color: var(--muted);
+  font-size: 12px;
 }
 .funding-review dd {
   margin: 0;
@@ -91,18 +143,25 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.funding-message[role='alert'] {
-  color: #eee;
+.funding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
-@media (max-width: 760px) {
+.funding-actions .primary-button {
+  flex: 1;
+}
+.funding-message[role='alert'] {
+  color: #e8b3b3;
+}
+@media (max-width: 440px) {
+  .funding-section {
+    margin-top: 28px;
+  }
   .funding-panel {
-    padding: 18px;
+    padding: 20px;
   }
-  .funding-accounts,
   .funding-review dl > div {
-    grid-template-columns: 1fr;
-  }
-  .funding-review dd {
-    text-align: left;
+    grid-template-columns: minmax(90px, 1fr) minmax(0, 1.5fr);
   }
 }

@@ -24,6 +24,12 @@
     {
       "decision": "Replace the separate gradient asset cards with one compact charcoal list: colored round icons, stacked labels, right-aligned exact balances, and inset dividers. No fiat quotes without a real price source.",
       "source": "User image reference, 2026-10-17"
+    },
+    {
+      "decision": "Move funding to a shared Top up navbar tab. Use a compact balance card, a Receive BTC disclosure, one amount field, and explicit transfer review. Keep funding mounted across navigation to preserve pending approval state.",
+      "source": "User request and public 21st Wallet Card 2 preview, 2026-10-17",
+      "reference": "https://21st.dev/@beratberkayg/components/wallet-card-2",
+      "implementation": "Adapted with existing wallet-kit primitives; registry CLI requires sign-in."
     }
   ]
 }

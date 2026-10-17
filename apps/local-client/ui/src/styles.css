@@ -88,7 +88,8 @@ p {
 }
 .site-nav {
   display: flex;
-  gap: 38px;
+  flex-wrap: wrap;
+  gap: 28px;
 }
 .site-nav button {
   position: relative;
@@ -991,7 +992,7 @@ textarea {
     gap: 20px;
   }
   .site-nav {
-    gap: 24px;
+    gap: 18px;
   }
   .top-actions {
     width: 100%;

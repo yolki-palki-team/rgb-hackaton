@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ClientStatus, FundingStatus, LocalClient } from './api';
-import { Button, Input, Panel, SectionTitle, StatusBadge } from './components/ui/wallet-kit';
+import { ArrowDown, ArrowRight, Bitcoin } from 'lucide-react';
+import { Button, Input, Panel, StatusBadge } from './components/ui/wallet-kit';
 
 const sats = (value: string) => `${BigInt(value).toLocaleString()} sats`;
 
@@ -18,6 +19,7 @@ export function FundingPanel({
   const [approvalAttempted, setApprovalAttempted] = useState(false);
   const eligible = Boolean(client && wallet?.mode === 'real' && wallet.network === 'regtest');
   const operation = funding?.operation ?? null;
+  const expired = operation?.status === 'PREVIEW' && operation.expiresAt <= Date.now();
   const canPreview =
     eligible &&
     funding?.available &&
@@ -121,26 +123,20 @@ export function FundingPanel({
 
   return (
     <section className="funding-section" aria-labelledby="funding-heading">
-      <SectionTitle
-        id="funding-heading"
-        kicker="02 / BITCOIN FUNDING"
-        title="Fund your exchange wallet"
-        action={<StatusBadge>WDK · REGTEST</StatusBadge>}
-      />
+      <div className="funding-heading">
+        <h1 id="funding-heading">Top up</h1>
+        <p>Test BTC from WDK to your exchange wallet.</p>
+      </div>
       <Panel className="funding-panel">
-        <div className="funding-intro">
-          <p>
-            Use a separate local WDK Bitcoin account to send regtest BTC to your exchange wallet.
-            This transfer has its own Bitcoin transaction and requires your approval.
-          </p>
-          <StatusBadge>
-            {operation?.status ?? (funding?.address ? 'READY' : 'NOT SET UP')}
-          </StatusBadge>
+        <div className="funding-topline">
+          <span className="funding-token">
+            <Bitcoin aria-hidden="true" size={22} /> Bitcoin
+          </span>
+          <StatusBadge>REGTEST ONLY</StatusBadge>
         </div>
         {!eligible ? (
           <p className="funding-message" role="status">
-            Connect a real regtest wallet to use WDK funding. Mock and unpaired wallets cannot send
-            BTC.
+            Connect a real regtest wallet to top up.
           </p>
         ) : error ? (
           <p className="funding-message" role="alert">
@@ -148,81 +144,87 @@ export function FundingPanel({
           </p>
         ) : funding && !funding.available ? (
           <p className="funding-message" role="status">
-            WDK funding unavailable: {funding.reason ?? 'The local funding service is not ready.'}
+            {funding.reason ?? 'The local funding service is not ready.'}
           </p>
         ) : !funding ? (
           <p className="funding-message" role="status">
-            Checking the local WDK account…
+            Loading your WDK account…
           </p>
         ) : null}
 
         {eligible && funding?.available && !funding.address && (
           <div className="funding-step">
-            <p>Create a dedicated local WDK account. Its keys remain in the local service.</p>
-            <Button className="outline-button" onClick={() => void create()} disabled={busy}>
-              Create WDK account
+            <p>Create a local funding account to get started.</p>
+            <Button
+              className="primary-button full"
+              onClick={() => void create()}
+              disabled={busy || Boolean(error)}
+            >
+              {busy ? 'Creating…' : 'Create WDK account'}
             </Button>
           </div>
         )}
 
         {eligible && funding?.available && funding.address && (
           <>
-            <div className="funding-accounts">
-              <div>
-                <span className="funding-label">WDK funding account</span>
-                <strong>
-                  {funding.balanceSats === undefined
-                    ? 'Balance unavailable'
-                    : sats(funding.balanceSats)}
-                </strong>
-                <code>{funding.address}</code>
-                <span>Receive regtest BTC at this address before funding the exchange wallet.</span>
-              </div>
-              <div>
-                <span className="funding-label">Exchange wallet</span>
-                <strong>Separate BTC and RGB balances above</strong>
-                <span>Funding sends BTC here after your approval.</span>
-              </div>
+            <div className="funding-balance">
+              <span>Available in WDK</span>
+              <strong>
+                {funding.balanceSats === undefined ? 'Unavailable' : sats(funding.balanceSats)}
+              </strong>
             </div>
-            {canPreview && (
+            <details className="funding-receive">
+              <summary>
+                <ArrowDown aria-hidden="true" size={14} /> Receive BTC
+              </summary>
+              <p>Send regtest BTC to this WDK address.</p>
+              <code>{funding.address}</code>
+            </details>
+            {(!operation || operation.status === 'PREVIEW' || operation.status === 'CONFIRMED') && (
               <div className="funding-step">
                 <label className="field-label" htmlFor="funding-amount">
-                  Amount to send, in satoshis
+                  Amount in sats
                 </label>
-                <div className="funding-actions">
-                  <Input
-                    id="funding-amount"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                    placeholder="100000"
-                  />
-                  <Button
-                    className="outline-button"
-                    onClick={() => void preview()}
-                    disabled={!/^[1-9]\d*$/.test(amount) || busy}
-                  >
-                    Review transfer
-                  </Button>
-                </div>
+                <Input
+                  id="funding-amount"
+                  className="funding-amount"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={amount}
+                  onChange={(event) => setAmount(event.target.value)}
+                  placeholder="0"
+                  disabled={busy}
+                />
+                <Button
+                  className="primary-button full"
+                  onClick={() => void preview()}
+                  disabled={!canPreview || !/^[1-9]\d*$/.test(amount)}
+                >
+                  {busy ? 'Please wait…' : 'Review top up'}{' '}
+                  <ArrowRight aria-hidden="true" size={16} />
+                </Button>
               </div>
             )}
           </>
         )}
 
-        {eligible && operation && (
+        {eligible && expired && (
+          <p className="funding-message">Preview expired. Review a new amount.</p>
+        )}
+
+        {eligible && operation && !expired && (
           <div className="funding-review">
-            <h3>
-              {operation.status === 'PREVIEW' ? 'Review before sending' : 'Funding operation'}
-            </h3>
+            <div className="funding-review-heading">
+              <h2>{operation.status === 'PREVIEW' ? 'Review top up' : 'Transfer'}</h2>
+              <StatusBadge>{operation.status}</StatusBadge>
+            </div>
             <dl>
               <div>
                 <dt>Network</dt>
                 <dd>{operation.network}</dd>
               </div>
               <div>
-                <dt>Destination, exchange wallet</dt>
+                <dt>To your wallet</dt>
                 <dd className="funding-address">{operation.address}</dd>
               </div>
               <div>
@@ -239,7 +241,7 @@ export function FundingPanel({
               </div>
               {operation.txid && (
                 <div>
-                  <dt>Bitcoin transaction</dt>
+                  <dt>Transaction</dt>
                   <dd className="funding-address">{operation.txid}</dd>
                 </div>
               )}
@@ -251,8 +253,8 @@ export function FundingPanel({
             )}
             {operation.status === 'PREVIEW' && (
               <p className="funding-message">
-                Preview expires {new Date(operation.expiresAt).toLocaleString()}. Confirm the
-                destination and fee before sending.
+                Expires {new Date(operation.expiresAt).toLocaleTimeString()}. Check the address and
+                fee.
               </p>
             )}
             <div className="funding-actions">
@@ -262,7 +264,7 @@ export function FundingPanel({
                   onClick={() => void approve()}
                   disabled={!canApprove}
                 >
-                  Approve and send BTC
+                  Approve & send BTC
                 </Button>
               )}
               <Button className="outline-button" onClick={() => void sync()} disabled={busy}>

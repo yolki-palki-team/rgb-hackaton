@@ -1,5 +1,5 @@
 export type AssetCode = string;
-export type View = 'home' | 'market' | 'trade';
+export type View = 'home' | 'market' | 'trade' | 'topup';
 export type Draft = {
   giveAsset: AssetCode;
   giveAmount: string;
