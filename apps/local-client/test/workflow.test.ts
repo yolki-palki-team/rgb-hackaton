@@ -72,7 +72,7 @@ test('durable local approval resumes recovery after restart, terminal states sto
     trade('AWAITING_APPROVAL', { signingAuthorized: true }),
   );
   assert.deepEqual(calls, ['sync']);
-  for (const status of ['CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED']) {
+  for (const status of ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED']) {
     assert.equal(nextTradeAction(trade(status, { signingAuthorized: true })), null);
   }
   assert.equal(tradeProgress(trade('CONFIRMED')).waiting, false);
@@ -93,10 +93,12 @@ test('automatic requests never overlap and repeated failures back off then pause
   };
   const workflow = new TradeWorkflow();
   const pending = workflow.advance(client, trade('PREPARING'), 0);
+  assert.equal(workflow.running, true);
   await workflow.advance(client, trade('PREPARING'), 1);
   assert.equal(calls, 1);
   finish();
   await pending;
+  assert.equal(workflow.running, false);
   client.prepare = async () => {
     calls++;
     throw new Error('Wallet offline');

@@ -182,3 +182,24 @@ test('prose or unknown tool calls cannot masquerade as a prepared order', async 
     );
   }
 });
+
+test('model fee arguments must be whole-satoshi strings; only an absent cap uses saved policy', () => {
+  for (const maxFeeSats of [
+    '0.5',
+    '500.0',
+    '5e2',
+    '-500',
+    '+500',
+    '1,000',
+    '1_000',
+    '1 000',
+    '0x1f4',
+  ]) {
+    assert.throws(() => intentFromProposal({ ...proposal, maxFeeSats }, assets));
+  }
+  for (const maxFeeSats of [null, '500']) {
+    const output = intentFromProposal({ ...proposal, maxFeeSats }, assets);
+    const { draft } = draftFromIntent(output, state, defaultPolicy(state));
+    assert.equal(draft?.maxFeeSats, maxFeeSats ?? '1000');
+  }
+});

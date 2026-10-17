@@ -17,6 +17,14 @@ export class LocalStore {
       { value: string } | undefined;
     return row ? (JSON.parse(row.value) as T) : null;
   }
+  entries<T>(prefix: string): Array<{ key: string; value: T }> {
+    const rows = this.db
+      .prepare(
+        'SELECT key, value FROM local_records WHERE substr(key, 1, length(?)) = ? ORDER BY key',
+      )
+      .all(prefix, prefix) as Array<{ key: string; value: string }>;
+    return rows.map((row) => ({ key: row.key, value: JSON.parse(row.value) as T }));
+  }
   set(key: string, value: unknown): void {
     this.db
       .prepare(

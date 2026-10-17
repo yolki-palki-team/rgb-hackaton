@@ -3,8 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { spawnSync } from 'node:child_process';
 import { MarketError, MarketStore } from '../src/store.ts';
-import type { AssetRef, PublicOrder, TradeSnapshot } from '@rgb-exchange/contracts';
+import {
+  MarketHistorySchema,
+  PublicMarketHistorySchema,
+  TradeHistorySchema,
+  type AssetRef,
+  type PublicOrder,
+  type TradeSnapshot,
+} from '@rgb-exchange/contracts';
 
 const network = 'regtest' as const;
 const btc: AssetRef = { network, kind: 'btc', precision: 8, symbol: 'BTC' };
@@ -685,3 +693,170 @@ test('public activity exposes ring progress and declined outcomes but no private
     );
     assert.equal(JSON.stringify(activity).includes('private-rejection-reason'), false);
   }));
+
+test('all order outcomes remain pageable beyond 50 trades after restart, with private details restricted', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rgb-market-history-'));
+  const path = join(dir, 'market.sqlite');
+  let store = new MarketStore(path);
+  const expectedIds: string[] = [];
+  try {
+    for (let index = 0; index < 55; index++) {
+      const suffix = String(index).padStart(2, '0');
+      const a = order(`a-${suffix}`, 'a', x, '100', dusd, '100');
+      const b = order(`b-${suffix}`, 'b', dusd, '100', x, '100');
+      expectedIds.push(a.id, b.id);
+      store.createOrder('a', a, now);
+      const { trade } = store.createOrder('b', b, now);
+      assert.ok(trade);
+      if (index % 3 === 0) {
+        signingTrade(store, trade);
+        for (const owner of ['a', 'b']) {
+          store.relayTradeMessage(owner, trade.plan.tradeId, {
+            messageId: `receipt-${owner}`,
+            revision: 0,
+            type: 'receipt',
+            payload: confirmedReceipt(trade.plan.tradeId),
+          });
+        }
+      } else {
+        store.relayTradeMessage('a', trade.plan.tradeId, {
+          messageId: 'failed',
+          revision: 0,
+          type: index % 3 === 1 ? 'reject' : 'unsupported',
+          payload: { reason: 'private-history-failure' },
+        });
+      }
+    }
+    store.createOrder('a', order('a-cancelled', 'a', x, '100', dusd, '100'), now);
+    store.cancelOrder('a', 'a-cancelled', 0, now);
+    store.createOrder(
+      'a',
+      { ...order('a-expired', 'a', x, '100', dusd, '100'), expiresAt: now + 1000 },
+      now,
+    );
+    store.expireOrders(now + 1000);
+    store.createOrder('a', order('z-open', 'a', x, '100', dusd, '100'), now);
+    expectedIds.push('a-cancelled', 'a-expired', 'z-open');
+
+    const first = PublicMarketHistorySchema.parse(store.publicHistory());
+    assert.equal(first.orders.length, 50);
+    assert.ok(first.nextCursor);
+    store.close();
+    store = new MarketStore(path);
+    const publicOrders = [...first.orders];
+    let cursor: string | null = first.nextCursor;
+    while (cursor) {
+      const page = PublicMarketHistorySchema.parse(store.publicHistory(cursor));
+      assert.ok(page.orders.length > 0 && page.orders.length <= 50);
+      publicOrders.push(...page.orders);
+      cursor = page.nextCursor;
+    }
+    assert.deepEqual(
+      publicOrders.map((entry) => entry.order.id),
+      expectedIds.sort().reverse(),
+    );
+    assert.equal(new Set(publicOrders.map((entry) => entry.order.id)).size, expectedIds.length);
+    assert.equal(
+      publicOrders.find((entry) => entry.order.id === 'a-expired')?.order.status,
+      'EXPIRED',
+    );
+    assert.deepEqual(
+      publicOrders.find((entry) => entry.order.id === 'a-cancelled')?.execution,
+      null,
+    );
+    for (const status of ['CONFIRMED', 'REJECTED', 'UNSUPPORTED'])
+      assert.ok(publicOrders.some((entry) => entry.execution?.status === status));
+    for (const secret of [
+      'private-history-failure',
+      'messages',
+      'reason',
+      'plan',
+      'settlementPackage',
+      'signatureMayExist',
+    ])
+      assert.equal(JSON.stringify(publicOrders).includes(secret), false);
+
+    const firstPrivate = MarketHistorySchema.parse(store.history('a'));
+    assert.equal(firstPrivate.myOrders.length, 50);
+    assert.ok(firstPrivate.nextCursor);
+    const restPrivate = MarketHistorySchema.parse(store.history('a', firstPrivate.nextCursor));
+    assert.equal(restPrivate.nextCursor, null);
+    const myOrders = [...firstPrivate.myOrders, ...restPrivate.myOrders];
+    const myTrades = [...firstPrivate.trades, ...restPrivate.trades];
+    assert.equal(myOrders.length, 58);
+    assert.equal(myTrades.length, 55);
+    assert.ok(myOrders.every((entry) => entry.ownerId === 'a'));
+    assert.ok(myTrades.every((entry) => entry.plan.participants.includes('a')));
+    assert.ok(myTrades.some((entry) => entry.reason === 'private-history-failure'));
+    assert.ok(myTrades.every((entry) => !('messages' in entry) && !('settlementPackage' in entry)));
+    const confirmed = myTrades.find((entry) => entry.status === 'CONFIRMED');
+    assert.ok(confirmed);
+    const fullTrade = store.getTrade(confirmed.plan.tradeId, 'a');
+    assert.ok(fullTrade?.messages.length && fullTrade.settlementPackage);
+    assert.equal(TradeHistorySchema.safeParse(fullTrade).success, false);
+    assert.deepEqual(store.history('outsider'), { myOrders: [], trades: [], nextCursor: null });
+    assert.throws(
+      () => store.history('b', Buffer.from('a-00').toString('base64url')),
+      /INVALID_HISTORY_CURSOR/,
+    );
+    for (const invalid of ['', '!', 'a'.repeat(301), Buffer.from('missing').toString('base64url')])
+      assert.throws(() => store.publicHistory(invalid), /INVALID_HISTORY_CURSOR/);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('history cursors remain stable when newer orders arrive between pages', () =>
+  withStore((store) => {
+    for (let index = 0; index < 51; index++) {
+      const id = `order-${String(index).padStart(2, '0')}`;
+      store.createOrder('a', order(id, 'a', x, '100', dusd, '100'), now);
+      store.cancelOrder('a', id, 0, now);
+    }
+    const first = store.publicHistory();
+    assert.ok(first.nextCursor);
+    store.createOrder('a', order('z-new', 'a', x, '100', dusd, '100'), now);
+    const last = store.publicHistory(first.nextCursor);
+    assert.deepEqual(
+      last.orders.map((entry) => entry.order.id),
+      ['order-00'],
+    );
+    assert.equal(last.nextCursor, null);
+    assert.equal(store.publicHistory().orders[0].order.id, 'z-new');
+  }));
+
+test('committed cancelled order history survives an ungraceful process exit', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rgb-market-crash-'));
+  const path = join(dir, 'market.sqlite');
+  const input = order('crash-cancelled', 'a', x, '100', dusd, '100');
+  try {
+    const child = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        'tsx',
+        '--input-type=module',
+        '-e',
+        `
+      import { MarketStore } from ${JSON.stringify(new URL('../src/store.ts', import.meta.url).href)};
+      const store = new MarketStore(${JSON.stringify(path)});
+      store.createOrder('a', ${JSON.stringify(input)}, ${now});
+      store.cancelOrder('a', 'crash-cancelled', 0, ${now});
+      process.kill(process.pid, 'SIGKILL');
+    `,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(child.signal, 'SIGKILL', child.stderr);
+    const reopened = new MarketStore(path);
+    try {
+      assert.equal(reopened.history('a').myOrders[0].status, 'CANCELLED');
+      assert.equal(reopened.publicHistory().orders[0].order.id, input.id);
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

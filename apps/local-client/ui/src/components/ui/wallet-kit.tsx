@@ -9,6 +9,7 @@ import type {
 } from 'react';
 import type { AssetCode, Balance } from '../../model';
 import { cn } from '../../lib/utils';
+import { MorphingSquare } from './morphing-square';
 
 export function Button({
   className,
@@ -25,16 +26,12 @@ export function Button({
       className={cn('ui-button', className)}
       {...props}
       disabled={disabled || loading}
-      aria-busy={loading || undefined}
+      aria-busy={loading ? true : props['aria-busy']}
     >
-      {loading && <Spinner />}
+      {loading && <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />}
       {loading && loadingText ? loadingText : children}
     </button>
   );
-}
-
-export function Spinner() {
-  return <span className="loading-spinner" aria-hidden="true" />;
 }
 
 export function WalletSkeleton() {

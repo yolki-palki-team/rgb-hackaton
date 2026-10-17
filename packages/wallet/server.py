@@ -6,7 +6,9 @@ import fcntl
 import json
 import os
 import secrets
+import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from protocol import Backend, save
@@ -16,6 +18,7 @@ def create_server(backend, token, port=4201):
     if len(token) < 32:
         raise ValueError("WALLET_RPC_TOKEN must be at least 32 characters")
     lock = threading.Lock()
+    timings = os.environ.get("PALKA_TIMINGS") == "1"
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -59,7 +62,44 @@ def create_server(backend, token, port=4201):
                 ):
                     raise ValueError("invalid envelope")
                 with lock:
-                    result = backend.handle(request["method"], request["params"])
+                    started = time.perf_counter() if timings else None
+                    outcome = "WALLET_REJECTED"
+                    try:
+                        result = backend.handle(request["method"], request["params"])
+                        outcome = "ok"
+                    finally:
+                        if started is not None:
+                            duration = round((time.perf_counter() - started) * 1000, 3)
+                            method = request["method"]
+                            if method not in (
+                                "capabilities",
+                                "state",
+                                "fundingTarget",
+                                "reserve",
+                                "release",
+                                "prepare",
+                                "validate",
+                                "sign",
+                                "recoverSignature",
+                                "finalize",
+                                "sync",
+                            ):
+                                method = "unknown"
+                            try:
+                                print(
+                                    json.dumps(
+                                        {
+                                            "event": "wallet_rpc",
+                                            "method": method,
+                                            "durationMs": duration,
+                                            "outcome": outcome,
+                                        }
+                                    ),
+                                    file=sys.stderr,
+                                    flush=True,
+                                )
+                            except (OSError, ValueError):
+                                pass  # Diagnostics must not change the outcome of a wallet action.
                 return self.respond(200, {"protocolVersion": 1, "result": result})
             except Exception as error:
                 save(

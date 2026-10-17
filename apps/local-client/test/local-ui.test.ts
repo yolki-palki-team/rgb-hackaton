@@ -194,103 +194,302 @@ test('local wallet renders exact BTC and RGB amounts using asset precision', asy
   assert.equal(formatAsset({ ...rgb, precision: 6 }, '12345678'), '12.345678 X');
 });
 
-test('wallet balance failure keeps the matched trade available for explicit recovery', async () => {
-  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
-  const wallet = new MockWalletAdapter('A');
-  const market = new MarketStore(':memory:');
-  const fixture = JSON.parse(
-    readFileSync(
-      new URL('../../../packages/contracts/fixtures/direct.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  for (const raw of fixture.orders) {
-    const order = PublicOrderSchema.parse({
-      ...raw,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 1800000,
-    });
-    market.createOrder(order.ownerId, order);
-  }
-  const snapshot = market.snapshot('A');
-  assert.equal(snapshot.trades.length, 1);
-  let unavailable = false;
-  const bridge: DesktopBridge = {
-    connect: async () => ({
-      ownerId: 'A',
-      network: 'regtest',
-      mode: 'mock',
-      wallet: await wallet.capabilities(),
-      qvac: { available: false },
-    }),
-    request: async (_method, path) => {
-      if (path === '/api/state') {
-        if (unavailable) throw new Error('RGB indexing pending');
-        return wallet.state();
-      }
-      if (path === '/api/snapshot') return snapshot;
-      if (path.endsWith('/progress'))
-        return {
-          tradeId: snapshot.trades[0].plan.tradeId,
-          signingAuthorized: false,
-          recoveryRequired: false,
-          receipt: null,
-        };
-      if (path === '/api/policy')
-        return {
-          allowedAssetKeys: ['btc', 'dusd'],
-          protectedBalances: {},
-          maxFeeSats: '1000',
-          allowBtcSale: true,
-        };
-      if (path.endsWith('/sync'))
-        return {
-          tradeId: snapshot.trades[0].plan.tradeId,
-          network: 'regtest',
-          mode: 'mock',
-          state: 'reconciling',
-          chainConfirmed: false,
-          rgbAccepted: false,
-        };
-      throw new Error('Unexpected request');
-    },
-    approveTrade: async () => {
-      throw new Error('Must not sign');
-    },
-    getPendingOffer: async () => null,
-    onOfferSelected: () => () => {},
-    openPublicMarket: async () => {},
-  };
-  Object.defineProperty(globalThis, 'window', {
-    configurable: true,
-    value: { palkaWallet: bridge },
-  });
-  try {
-    const client = new LocalClient();
-    await client.connect();
-    assert.ok((await client.snapshot()).balances.length);
-    unavailable = true;
-    const pending = await client.snapshot();
-    assert.equal(pending.walletError, 'RGB indexing pending');
-    assert.deepEqual(pending.balances, []);
-    assert.equal(pending.trade?.id, snapshot.trades[0].plan.tradeId);
-    assert.equal((await client.sync(pending.trade!.id)).state, 'reconciling');
-    await assert.rejects(
-      client.checkDraft(
-        {
-          giveAsset: 'BTC',
-          receiveAsset: 'DUSD',
-          giveAmount: '100',
-          minReceiveAmount: '1',
-          maxFeeSats: '1000',
-          expiresMinutes: '30',
-        },
-        pending.policy,
+test(
+  'progress never waits for wallet reads, and cached balances cannot validate orders',
+  { timeout: 5000 },
+  async () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const wallet = new MockWalletAdapter('A');
+    const market = new MarketStore(':memory:');
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL('../../../packages/contracts/fixtures/direct.json', import.meta.url),
+        'utf8',
       ),
-      /Balances have not loaded/,
     );
+    for (const raw of fixture.orders) {
+      const order = PublicOrderSchema.parse({
+        ...raw,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 1800000,
+      });
+      market.createOrder(order.ownerId, order);
+    }
+    const snapshot = market.snapshot('A');
+    assert.equal(snapshot.trades.length, 1);
+    let unavailable = false;
+    let holdState: Promise<void> | null = null;
+    let stateRequests = 0;
+    let walletUnavailable = false;
+    let realWallet = false;
+    let holdPreview: Promise<void> | null = null;
+    const bridge: DesktopBridge = {
+      connect: async () => ({
+        ownerId: 'A',
+        network: 'regtest',
+        mode: walletUnavailable || realWallet ? 'real' : 'mock',
+        wallet: walletUnavailable
+          ? null
+          : realWallet
+            ? {
+                ...(await wallet.capabilities()),
+                mode: 'real',
+                signing: true,
+                directSwap: true,
+              }
+            : await wallet.capabilities(),
+        qvac: { available: false },
+        blockedReason: walletUnavailable ? 'Wallet indexing unavailable' : undefined,
+      }),
+      request: async (_method, path) => {
+        if (path === '/api/state') {
+          stateRequests++;
+          if (holdState) await holdState;
+          if (unavailable) throw new Error('RGB indexing pending');
+          return wallet.state();
+        }
+        if (path === '/api/snapshot') return snapshot;
+        if (path === '/api/history')
+          return {
+            myOrders: snapshot.myOrders,
+            trades: snapshot.trades.map(({ plan, status, reason }) => ({ plan, status, reason })),
+            nextCursor: null,
+            stale: true,
+          };
+        if (path.endsWith('/preview')) {
+          const plan = snapshot.trades[0].plan;
+          const give = plan.legs.find((leg) => leg.fromOwnerId === 'A')!;
+          const receive = plan.legs.find((leg) => leg.toOwnerId === 'A')!;
+          const preview = {
+            walletId: 'test-wallet',
+            ownerId: 'A',
+            mode: 'real',
+            network: 'regtest',
+            packageId: 'test-package',
+            planDigest: plan.digest,
+            unsignedTxDigest: 'a'.repeat(64),
+            commitmentDigest: 'b'.repeat(64),
+            validated: true,
+            reasons: [],
+            give: { asset: give.asset, amount: give.amount },
+            receive: { asset: receive.asset, amount: receive.amount },
+            feeSats: '100',
+            btcDelta: '-100',
+            balancesAfter: [],
+          };
+          if (holdPreview) await holdPreview;
+          return { preview, approvalToken: 'test-token' };
+        }
+        if (path.endsWith('/progress'))
+          return {
+            tradeId: snapshot.trades[0].plan.tradeId,
+            signingAuthorized: false,
+            recoveryRequired: false,
+            receipt: null,
+          };
+        if (path === '/api/policy')
+          return {
+            allowedAssetKeys: ['btc', 'dusd'],
+            protectedBalances: {},
+            maxFeeSats: '1000',
+            allowBtcSale: true,
+          };
+        if (path.endsWith('/sync'))
+          return {
+            tradeId: snapshot.trades[0].plan.tradeId,
+            network: 'regtest',
+            mode: 'mock',
+            state: 'reconciling',
+            chainConfirmed: false,
+            rgbAccepted: false,
+          };
+        throw new Error('Unexpected request');
+      },
+      approveTrade: async () => {
+        throw new Error('Must not sign');
+      },
+      getPendingOffer: async () => null,
+      onOfferSelected: () => () => {},
+      openPublicMarket: async () => {},
+    };
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { palkaWallet: bridge },
+    });
+    try {
+      const client = new LocalClient();
+      await client.connect();
+      const initial = await client.snapshot();
+      assert.ok(initial.balances.length);
+      let finishState!: () => void;
+      holdState = new Promise<void>((resolve) => {
+        finishState = resolve;
+      });
+      const pendingRead = client.refreshWallet();
+      const duplicateRead = client.refreshWallet();
+      assert.equal(pendingRead, duplicateRead);
+      assert.equal(stateRequests, 2);
+      const progress = await client.progressSnapshot();
+      assert.equal(progress.trade?.id, snapshot.trades[0].plan.tradeId);
+      await assert.rejects(
+        client.checkDraft(
+          {
+            giveAsset: 'BTC',
+            receiveAsset: 'DUSD',
+            giveAmount: '100',
+            minReceiveAmount: '1',
+            maxFeeSats: '1000',
+            expiresMinutes: '30',
+          },
+          initial.policy,
+        ),
+        /Balances have not loaded/,
+      );
+      finishState();
+      await pendingRead;
+      holdState = null;
+      unavailable = true;
+      const pending = await client.snapshot();
+      assert.equal(pending.walletError, 'RGB indexing pending');
+      assert.deepEqual(pending.balances, initial.balances);
+      assert.ok(pending.updatedAt);
+      assert.equal(pending.trade?.id, snapshot.trades[0].plan.tradeId);
+      assert.equal((await client.sync(pending.trade!.id)).state, 'reconciling');
+      await assert.rejects(
+        client.checkDraft(
+          {
+            giveAsset: 'BTC',
+            receiveAsset: 'DUSD',
+            giveAmount: '100',
+            minReceiveAmount: '1',
+            maxFeeSats: '1000',
+            expiresMinutes: '30',
+          },
+          pending.policy,
+        ),
+        /Balances have not loaded/,
+      );
+      walletUnavailable = true;
+      const readOnly = new LocalClient();
+      const status = await readOnly.connect();
+      assert.equal(status.mode, 'real');
+      assert.equal(status.wallet, null);
+      assert.equal(status.walletError, 'Wallet indexing unavailable');
+      assert.equal((await readOnly.progressSnapshot()).trade?.id, progress.trade?.id);
+      const history = await readOnly.history();
+      assert.equal(history.stale, true);
+      assert.equal(history.trades[0].plan.tradeId, progress.trade?.id);
+      assert.ok(!readOnly.supportsTrade(progress.trade!));
+      await assert.rejects(readOnly.preview(progress.trade!.id), /does not support signing/);
+      walletUnavailable = false;
+      realWallet = true;
+      await readOnly.connect();
+      snapshot.trades[0].status = 'AWAITING_APPROVAL';
+      await readOnly.progressSnapshot();
+      let finishPreview!: () => void;
+      holdPreview = new Promise<void>((resolve) => {
+        finishPreview = resolve;
+      });
+      const checking = readOnly.preview(progress.trade!.id);
+      snapshot.trades[0].status = 'REJECTED';
+      await readOnly.progressSnapshot();
+      finishPreview();
+      await assert.rejects(checking, /Trade changed during validation/);
+      holdPreview = null;
+      snapshot.trades[0].status = 'AWAITING_APPROVAL';
+      await readOnly.progressSnapshot();
+      await readOnly.preview(progress.trade!.id);
+      assert.ok((await readOnly.progressSnapshot()).trade?.validatedPreview);
+      snapshot.trades[0].status = 'REJECTED';
+      assert.equal((await readOnly.progressSnapshot()).trade?.validatedPreview, undefined);
+    } finally {
+      market.close();
+      if (previous) Object.defineProperty(globalThis, 'window', previous);
+      else Reflect.deleteProperty(globalThis, 'window');
+    }
+  },
+);
+
+test('late wallet reads cannot restore balances across profile changes', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  try {
+    for (const scenario of ['owner', 'mode', 'roundtrip', 'wrong-mode', 'unchanged']) {
+      const wallet = new MockWalletAdapter('A');
+      const state = await wallet.state();
+      let ownerId = 'A';
+      let mode: 'mock' | 'real' = 'mock';
+      let hold: Promise<void> | null = null;
+      let finish!: () => void;
+      const bridge: DesktopBridge = {
+        connect: async () => ({
+          ownerId,
+          network: 'regtest',
+          mode,
+          wallet: { ...(await wallet.capabilities()), mode },
+          qvac: { available: false },
+        }),
+        request: async (_method, path) => {
+          assert.equal(path, '/api/state');
+          if (hold) await hold;
+          return scenario === 'wrong-mode' && hold ? { ...state, mode: 'real' } : state;
+        },
+        approveTrade: async () => assert.fail('Must not sign'),
+        getPendingOffer: async () => null,
+        onOfferSelected: () => () => {},
+        openPublicMarket: async () => {},
+      };
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: { palkaWallet: bridge },
+      });
+      const client = new LocalClient();
+      await client.connect();
+      const initial = await client.refreshWallet();
+      assert.ok(initial.balances.length);
+      hold = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const pending = client.refreshWallet();
+      if (scenario === 'owner' || scenario === 'roundtrip') ownerId = 'B';
+      if (scenario === 'mode') mode = 'real';
+      await client.connect();
+      if (scenario === 'roundtrip') {
+        ownerId = 'A';
+        await client.connect();
+      }
+      finish();
+      const result = await pending;
+      if (scenario === 'unchanged') {
+        assert.equal(result.walletError, undefined);
+        assert.deepEqual(result.balances, initial.balances);
+      } else {
+        assert.match(result.walletError!, /does not match the paired profile/);
+        if (scenario !== 'wrong-mode') {
+          assert.deepEqual(result.balances, []);
+          assert.equal(result.updatedAt, null);
+        }
+        await assert.rejects(
+          client.checkDraft(
+            {
+              giveAsset: 'BTC',
+              receiveAsset: 'DUSD',
+              giveAmount: '100',
+              minReceiveAmount: '1',
+              maxFeeSats: '1000',
+              expiresMinutes: '30',
+            },
+            {
+              allowedAssetKeys: ['btc', 'dusd'],
+              protectedBalances: {},
+              maxFeeSats: '1000',
+              allowBtcSale: true,
+            },
+          ),
+          /Balances have not loaded/,
+        );
+      }
+    }
   } finally {
-    market.close();
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');
   }

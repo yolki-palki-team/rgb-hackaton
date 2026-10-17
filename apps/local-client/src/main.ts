@@ -66,8 +66,7 @@ server.listen(port, host, () => {
     `Local profile ${owner}: http://127.0.0.1:${port}; wallet=${mode}; pairing token: ${process.env.LOCAL_SESSION_TOKEN ? 'provided through LOCAL_SESSION_TOKEN' : tokenPath}`,
   );
 });
-// Only unsigned cancellation cleanup runs in the background. Signing recovery
-// remains an explicit sync operation using an already persisted authorization.
+// Unsigned cancellation cleanup remains independent of committed transaction recovery.
 let checkingCancellation = false;
 const cancellationTimer = setInterval(() => {
   if (checkingCancellation) return;
@@ -80,14 +79,38 @@ const cancellationTimer = setInterval(() => {
     });
 }, 5000);
 cancellationTimer.unref();
+let closing = false;
+let recoveryDelay = 5000;
+let recoveryTimer: ReturnType<typeof setTimeout>;
+const recoverCommitted = async () => {
+  try {
+    const hasPending = await service.exclusive(() => service.recoverCommitted());
+    recoveryDelay = hasPending ? Math.min(recoveryDelay * 2, 60_000) : 5000;
+  } catch {
+    recoveryDelay = Math.min(recoveryDelay * 2, 60_000);
+  } finally {
+    if (!closing) {
+      recoveryTimer = setTimeout(() => void recoverCommitted(), recoveryDelay);
+      recoveryTimer.unref();
+    }
+  }
+};
+recoveryTimer = setTimeout(() => void recoverCommitted(), recoveryDelay);
+recoveryTimer.unref();
 const close = () => {
+  closing = true;
   clearInterval(cancellationTimer);
+  clearTimeout(recoveryTimer);
   market.close();
   server.close(() => {
-    void qvac.dispose().finally(() => {
-      funding?.close();
-      store.close();
-      process.exit(0);
+    void service.exclusive(async () => {
+      try {
+        await qvac.dispose();
+      } finally {
+        funding?.close();
+        store.close();
+        process.exit(0);
+      }
     });
   });
 };

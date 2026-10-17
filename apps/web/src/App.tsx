@@ -4,12 +4,15 @@ import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
 import { getPublicActivity } from './api';
+import { PublicHistory } from './PublicHistory';
+import { MorphingSquare } from './components/ui/morphing-square';
 import {
   assetIdentity,
   formatAsset,
   shortId,
   executionLabels,
   executionStep,
+  marketLoadFailed,
   type MarketState,
 } from './model';
 
@@ -89,8 +92,10 @@ function OrderCard({ entry }: { entry: PublicMarketOrder }) {
 
 function Market() {
   const [state, setState] = useState<MarketState>({ kind: 'loading', orders: [] });
+  const [view, setView] = useState<'orders' | 'history'>('orders');
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [retry, setRetry] = useState(0);
+  const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -98,21 +103,23 @@ function Market() {
     const load = async () => {
       if (pending) return;
       pending = true;
+      setRefreshing(true);
       try {
         const orders = await getPublicActivity();
         if (active) setState({ kind: 'ready', orders, updatedAt: Date.now() });
       } catch (error) {
         if (active)
-          setState({
-            kind: 'error',
-            orders: [],
-            message:
+          setState((current) =>
+            marketLoadFailed(
+              current,
               error instanceof Error && error.message.startsWith('Market')
                 ? error.message
                 : 'Could not load public orders.',
-          });
+            ),
+          );
       } finally {
         pending = false;
+        if (active) setRefreshing(false);
       }
     };
     void load();
@@ -161,7 +168,7 @@ function Market() {
               <h1 id="orderbook-heading">
                 Order book{' '}
                 <span>
-                  {state.kind === 'ready' ? String(state.orders.length).padStart(2, '0') : '—'}
+                  {state.kind === 'loading' ? '—' : String(state.orders.length).padStart(2, '0')}
                 </span>
               </h1>
             </div>
@@ -170,89 +177,120 @@ function Market() {
               type="button"
               onClick={() => setRetry((value) => value + 1)}
               aria-label="Refresh orders"
+              disabled={refreshing}
+              aria-busy={refreshing}
             >
-              <span aria-hidden="true">↻</span> Refresh
+              {refreshing ? (
+                <MorphingSquare className="h-3 w-3 bg-current" aria-hidden="true" />
+              ) : (
+                <span aria-hidden="true">↻</span>
+              )}{' '}
+              Refresh
             </button>
           </div>
-          <div className="filter-row" role="group" aria-label="Filter by asset">
+          <div className="market-views" role="group" aria-label="Market views">
             <button
               type="button"
-              className={assetFilter === 'all' ? 'active' : ''}
-              onClick={() => setAssetFilter('all')}
+              aria-pressed={view === 'orders'}
+              onClick={() => setView('orders')}
             >
-              All assets
+              Orders <span>{state.orders.length}</span>
             </button>
-            {assets.map(([key, asset]) => (
-              <button
-                type="button"
-                key={key}
-                className={assetFilter === key ? 'active' : ''}
-                onClick={() => setAssetFilter(key)}
-                title={assetIdentity(asset)}
-              >
-                {asset.symbol}
-                {asset.kind === 'rgb' ? ` · ${shortId(asset.contractId)}` : ''}
-              </button>
-            ))}
+            <button
+              type="button"
+              aria-pressed={view === 'history'}
+              onClick={() => setView('history')}
+            >
+              History
+            </button>
           </div>
-          {state.kind === 'loading' && (
-            <div className="market-message" role="status">
-              <span className="message-symbol" aria-hidden="true">
-                ◌
-              </span>
-              <h3>Loading orders</h3>
-              <p>Fetching the public order book.</p>
-            </div>
-          )}
-          {state.kind === 'error' && (
-            <div className="market-message error" role="alert">
-              <span className="message-symbol" aria-hidden="true">
-                !
-              </span>
-              <h3>Could not open market</h3>
-              <p>{state.message}</p>
+          <div hidden={view !== 'history'}>
+            <PublicHistory activity={state.orders} />
+          </div>
+          <div hidden={view === 'history'}>
+            <div className="filter-row" role="group" aria-label="Filter by asset">
               <button
                 type="button"
-                className="dark-button"
-                onClick={() => setRetry((value) => value + 1)}
-              >
-                Try again
-              </button>
-            </div>
-          )}
-          {state.kind === 'ready' && state.orders.length === 0 && (
-            <div className="market-message" role="status">
-              <span className="message-symbol" aria-hidden="true">
-                ◌
-              </span>
-              <h3>No orders yet</h3>
-            </div>
-          )}
-          {state.kind === 'ready' && state.orders.length > 0 && visibleOrders.length === 0 && (
-            <div className="market-message" role="status">
-              <h3>No orders for this asset</h3>
-              <p>Choose another asset or show all orders.</p>
-              <button
-                className="outline-button"
-                type="button"
+                className={assetFilter === 'all' ? 'active' : ''}
                 onClick={() => setAssetFilter('all')}
               >
                 All assets
               </button>
-            </div>
-          )}
-          {state.kind === 'ready' && visibleOrders.length > 0 && (
-            <p className="execution-note">
-              Live wallet-reported progress · Updates every 5 seconds
-            </p>
-          )}
-          {state.kind === 'ready' && visibleOrders.length > 0 && (
-            <div className="order-list">
-              {visibleOrders.map((entry) => (
-                <OrderCard key={entry.order.id} entry={entry} />
+              {assets.map(([key, asset]) => (
+                <button
+                  type="button"
+                  key={key}
+                  className={assetFilter === key ? 'active' : ''}
+                  onClick={() => setAssetFilter(key)}
+                  title={assetIdentity(asset)}
+                >
+                  {asset.symbol}
+                  {asset.kind === 'rgb' ? ` · ${shortId(asset.contractId)}` : ''}
+                </button>
               ))}
             </div>
-          )}
+            {state.kind === 'loading' && (
+              <div className="market-message" role="status">
+                <MorphingSquare wrapperClassName="mb-6" aria-hidden="true" />
+                <h3>Loading orders</h3>
+                <p>Fetching the public order book.</p>
+              </div>
+            )}
+            {state.kind === 'error' && state.orders.length === 0 && (
+              <div className="market-message error" role="alert">
+                <span className="message-symbol" aria-hidden="true">
+                  !
+                </span>
+                <h3>Could not open market</h3>
+                <p>{state.message}</p>
+                <button
+                  type="button"
+                  className="dark-button"
+                  onClick={() => setRetry((value) => value + 1)}
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            {state.kind === 'error' && state.orders.length > 0 && (
+              <p className="market-stale" role="status">
+                {state.message} Showing the last loaded orders; they may be out of date.
+              </p>
+            )}
+            {state.kind === 'ready' && state.orders.length === 0 && (
+              <div className="market-message" role="status">
+                <span className="message-symbol" aria-hidden="true">
+                  ◌
+                </span>
+                <h3>No orders yet</h3>
+              </div>
+            )}
+            {state.kind === 'ready' && state.orders.length > 0 && visibleOrders.length === 0 && (
+              <div className="market-message" role="status">
+                <h3>No orders for this asset</h3>
+                <p>Choose another asset or show all orders.</p>
+                <button
+                  className="outline-button"
+                  type="button"
+                  onClick={() => setAssetFilter('all')}
+                >
+                  All assets
+                </button>
+              </div>
+            )}
+            {state.kind === 'ready' && visibleOrders.length > 0 && (
+              <p className="execution-note">
+                Live wallet-reported progress · Updates every 5 seconds
+              </p>
+            )}
+            {state.kind !== 'loading' && visibleOrders.length > 0 && (
+              <div className="order-list">
+                {visibleOrders.map((entry) => (
+                  <OrderCard key={entry.order.id} entry={entry} />
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </main>
       <SiteFooter />

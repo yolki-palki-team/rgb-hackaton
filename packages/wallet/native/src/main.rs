@@ -227,7 +227,9 @@ fn run() -> Result<()> {
         "validate" => cooperative::validate(&mut wallet, &root, &req)?,
         "state" | "offline-state" => {
             let on = if op == "state" {
-                Some(online(&mut wallet)?)
+                let on = online(&mut wallet)?;
+                wallet.cooperative_check_index()?;
+                Some(on)
             } else {
                 None
             };
