@@ -463,7 +463,7 @@ function App() {
             !['CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(trade.status) && (
               <button className="trade-notification" onClick={() => setView('trade')}>
                 <span>
-                  <strong>{tradeProgress(trade).title}</strong>
+                  <strong>{tradeProgress(trade, busy === 'approve').title}</strong>
                   <small>
                     {trade.kind === 'ring' ? 'Three-party ring' : 'Direct swap'} · View your swap
                   </small>
@@ -709,19 +709,21 @@ function App() {
               {trade && client?.supportsTrade(trade) && (
                 <section className="swap-progress" aria-label="Swap progress" aria-live="polite">
                   <div className="progress-heading">
-                    {tradeProgress(trade).waiting && !workflowPaused ? (
+                    {tradeProgress(trade, busy === 'approve').waiting && !workflowPaused ? (
                       <span className="spinner" aria-hidden="true" />
                     ) : (
                       <Icon name="shield" size={24} />
                     )}
                     <div>
                       <h2>
-                        {workflowPaused ? 'Your swap needs attention' : tradeProgress(trade).title}
+                        {workflowPaused
+                          ? 'Your swap needs attention'
+                          : tradeProgress(trade, busy === 'approve').title}
                       </h2>
                       <p>
                         {workflowPaused
                           ? 'We couldn’t finish this step. Your approval and transaction history are saved. Check the details, then try again.'
-                          : tradeProgress(trade).detail}
+                          : tradeProgress(trade, busy === 'approve').detail}
                       </p>
                     </div>
                   </div>
@@ -731,15 +733,23 @@ function App() {
                         <li
                           key={label}
                           className={
-                            tradeProgress(trade).step > index
+                            tradeProgress(trade, busy === 'approve').step > index
                               ? 'done'
-                              : tradeProgress(trade).step === index
+                              : tradeProgress(trade, busy === 'approve').step === index
                                 ? 'current'
                                 : ''
                           }
-                          aria-current={tradeProgress(trade).step === index ? 'step' : undefined}
+                          aria-current={
+                            tradeProgress(trade, busy === 'approve').step === index
+                              ? 'step'
+                              : undefined
+                          }
                         >
-                          <span>{tradeProgress(trade).step > index ? '✓' : index + 1}</span>
+                          <span>
+                            {tradeProgress(trade, busy === 'approve').step > index
+                              ? '✓'
+                              : index + 1}
+                          </span>
                           {label}
                         </li>
                       ),
@@ -899,7 +909,7 @@ function App() {
                           </div>
                           <p>
                             {trade
-                              ? tradeProgress(trade).detail
+                              ? tradeProgress(trade, busy === 'approve').detail
                               : 'This is a sample plan. Connect your wallet to start a real swap.'}
                           </p>
                           {(isMock || !trade || trade.status === 'UNSUPPORTED') && (

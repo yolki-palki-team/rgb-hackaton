@@ -125,51 +125,6 @@ function rejectSecrets(value: unknown): unknown {
     throw new Error('Sensitive response blocked');
   return value;
 }
-function approvalSummary(result: unknown): { token: string; detail: string } {
-  if (!result || typeof result !== 'object') throw new Error('Invalid wallet preview');
-  const source = result as Record<string, unknown>;
-  const preview = source.preview;
-  if (
-    typeof source.approvalToken !== 'string' ||
-    !/^[0-9a-f-]{36}$/i.test(source.approvalToken) ||
-    !preview ||
-    typeof preview !== 'object'
-  )
-    throw new Error('Invalid wallet preview');
-  const value = preview as Record<string, unknown>;
-  const amount = (entry: unknown): string => {
-    if (!entry || typeof entry !== 'object') throw new Error('Invalid wallet preview');
-    const row = entry as Record<string, unknown>;
-    if (
-      typeof row.amount !== 'string' ||
-      !/^\d{1,20}$/.test(row.amount) ||
-      !row.asset ||
-      typeof row.asset !== 'object'
-    )
-      throw new Error('Invalid wallet preview');
-    const asset = row.asset as Record<string, unknown>;
-    if (asset.kind === 'btc') return `${row.amount} sats BTC`;
-    if (
-      asset.kind === 'rgb' &&
-      typeof asset.contractId === 'string' &&
-      /^[a-zA-Z0-9:._~+/#=-]{1,200}$/.test(asset.contractId)
-    )
-      return `${row.amount} atomic RGB units (${asset.contractId})`;
-    throw new Error('Invalid wallet preview');
-  };
-  if (
-    value.validated !== true ||
-    value.mode !== 'real' ||
-    value.network !== 'regtest' ||
-    typeof value.feeSats !== 'string' ||
-    !/^\d{1,20}$/.test(value.feeSats)
-  )
-    throw new Error('Wallet has not validated this trade');
-  return {
-    token: source.approvalToken,
-    detail: `Give: ${amount(value.give)}\nReceive: ${amount(value.receive)}\nBitcoin fee: ${value.feeSats} sats\nNetwork: regtest`,
-  };
-}
 function validatedSender(event: IpcMainInvokeEvent): void {
   const frame = event.senderFrame;
   if (
@@ -465,21 +420,10 @@ else {
       !/^[a-zA-Z0-9-]{1,100}$/.test(approvalToken)
     )
       throw new Error('Invalid approval request');
-    // Refreshing the preview invalidates the renderer's token. Only this newly wallet-validated preview is shown and approved.
-    const fresh = approvalSummary(await requestLocal('POST', `/api/trades/${tradeId}/preview`, {}));
-    const decision = await dialog.showMessageBox(window!, {
-      type: 'warning',
-      buttons: ['Cancel', 'Approve and sign'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-      title: 'Approve wallet signature',
-      message: 'Approve this exact trade and sign?',
-      detail: `Trade: ${tradeId}\n${fresh.detail}\nThe wallet will validate the final package again before signing.`,
-    });
-    if (decision.response !== 1) throw new Error('Signing was not approved');
+    // Use the token for the exact preview approved in the UI. The local service
+    // revalidates the package and rejects stale or already-used authorization.
     return requestLocal('POST', `/api/trades/${tradeId}/approve`, {
-      approvalToken: fresh.token,
+      approvalToken,
       confirmed: true,
     });
   });
