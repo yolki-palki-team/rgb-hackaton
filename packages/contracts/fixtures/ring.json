@@ -1,0 +1,82 @@
+{
+  "protocolVersion": 1,
+  "synthetic": true,
+  "orders": [
+    {
+      "revision": 0,
+      "network": "regtest",
+      "maxFeeSats": "1000",
+      "createdAt": 1760000000000,
+      "expiresAt": 4102444800000,
+      "status": "OPEN",
+      "id": "order-A",
+      "ownerId": "A",
+      "giveAsset": {
+        "network": "regtest",
+        "kind": "rgb",
+        "contractId": "mock-contract-X",
+        "precision": 0,
+        "symbol": "X"
+      },
+      "giveAmount": "100",
+      "receiveAsset": {
+        "network": "regtest",
+        "kind": "rgb",
+        "contractId": "mock-contract-DUSD",
+        "precision": 0,
+        "symbol": "DUSD"
+      },
+      "minReceiveAmount": "100"
+    },
+    {
+      "revision": 0,
+      "network": "regtest",
+      "maxFeeSats": "1000",
+      "createdAt": 1760000000000,
+      "expiresAt": 4102444800000,
+      "status": "OPEN",
+      "id": "order-B",
+      "ownerId": "B",
+      "giveAsset": {
+        "network": "regtest",
+        "kind": "rgb",
+        "contractId": "mock-contract-DUSD",
+        "precision": 0,
+        "symbol": "DUSD"
+      },
+      "giveAmount": "100",
+      "receiveAsset": {
+        "network": "regtest",
+        "kind": "btc",
+        "precision": 8,
+        "symbol": "BTC"
+      },
+      "minReceiveAmount": "100000"
+    },
+    {
+      "revision": 0,
+      "network": "regtest",
+      "maxFeeSats": "1000",
+      "createdAt": 1760000000000,
+      "expiresAt": 4102444800000,
+      "status": "OPEN",
+      "id": "order-C",
+      "ownerId": "C",
+      "giveAsset": {
+        "network": "regtest",
+        "kind": "btc",
+        "precision": 8,
+        "symbol": "BTC"
+      },
+      "giveAmount": "100000",
+      "receiveAsset": {
+        "network": "regtest",
+        "kind": "rgb",
+        "contractId": "mock-contract-X",
+        "precision": 0,
+        "symbol": "X"
+      },
+      "minReceiveAmount": "100"
+    }
+  ]
+}

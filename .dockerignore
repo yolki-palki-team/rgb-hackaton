@@ -1,0 +1,28 @@
+# Allow only the exchange source and build inputs. Credentials, local state,
+# host dependencies, retained utilities and Git history never enter the context.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!tsconfig.json
+!apps/
+!apps/market/
+!apps/market/**
+!apps/local-client/
+!apps/local-client/**
+!apps/web/
+!apps/web/**
+!packages/
+!packages/contracts/
+!packages/contracts/**
+!docker/
+!docker/**
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/.state
+**/.qvac
+**/*.sqlite*
+**/*.log
+**/.DS_Store

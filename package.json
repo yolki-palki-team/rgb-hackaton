@@ -1,0 +1,41 @@
+{
+  "name": "rgb-p2p-exchange",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/contracts"
+  ],
+  "engines": {
+    "node": ">=22.17.0"
+  },
+  "scripts": {
+    "dev:market": "tsx apps/market/src/main.ts",
+    "dev:local": "tsx apps/local-client/src/main.ts",
+    "dev:web": "vite --config apps/web/vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test packages/contracts/test/*.test.ts apps/market/test/*.test.ts apps/local-client/test/*.test.ts",
+    "build": "vite build --config apps/web/vite.config.ts",
+    "smoke:qvac": "tsx apps/local-client/scripts/qvac-smoke.ts",
+    "dev:mock": "tsx apps/local-client/scripts/dev-mock.ts"
+  },
+  "dependencies": {
+    "@qvac/sdk": "0.21.1",
+    "b4a": "1.9.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "ws": "8.18.3",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/ws": "8.18.1",
+    "node": "22.17.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vite": "6.4.4"
+  }
+}

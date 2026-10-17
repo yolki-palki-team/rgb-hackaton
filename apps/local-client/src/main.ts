@@ -1,0 +1,37 @@
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { IdSchema } from '@rgb-exchange/contracts';
+import { LocalStore } from './store.ts';
+import { MockWalletAdapter, HttpWalletAdapter } from './wallet.ts';
+import { MarketClient } from './market-client.ts';
+import { QvacInterpreter } from './qvac.ts';
+import { LocalService } from './service.ts';
+import { createLocalServer } from './server.ts';
+
+const owner=IdSchema.parse(process.env.LOCAL_OWNER_ID ?? 'A');
+const stateDir=resolve(process.env.LOCAL_STATE_DIR ?? `.state/local-${owner}`);
+mkdirSync(stateDir,{recursive:true,mode:0o700});
+const tokenPath=resolve(stateDir,'session-token');
+if (!process.env.LOCAL_SESSION_TOKEN && !existsSync(tokenPath)) writeFileSync(tokenPath,randomBytes(32).toString('hex'),{mode:0o600,flag:'wx'});
+const token=process.env.LOCAL_SESSION_TOKEN ?? readFileSync(tokenPath,'utf8').trim();
+const mode=process.env.WALLET_MODE ?? 'mock';
+if (!['mock','real'].includes(mode)) throw new Error('WALLET_MODE must be mock or real');
+if (!process.env.MARKET_TOKEN) throw new Error('Set MARKET_TOKEN for this profile');
+const market=new MarketClient(process.env.MARKET_URL ?? 'http://127.0.0.1:4100',process.env.MARKET_TOKEN);
+const store=new LocalStore(resolve(stateDir,'local.sqlite'));
+const wallet=mode==='mock' ? new MockWalletAdapter(owner) : new HttpWalletAdapter(process.env.WALLET_RPC_URL ?? 'http://127.0.0.1:4201',process.env.WALLET_RPC_TOKEN ?? '');
+const qvac=new QvacInterpreter();
+const service=new LocalService(owner,wallet,market,store,qvac);
+const origins=(process.env.LOCAL_ALLOWED_ORIGINS ?? 'http://127.0.0.1:5173,http://localhost:5173').split(',');
+const port=Number(process.env.LOCAL_PORT ?? 4101);
+if (!Number.isInteger(port) || port<1024 || port>65535) throw new Error('Invalid LOCAL_PORT');
+const host=process.env.LOCAL_HOST ?? '127.0.0.1';
+if (!['127.0.0.1','0.0.0.0'].includes(host)) throw new Error('LOCAL_HOST must be 127.0.0.1 or 0.0.0.0');
+const server=createLocalServer(service,{token,allowedOrigins:origins});
+server.listen(port,host,()=>{
+  market.connect();
+  console.log(`Local profile ${owner}: http://127.0.0.1:${port}; wallet=${mode}; pairing token: ${process.env.LOCAL_SESSION_TOKEN ? 'provided through LOCAL_SESSION_TOKEN' : tokenPath}`);
+});
+const close=()=>{market.close();server.close(()=>{void qvac.dispose().finally(()=>{store.close();process.exit(0);});});};
+process.once('SIGINT',close); process.once('SIGTERM',close);

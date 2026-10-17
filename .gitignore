@@ -3,3 +3,19 @@
 .env
 .env.*
 !.env.example
+
+# Local development artifacts and private state
+node_modules/
+dist/
+.state/
+.qvac/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.tsbuildinfo
+.expo/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+tools/
