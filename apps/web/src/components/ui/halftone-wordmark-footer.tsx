@@ -1,7 +1,5 @@
 'use client';
 
-import { walletUrl } from '../../wallet-url';
-
 // Halftone Wordmark Footer — supplied 21st component. React + Canvas 2D only.
 import * as React from 'react';
 
@@ -52,7 +50,6 @@ const DEFAULT_COLUMNS: FooterColumn[] = [
       { label: 'Home', href: '/' },
     ],
   },
-  { title: 'Wallet', links: [{ label: 'Local wallet', href: walletUrl }] },
   {
     title: 'Learn',
     links: [
@@ -126,7 +123,7 @@ const HWF_CSS = `
   line-height: .8; text-align: center; white-space: nowrap; pointer-events: none; overflow: hidden; }
 .hwf-root[data-canvas-ready='true'] .hwf-fallback { display: none; }
 .hwf-top {
-  position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 1fr));
+  position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr));
   gap: 24px; padding: clamp(22px, 3.4vw, 40px) clamp(20px, 3.4vw, 44px) 0;
   font-family: var(--hwf-mono); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; line-height: 1.75;
 }

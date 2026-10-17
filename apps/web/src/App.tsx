@@ -4,26 +4,9 @@ import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
 import { getPublicOrders } from './api';
-import { assetIdentity, desktopOfferUrl, formatAsset, shortId, type MarketState } from './model';
-
-import { walletUrl } from './wallet-url';
+import { assetIdentity, formatAsset, shortId, type MarketState } from './model';
 
 const marketPath = '/market';
-
-function WalletLink({
-  className = '',
-  children = 'Open local wallet',
-}: {
-  className?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <a className={className} href={walletUrl} target="_blank" rel="noopener noreferrer">
-      {children}
-      <span aria-hidden="true"> ↗</span>
-    </a>
-  );
-}
 
 function Landing() {
   return (
@@ -34,22 +17,9 @@ function Landing() {
   );
 }
 
-function OrderCard({
-  order,
-  selected,
-  onSelect,
-}: {
-  order: PublicOrder;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function OrderCard({ order }: { order: PublicOrder }) {
   return (
-    <button
-      className={`order-card ${selected ? 'selected' : ''}`}
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-    >
+    <article className="order-card">
       <div className="order-card-top">
         <span className="order-network">{order.network.toUpperCase()}</span>
         <span className="order-open">
@@ -77,88 +47,13 @@ function OrderCard({
       </div>
       <div className="order-card-bottom">
         <span>Order {shortId(order.id)}</span>
-        <span aria-hidden="true">↗</span>
       </div>
-    </button>
-  );
-}
-
-function OrderDetails({ order }: { order: PublicOrder }) {
-  const desktopUrl = desktopOfferUrl(order.id);
-  const expires = new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(order.expiresAt);
-  return (
-    <aside className="order-detail" aria-label="Order details">
-      <div className="detail-heading">
-        <div>
-          <span className="section-index">ORDER DETAILS</span>
-          <h2>
-            {order.giveAsset.symbol} <span>→</span> {order.receiveAsset.symbol}
-          </h2>
-        </div>
-        <span className="detail-open">Open</span>
-      </div>
-      <p className="detail-intro">
-        This is a participant's public intent. Balance checks, plan approval and signing require a
-        local wallet.
-      </p>
-      <dl className="detail-terms">
-        <div>
-          <dt>Gives</dt>
-          <dd>{formatAsset(order.giveAsset, order.giveAmount)}</dd>
-        </div>
-        <div>
-          <dt>Receives at least</dt>
-          <dd>{formatAsset(order.receiveAsset, order.minReceiveAmount)}</dd>
-        </div>
-        <div>
-          <dt>Maximum fee</dt>
-          <dd>{BigInt(order.maxFeeSats).toLocaleString('en-US')} sats</dd>
-        </div>
-        <div>
-          <dt>Expires</dt>
-          <dd>{expires}</dd>
-        </div>
-      </dl>
-      <div className="identity-block">
-        <span>ASSET IDENTITY</span>
-        <div>
-          <small>Gives</small>
-          <code>{assetIdentity(order.giveAsset)}</code>
-          <small>Precision: {order.giveAsset.precision} decimal places</small>
-        </div>
-        <div>
-          <small>Receives</small>
-          <code>{assetIdentity(order.receiveAsset)}</code>
-          <small>Precision: {order.receiveAsset.precision} decimal places</small>
-        </div>
-      </div>
-      <div className="detail-meta">
-        <span>Order ID</span>
-        <code>{order.id}</code>
-        <span>Participant</span>
-        <code>{order.ownerId}</code>
-      </div>
-      <div className="order-wallet-actions">
-        {desktopUrl && (
-          <a className="dark-button" href={desktopUrl}>
-            Open offer in palka. desktop <span aria-hidden="true">↗</span>
-          </a>
-        )}
-        <WalletLink className="outline-button">Open browser wallet</WalletLink>
-      </div>
-      <p className="detail-footnote">
-        This public site never accesses keys, private preferences or wallet state.
-      </p>
-    </aside>
+    </article>
   );
 }
 
 function Market() {
   const [state, setState] = useState<MarketState>({ kind: 'loading', orders: [] });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [retry, setRetry] = useState(0);
 
@@ -219,7 +114,6 @@ function Market() {
             assetKey(order.giveAsset) === assetFilter ||
             assetKey(order.receiveAsset) === assetFilter,
         );
-  const selected = state.orders.find((order) => order.id === selectedId) ?? null;
 
   return (
     <div className="public-site market-page">
@@ -297,8 +191,6 @@ function Market() {
                 ◌
               </span>
               <h3>No open orders yet</h3>
-              <p>New offers appear here after publication from a local wallet.</p>
-              <WalletLink className="outline-button">Open local wallet</WalletLink>
             </div>
           )}
           {state.kind === 'ready' && state.orders.length > 0 && visibleOrders.length === 0 && (
@@ -315,44 +207,12 @@ function Market() {
             </div>
           )}
           {state.kind === 'ready' && visibleOrders.length > 0 && (
-            <div className="book-layout">
-              <div className="order-list">
-                {visibleOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    selected={selectedId === order.id}
-                    onSelect={() => setSelectedId(order.id)}
-                  />
-                ))}
-              </div>
-              {selected ? (
-                <OrderDetails order={selected} />
-              ) : (
-                <aside className="detail-placeholder">
-                  <div className="placeholder-art" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                  <span className="section-index">DETAILS</span>
-                  <h2>Select an order.</h2>
-                  <p>See exact amounts, RGB contract IDs and expiry.</p>
-                </aside>
-              )}
+            <div className="order-list">
+              {visibleOrders.map((order) => (
+                <OrderCard key={order.id} order={order} />
+              ))}
             </div>
           )}
-        </section>
-        <section className="market-bottom page-container">
-          <div>
-            <span className="section-index">HOW TRADES WORK</span>
-            <h2>From order to plan.</h2>
-          </div>
-          <p>
-            The engine finds direct pairs or compatible three-party rings. Matching is available;
-            BTC/RGB settlement requires a compatible local wallet adapter.
-          </p>
-          <WalletLink className="text-link">Open local wallet</WalletLink>
         </section>
       </main>
       <SiteFooter />
@@ -375,7 +235,6 @@ function SiteFooter() {
             { label: 'Home', href: '/' },
           ],
         },
-        { title: 'Wallet', links: [{ label: 'Local wallet', href: walletUrl }] },
         {
           title: 'Learn',
           links: [

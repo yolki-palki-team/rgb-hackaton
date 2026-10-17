@@ -4,6 +4,40 @@ A non-custodial A2A marketplace prototype for BTC and RGB assets, designed for d
 
 Users describe their goals in plain language. An on-device QVAC assistant turns those goals and private preferences into orders for users to review. A deterministic matching engine finds compatible orders; each wallet validates the proposed exchange and requests approval before signing a shared Bitcoin transaction.
 
+## Motivation: validate multilateral exchange on RGB
+
+**Our primary research goal is to test whether cyclic exchange can unlock trades that bilateral matching cannot execute, without requiring participants to buy intermediate assets first—and whether RGB can settle those trades atomically.** The marketplace and local AI are interfaces for this experiment, not the experiment's main result.
+
+We were inspired by Paolo Dini's [An Introduction to MTCS](https://cycles.money/blog/an-introduction-to-mtcs) (Cycles, November 27, 2023). It explains how Multilateral Trade Credit Set-off finds cycles in business obligation networks, allowing debts to be reduced without changing each firm's net position. Its graph-based approach motivates looking at a whole network of participants instead of requiring every exchange to have a reciprocal pair.
+
+This is an adaptation of that idea, **not an implementation or proof of the MTCS algorithm**. MTCS clears existing monetary obligations; palka exchanges independently owned BTC and RGB assets with explicit amounts and consent. Different assets cannot simply be added together as equivalent debts. Our current matcher selects a feasible direct swap or three-party cycle; it does not implement MTCS's minimum-cost maximum-flow optimization or claim globally optimal liquidity savings.
+
+### The hypothesis we want to test
+
+Consider three participants with these proposed terms (illustrative quantities, not market prices):
+
+| Participant | Owns and offers | Wants to receive |
+| ----------- | --------------- | ---------------- |
+| Alice       | 100 X           | 100 DUSD         |
+| Bob         | 100 DUSD        | 100,000 sats     |
+| Carol       | 100,000 sats    | 100 X            |
+
+No two orders match directly. A ring can connect Alice's X to Carol, Carol's BTC to Bob, and Bob's DUSD to Alice in one atomic settlement. Alice need not hold or purchase BTC as an intermediate asset. Every asset offered must nevertheless exist in its sender's wallet, and Bitcoin fees require additional funding. “Trading through assets a participant does not hold” means avoiding intermediate inventory, not creating missing assets or spending an unfunded balance.
+
+RGB makes this a concrete engineering question: can independently validated asset histories and owned inputs be coordinated into one approved Bitcoin transaction while preserving each participant's terms? Finding a graph cycle alone is insufficient. We must check conservation separately for each asset, BTC fees, ownership, private limits, signatures and RGB acceptance. Sequential transfers do not count as an atomic ring. QVAC only drafts intent locally; deterministic code checks amounts and each user approves signing.
+
+### Planned validation campaign
+
+The following is a **proposed experiment, not a report of 100 completed swaps**:
+
+1. Run 100 scheduled real regtest settlement attempts: 20 direct swaps as controls and 80 three-party rings, with reproducible order fixtures and recorded starting balances. Include rings where the desired asset starts at zero in the receiving wallet and no participant needs to acquire an intermediate asset.
+2. Compare direct-only matching with direct-plus-ring matching on the same order sets. Report executable orders, unmatched orders, completed settlements out of all attempts, fees, latency and failures. Measure intermediate inventory per asset; do not invent a common valuation to sum BTC and RGB quantities.
+3. For each successful attempt, retain the approved plan digest, transaction ID, Bitcoin confirmation, every participant's RGB acceptance and before/after balances. Verify that received RGB can be spent again after restarting the wallets. A match or broadcast alone is not settlement evidence. Publish sanitized results without keys, tokens or private policies.
+4. Run separate failure cases: insufficient balance, excessive fee, expired order, unavailable participant, conflicting inputs and restart during settlement. Reject invalid plans before signing; after broadcast, reconcile the existing transaction rather than pretending it was rolled back. No partial or unresolved result may be reported as success.
+5. Extend the experiment to five-party rings only after expanding the contracts, matcher, wallet validation and settlement tests. **Current support is two or three participants; five-party swaps are a research milestone, not an existing feature.**
+
+Success would provide bounded evidence that cyclic matching improves execution for the tested orders and that RGB can enforce the resulting exchange without prefunded intermediate inventory. It would not establish mainnet readiness, market-wide liquidity savings or a general mathematical proof. Existing settlement evidence is documented separately in [integration verification](docs/integration.md); the campaign above still needs to be run and measured.
+
 ## Scope and status
 
 - Target: direct and three-party atomic swaps on Bitcoin regtest, using BTC and two test RGB assets.
@@ -109,11 +143,11 @@ Example goal: `Sell 100 X for at least 100 DUSD. Fee up to 1000 sats. Do not sel
 
 For the ring, confirm these three independent orders, allowing BTC sale only for C:
 
-| Profile | Gives | Receives at least |
-| --- | --- | --- |
-| A | 100 X | 100 DUSD |
-| B | 100 DUSD | 100000 sats |
-| C | 100000 sats | 100 X |
+| Profile | Gives       | Receives at least |
+| ------- | ----------- | ----------------- |
+| A       | 100 X       | 100 DUSD          |
+| B       | 100 DUSD    | 100000 sats       |
+| C       | 100000 sats | 100 X             |
 
 Confirming an order authorizes matching only. Signing has a separate final wallet-validated preview and approval. Real mode retains reservations after a signing attempt or an uncertain broadcast; expiry is not permission to reuse the funds.
 
@@ -175,13 +209,13 @@ while Python tests cover wallet journals, protocol validation and crash recovery
 These are isolated tests with synthetic fixtures; they do not perform real transfers
 or download QVAC model weights. The full quality workflow retains its existing tests.
 
-| Code | Linter | Formatter |
-| --- | --- | --- |
-| TypeScript, TSX, JavaScript, MJS (including tests and scripts) | ESLint, typescript-eslint, React Hooks rules | Prettier |
-| CSS | Stylelint recommended rules | Prettier |
-| Python wallet and demo scripts | Ruff via uv | Ruff |
-| Native Rust and the local SDK bridge | Clippy for the application; bridge compiled as part of the SDK | rustfmt, including `extension.rs` |
-| JSON, YAML, HTML | Prettier syntax validation | Prettier |
+| Code                                                           | Linter                                                         | Formatter                         |
+| -------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------- |
+| TypeScript, TSX, JavaScript, MJS (including tests and scripts) | ESLint, typescript-eslint, React Hooks rules                   | Prettier                          |
+| CSS                                                            | Stylelint recommended rules                                    | Prettier                          |
+| Python wallet and demo scripts                                 | Ruff via uv                                                    | Ruff                              |
+| Native Rust and the local SDK bridge                           | Clippy for the application; bridge compiled as part of the SDK | rustfmt, including `extension.rs` |
+| JSON, YAML, HTML                                               | Prettier syntax validation                                     | Prettier                          |
 
 ```sh
 rtk proxy npm run format       # Apply all formatters
