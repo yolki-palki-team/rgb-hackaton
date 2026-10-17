@@ -54,6 +54,8 @@ jobs:
         run: uv run --locked python -m unittest discover -s packages/wallet -p 'test_*.py' -v
       - name: Deployment credential persistence tests
         run: uv run --locked python -m unittest discover -s deploy -p 'test_*.py' -v
+      - name: Independent desktop wallet setup and recovery tests
+        run: uv run --locked python -m unittest discover -s scripts/demo -p 'test_desktop_wallet.py' -v
 
   deployment:
     name: Server deployment smoke
