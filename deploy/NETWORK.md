@@ -171,6 +171,21 @@ BTC to this demo.
 
 ## Diagnostics and limits
 
+Local ARM64 integration verified two independent wallets over authenticated HTTPS,
+repeat-safe BTC funding, real X/DUSD issuance and SDK catalog validation. A WDK
+transfer delivered 50,000 sats to the native wallet with a 141-sat fee and retained
+the account and transaction across restart. The check uses an isolated Compose
+project; it does not claim that Oracle or two physical computers were tested.
+
+To reproduce (requires Docker, the built native bridge, and installed dependencies):
+
+```bash
+uv run --locked python scripts/demo/shared-network-smoke.py --execute
+```
+
+The check preserves ignored wallet state and Docker volumes for investigation.
+It is a real test transfer, not a mock or an atomic-swap verification.
+
 ```bash
 # Server
 bash deploy/server.sh logs

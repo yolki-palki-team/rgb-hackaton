@@ -95,6 +95,9 @@ case "$action" in
       curl --fail --silent --show-error --max-time 15 --resolve owlpeer.com:443:127.0.0.1 https://owlpeer.com/market-api/health
       curl --fail --silent --show-error --max-time 15 --resolve owlpeer.com:443:127.0.0.1 https://owlpeer.com/market-api/orders
       curl --fail --silent --show-error --max-time 15 --resolve api.owlpeer.com:443:127.0.0.1 https://api.owlpeer.com/health
+      if [[ -f "$deploy_dir/.state/network.enabled" ]]; then
+        curl --fail --silent --show-error --max-time 45 --resolve api.owlpeer.com:443:127.0.0.1 https://api.owlpeer.com/chain/health
+      fi
     else
       curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${PALKA_WEB_PORT:-80}/health"
       curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${PALKA_WEB_PORT:-80}/market-api/health"
