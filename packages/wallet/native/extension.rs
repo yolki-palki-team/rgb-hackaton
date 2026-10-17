@@ -255,7 +255,8 @@ impl Wallet {
             bitcoin::consensus::deserialize(&hex::decode(raw).map_err(|_| Error::InvalidTxid)?)
                 .map_err(|_| Error::InvalidTxid)?;
         let options = OnlineOptions {
-            indexer_url: std::env::var("RGB_INDEXER_URL").unwrap_or_else(|_| "127.0.0.1:50001".into()),
+            indexer_url: std::env::var("RGB_INDEXER_URL")
+                .unwrap_or_else(|_| "127.0.0.1:50001".into()),
             skip_consistency_check: false,
             vanilla_sync_lookback: 20,
         };
