@@ -32,7 +32,7 @@
       "implementation": "Adapted with existing wallet-kit primitives; registry CLI requires sign-in."
     },
     {
-      "decision": "Show the order book and exact wallet balances in aligned Overview columns, stacking on mobile. Remove the wallet Market tab. Use a short accent on the first a in p\u00e1lka. navbars and p\u00e1lka without a dot in footers.",
+      "decision": "Show the order book and exact wallet balances in aligned Overview columns, stacking on mobile. Remove the wallet Market tab. Use a short accent on the first a in pálka. navbars and pálka without a dot in footers.",
       "source": "User correction, 2026-10-17"
     },
     {
@@ -49,6 +49,12 @@
       "source": "User request, 2026-10-17",
       "reference": "https://developer.apple.com/design/resources/",
       "implementation": "React and CSS adaptation using existing components; no native UIKit dependency or bundled Apple fonts."
+    },
+    {
+      "decision": "Replace glossy coin icons with flat tinted rounded tiles. Use neutral translucent surfaces, fine highlights, grouped rows, and stronger blur on floating asset menus as a web approximation of Apple materials. Keep public landing and market free of Matrix backgrounds; remove the public market hero.",
+      "source": "User refinement, 2026-10-17",
+      "reference": "https://developer.apple.com/design/human-interface-guidelines/materials",
+      "implementation": "Shared React/CSS wallet implementation; not native Apple Liquid Glass."
     }
   ]
 }

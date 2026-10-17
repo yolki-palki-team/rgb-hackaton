@@ -3,8 +3,7 @@ import { assetKey, type PublicOrder } from '@rgb-exchange/contracts';
 import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
-import { MatrixRain } from '@/components/ui/matrix-rain';
-import { getPublicHealth, getPublicOrders } from './api';
+import { getPublicOrders } from './api';
 import { assetIdentity, desktopOfferUrl, formatAsset, shortId, type MarketState } from './model';
 
 import { walletUrl } from './wallet-url';
@@ -23,33 +22,6 @@ function WalletLink({
       {children}
       <span aria-hidden="true"> ↗</span>
     </a>
-  );
-}
-
-function StatusPill({ live }: { live: boolean | null }) {
-  return (
-    <span
-      className={`status-pill ${live === true ? 'is-live' : live === false ? 'is-offline' : ''}`}
-      role="status"
-    >
-      <span className="status-dot" />
-      {live === null ? 'Checking connection' : live ? 'Market online' : 'Market offline'}
-    </span>
-  );
-}
-
-function SiteRain() {
-  return (
-    <MatrixRain
-      className="site-rain"
-      background="#080808"
-      color="#b5b5b5"
-      highlight="#eeeeee"
-      density={0.55}
-      fontSize={18}
-      glow={1}
-      speed={0.65}
-    />
   );
 }
 
@@ -186,7 +158,6 @@ function OrderDetails({ order }: { order: PublicOrder }) {
 
 function Market() {
   const [state, setState] = useState<MarketState>({ kind: 'loading', orders: [] });
-  const [live, setLive] = useState<boolean | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [retry, setRetry] = useState(0);
@@ -212,12 +183,6 @@ function Market() {
           });
       } finally {
         pending = false;
-      }
-      try {
-        await getPublicHealth();
-        if (active) setLive(true);
-      } catch {
-        if (active) setLive(false);
       }
     };
     void load();
@@ -258,48 +223,18 @@ function Market() {
 
   return (
     <div className="public-site market-page">
-      <SiteRain />
       <SiteHeader active="market" />
       <main>
-        <section className="market-hero">
-          <div className="page-container">
-            <div className="market-topline">
-              <span className="section-index">EXCHANGE palka. / 01</span>
-              <StatusPill live={live} />
-            </div>
-            <div className="market-headline">
-              <div>
-                <h1>
-                  Open <em>orders.</em>
-                </h1>
-                <p>
-                  Explore public BTC and RGB exchange intents. Matching and settlement are checked
-                  separately in a local wallet.
-                </p>
-              </div>
-              <WalletLink className="market-wallet-cta">My local wallet</WalletLink>
-            </div>
-            <div className="market-note">
-              <span className="note-symbol" aria-hidden="true">
-                ↗
-              </span>
-              <p>
-                Only open orders appear here. Balances, private limits, matched trades and
-                signatures stay outside the public site.
-              </p>
-            </div>
-          </div>
-        </section>
         <section className="market-content page-container" aria-labelledby="orderbook-heading">
           <div className="book-heading">
             <div>
               <span className="section-index">PUBLIC MARKET</span>
-              <h2 id="orderbook-heading">
+              <h1 id="orderbook-heading">
                 Order book{' '}
                 <span>
                   {state.kind === 'ready' ? String(state.orders.length).padStart(2, '0') : '—'}
                 </span>
-              </h2>
+              </h1>
             </div>
             <button
               className="refresh-button"

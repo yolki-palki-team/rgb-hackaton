@@ -39,16 +39,6 @@ a {
   overflow-x: clip;
   min-height: 100vh;
 }
-.site-rain {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100dvh;
-  opacity: 0.17;
-  mix-blend-mode: screen;
-  mask-image: linear-gradient(90deg, #000, transparent 42%, transparent 58%, #000);
-}
 .page-container {
   width: min(100% - 80px, 1280px);
   margin-inline: auto;
@@ -299,104 +289,9 @@ a {
   transform: translateY(-2px);
 }
 
-.market-hero {
-  background: radial-gradient(circle at 88% 10%, #171717 0, transparent 39%), #101010;
-  border-bottom: 1px solid #333333;
-  padding-block: 54px 42px;
-}
-.market-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #333333;
-  background: #242424;
-  color: #aaaaaa;
-  padding: 8px 12px;
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 800;
-}
-.status-dot {
-  width: 7px;
-  height: 7px;
-  background: #888888;
-  border-radius: 50%;
-}
-.status-pill.is-live {
-  color: #aaaaaa;
-  border-color: #333333;
-}
-.status-pill.is-live .status-dot {
-  background: #888888;
-  box-shadow: 0 0 0 3px #333333;
-}
-.status-pill.is-offline {
-  color: #aaaaaa;
-  border-color: #333333;
-}
-.status-pill.is-offline .status-dot {
-  background: #aaaaaa;
-}
-.market-headline {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 30px;
-  padding-block: 46px 40px;
-}
-.market-headline h1 {
-  font-size: clamp(60px, 7.7vw, 112px);
-  line-height: 1.02;
-  margin: 0 0 26px;
-}
-.market-headline p {
-  max-width: 530px;
-  color: #aaaaaa;
-  line-height: 1.75;
-  margin: 0;
-}
-.market-wallet-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  border-radius: 8px;
-  background: #e6e6e6;
-  color: #171717;
-  font-size: 13px;
-  font-weight: 800;
-  padding: 16px 22px;
-}
-.market-wallet-cta:hover {
-  background: #cccccc;
-}
-.market-note {
-  border-top: 1px solid #333333;
-  display: flex;
-  gap: 14px;
-  align-items: start;
-  padding-top: 20px;
-}
-.market-note .note-symbol {
-  color: #aaaaaa;
-  font-size: 24px;
-  line-height: 1;
-}
-.market-note p {
-  color: #aaaaaa;
-  font-size: 12px;
-  line-height: 1.6;
-  max-width: 780px;
-  margin: 0;
-}
 .market-content {
   min-height: 600px;
-  padding-block: 76px 95px;
+  padding-block: 40px 80px;
 }
 .book-heading {
   display: flex;
@@ -404,11 +299,11 @@ a {
   justify-content: space-between;
   gap: 20px;
 }
-.book-heading h2 {
+.book-heading h1 {
   font-size: clamp(38px, 4vw, 56px);
   margin: 12px 0 0;
 }
-.book-heading h2 span {
+.book-heading h1 span {
   vertical-align: top;
   color: #666666;
   font-size: 17px;
@@ -795,23 +690,10 @@ a {
   .page-container {
     width: min(100% - 36px, 1280px);
   }
-  .market-hero {
-    padding-block: 38px 28px;
-  }
-  .market-headline {
-    display: block;
-    padding-block: 40px 30px;
-  }
-  .market-headline h1 {
-    font-size: 58px;
-  }
-  .market-wallet-cta {
-    margin-top: 26px;
-  }
   .market-content {
-    padding-block: 55px 70px;
+    padding-block: 28px 56px;
   }
-  .book-heading h2 {
+  .book-heading h1 {
     font-size: 40px;
   }
   .market-bottom {
@@ -823,15 +705,6 @@ a {
   }
 }
 @media (max-width: 400px) {
-  .market-headline h1 {
-    font-size: 51px;
-  }
-  .market-topline .section-index {
-    max-width: 110px;
-  }
-  .status-pill {
-    font-size: 10px;
-  }
   .order-card,
   .order-detail {
     padding: 20px;
