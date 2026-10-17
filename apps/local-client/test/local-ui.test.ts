@@ -7,7 +7,38 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MockWalletAdapter } from '../src/wallet.ts';
 import App from '../ui/src/App.tsx';
+import {
+  ChatInput,
+  ChatInputSubmit,
+  ChatInputTextArea,
+} from '../ui/src/components/ui/chat-input.tsx';
 import { LocalClient, formatAsset, mapBalance, type DesktopBridge } from '../ui/src/api.ts';
+
+test('chat composer blocks empty, disconnected, and loading submissions', () => {
+  for (const state of [
+    { value: '', blocked: true },
+    { value: '   ', blocked: true },
+    { value: 'Swap X for DUSD', disabled: true, blocked: true },
+    { value: 'Swap X for DUSD', loading: true, blocked: true },
+    { value: 'Swap X for DUSD', blocked: false },
+  ]) {
+    const html = renderToStaticMarkup(
+      createElement(ChatInput, {
+        ...state,
+        children: [
+          createElement(ChatInputTextArea, {
+            key: 'input',
+            'aria-label': 'Swap terms',
+            readOnly: true,
+          }),
+          createElement(ChatInputSubmit, { key: 'submit' }),
+        ],
+      }),
+    );
+    assert.equal(/<button[^>]*disabled/.test(html), state.blocked);
+    assert.match(html, /aria-label="Swap terms"/);
+  }
+});
 
 test('unpaired wallet starts with no synthetic balances, orders, or network', () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');

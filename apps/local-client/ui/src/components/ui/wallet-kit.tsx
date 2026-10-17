@@ -2,6 +2,7 @@ import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
   InputHTMLAttributes,
+  Ref,
   SelectHTMLAttributes,
   TableHTMLAttributes,
   TextareaHTMLAttributes,
@@ -31,7 +32,7 @@ export function StatusBadge({ className, ...props }: HTMLAttributes<HTMLSpanElem
 
 export function AssetCard({ balance }: { balance: Balance }) {
   return (
-    <article className="balance-card ui-panel">
+    <article className="balance-card ui-panel" data-asset={balance.code}>
       <div className="balance-card-top">
         <AssetIcon code={balance.code} size="large" />
         <span className="balance-code">{balance.code}</span>
@@ -171,6 +172,9 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
   return <select className={cn('ui-input', className)} {...props} />;
 }
 
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({
+  className,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
   return <textarea className={cn('ui-input', className)} {...props} />;
 }

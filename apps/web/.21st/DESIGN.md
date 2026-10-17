@@ -1,6 +1,6 @@
-# palka design context
+# palka. design context
 
-palka is a public BTC/RGB A2A marketplace. The public pages show orders; balances, private policy, QVAC and signing stay in a separate local wallet UI.
+palka. is a public BTC/RGB A2A marketplace. The public pages show orders; balances, private policy, QVAC and signing stay in a separate local wallet UI.
 
 - Stack: React 19, TypeScript, Vite, Tailwind v4; shadcn aliases point to `src/components/ui`.
 - Palette: black `#080808`, charcoal surfaces `#101010`/`#171717`, text `#eeeeee`, muted `#aaaaaa`, borders `#333333`.

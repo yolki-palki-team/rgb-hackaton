@@ -331,9 +331,9 @@ else {
       window.show();
     })
     .catch(() => {
-      console.error(`palka startup failed while ${startupStage}`);
+      console.error(`palka. startup failed while ${startupStage}`);
       dialog.showErrorBox(
-        'palka startup failed',
+        'palka. startup failed',
         `Could not complete ${startupStage}. Check the installed app and private desktop configuration.`,
       );
       app.quit();

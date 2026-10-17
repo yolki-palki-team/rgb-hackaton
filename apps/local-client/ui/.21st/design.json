@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "project": { "name": "palka.", "stack": ["React 19", "TypeScript", "Tailwind CSS v4", "Vite"] },
+  "sources": {
+    "tokens": ["src/styles.css", "src/tailwind.css"],
+    "components": ["src/components/ui"]
+  },
+  "decisions": [
+    {
+      "decision": "Use the supplied ChatInput composition with existing wallet-kit primitives; keep local interpretation and explicit review before publication.",
+      "source": "User selection, 2026-10-17"
+    },
+    {
+      "decision": "Remove the Overview hero and goal panel, shorten the footer, and place colorful real-wallet asset cards below funding.",
+      "source": "User selection, 2026-10-17"
+    },
+    {
+      "decision": "Display palka. in both public and desktop branding without changing internal identifiers.",
+      "source": "User correction, 2026-10-17"
+    }
+  ]
+}
