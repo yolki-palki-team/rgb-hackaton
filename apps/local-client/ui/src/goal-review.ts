@@ -26,7 +26,10 @@ export async function requestGoalReview(
   } catch (error) {
     update({
       state: 'error',
-      message: error instanceof Error ? error.message : 'Local interpretation failed.',
+      message:
+        error instanceof Error
+          ? error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+          : 'Local interpretation failed.',
     });
   }
 }

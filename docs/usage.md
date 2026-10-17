@@ -47,7 +47,7 @@ rtk proxy npm run build:desktop
 Bootstrap materializes the pinned rgb-lib and reviewed local cooperative extension.
 When updating the extension, use `bootstrap-native.py --refresh`, then repeat the
 cargo build. This does not create or fund a wallet. QVAC downloads approximately
-1.06 GB on first load; subsequent inference is local. The UI shows model readiness;
+2.7 GB on first load; subsequent inference is local. The UI shows model readiness;
 the manual form works independently.
 
 ## Infrastructure: initial setup and restarts

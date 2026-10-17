@@ -439,7 +439,7 @@ export class LocalClient {
     const controller = new AbortController();
     const timeoutMs =
       path === '/api/interpret'
-        ? 240_000
+        ? 360_000
         : path.startsWith('/api/funding') || /\/(prepare|preview|sync|approve)$/.test(path)
           ? 90_000
           : 15_000;

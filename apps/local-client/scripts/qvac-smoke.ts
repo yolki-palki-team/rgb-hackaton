@@ -83,6 +83,27 @@ try {
       giveAmount: '10000',
       receiveAmount: '10',
     },
+    {
+      goal: 'I would like ten X in return for my ten thousand satoshis. Fee limit: 1000 sats.',
+      give: btcKey,
+      receive: xKey,
+      giveAmount: '10000',
+      receiveAmount: '10',
+    },
+    {
+      goal: '\u0425\u043e\u0447\u0443 \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u043c\u0438\u043d\u0438\u043c\u0443\u043c 10 X, \u043e\u0442\u0434\u0430\u044e 10000 \u0441\u0430\u0442\u043e\u0448\u0438. \u041a\u043e\u043c\u0438\u0441\u0441\u0438\u044f \u043d\u0435 \u0432\u044b\u0448\u0435 1000 \u0441\u0430\u0442\u043e\u0448\u0438.',
+      give: btcKey,
+      receive: xKey,
+      giveAmount: '10000',
+      receiveAmount: '10',
+    },
+    {
+      goal: 'get 5 dusd for 100 sat, max fee 1000 sats',
+      give: btcKey,
+      receive: dusdKey,
+      giveAmount: '100',
+      receiveAmount: '5',
+    },
   ];
   for (const fixture of cases) {
     const result = await qvac.interpret(fixture.goal, assets);
@@ -107,10 +128,42 @@ try {
       }),
     );
   }
+  const reserved = await qvac.interpret(
+    'Sell 10 X for at least 10000 sats. Keep at least 50% of my X and 0.0001 BTC. Maximum fee 500 sats.',
+    assets,
+  );
+  const reserves = draftFromIntent(reserved.output, state, defaultPolicy(state));
+  assert.ok(reserves.draft);
+  assert.equal(reserves.policy.maxFeeSats, '500');
+  assert.equal(
+    reserves.policy.protectedBalances[xKey],
+    (BigInt(state.balances[1].amount) / 2n).toString(),
+  );
+  assert.equal(reserves.policy.protectedBalances[btcKey], '10000');
+  console.log(
+    JSON.stringify({
+      stage: 'amount and percentage reserves validated',
+      durationMs: reserved.diagnostics.durationMs,
+      settlement: 'not attempted',
+    }),
+  );
   const incomplete = await qvac.interpret('Sell 10 X for BTC. Maximum fee 1000 sats.', assets);
   assert.equal(draftFromIntent(incomplete.output, state, defaultPolicy(state)).draft, null);
   console.log(
     JSON.stringify({ stage: 'missing amount requires clarification', settlement: 'not attempted' }),
+  );
+  const colloquial = await qvac.interpret('get some dusd for 100 sat', assets);
+  assert.equal(colloquial.output.minReceiveAmount, null);
+  const partial = draftFromIntent(colloquial.output, state, defaultPolicy(state));
+  assert.equal(partial.draft, null);
+  assert.match(partial.clarification ?? '', /DUSD/i);
+  console.log(
+    JSON.stringify({
+      stage: 'colloquial goal needs minimum DUSD',
+      clarification: partial.clarification,
+      durationMs: colloquial.diagnostics.durationMs,
+      settlement: 'not attempted',
+    }),
   );
 } finally {
   await qvac.dispose();

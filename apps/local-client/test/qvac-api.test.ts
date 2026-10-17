@@ -7,7 +7,7 @@ import { MarketClient } from '../src/market-client.ts';
 import { MockWalletAdapter } from '../src/wallet.ts';
 import { createLocalServer } from '../src/server.ts';
 import { QvacUnavailableError } from '../src/qvac.ts';
-import { IntentValidationError } from '../src/intent-grounding.ts';
+import { IntentValidationError } from '../src/intent-amounts.ts';
 
 test('authenticated QVAC health bypasses wallet work and API errors distinguish inference from semantics', async () => {
   const store = new LocalStore(':memory:');

@@ -3,7 +3,7 @@ import { QvacInterpreter } from '../src/qvac.ts';
 const qvac = new QvacInterpreter();
 let code = 0;
 try {
-  console.log('Preparing shared QVAC CPU model cache (first start downloads about 1.06 GB).');
+  console.log('Preparing shared QVAC CPU model cache (first start downloads about 2.7 GB).');
   const health = await qvac.health();
   if (!health.available) throw new Error(health.reason);
   console.log(`QVAC model cache ready: ${health.model}`);

@@ -1,4 +1,4 @@
-import { canonicalDecimal } from './intent-grounding.ts';
+import { canonicalDecimal } from './intent-amounts.ts';
 import {
   AiIntentSchema,
   OrderDraftSchema,

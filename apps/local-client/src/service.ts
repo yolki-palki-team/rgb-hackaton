@@ -1,6 +1,6 @@
 import type { QvacHealth } from './qvac.ts';
 import { QvacUnavailableError, QvacInvalidOutputError } from './qvac.ts';
-import { IntentValidationError } from './intent-grounding.ts';
+import { IntentValidationError } from './intent-amounts.ts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {

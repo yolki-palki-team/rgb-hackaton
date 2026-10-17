@@ -47,3 +47,17 @@ test('semantic errors, unavailable inference, and clarification never open a sta
   assert.equal(initialDraft.giveAmount, '');
   assert.equal(initialDraft.minReceiveAmount, '');
 });
+
+test('desktop IPC wrappers do not leak into interpretation messages', async () => {
+  const events: GoalReview[] = [];
+  await requestGoalReview(
+    async () => {
+      throw new Error(
+        "Error invoking remote method 'wallet:request': Error: Check the amount precision.",
+      );
+    },
+    'goal',
+    (event) => events.push(event),
+  );
+  assert.deepEqual(events.at(-1), { state: 'error', message: 'Check the amount precision.' });
+});

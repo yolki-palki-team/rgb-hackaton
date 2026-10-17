@@ -115,7 +115,7 @@ packaged app) and restart to pick up these changes; browser Docker profiles need
 the runtime rebuild above. Live settlement through these loading states has not
 been reverified.
 
-Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. The real-default path does not preload QVAC; first actual AI use downloads about 1.06 GB of public model weights, then loads them locally. Docker runs Linux CPU inference. Model readiness is shown in the local UI. Allow enough disk space and memory for the model; inference speed depends on the machine.
+Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. The real-default path does not preload QVAC; first actual AI use downloads about 2.7 GB of public model weights, then loads them locally. Docker runs Linux CPU inference. Model readiness is shown in the local UI. Allow enough disk space and memory for the model; inference speed depends on the machine.
 
 To run the explicit synthetic three-profile demonstration instead:
 
@@ -145,7 +145,9 @@ Open **http://127.0.0.1:5173/** for the landing page or **http://127.0.0.1:5173/
 
 `mock` applies to the wallet: its labeled balances are synthetic. The market, SQLite persistence, HTTP/WebSocket authorization and QVAC inference are real. Preparing a mock trade returns `UNSUPPORTED`, without a fake transaction ID. Three profiles on this machine are a demonstration, not three independent devices.
 
-QVAC uses **@qvac/sdk 0.21.1**, **QWEN3_1_7B_INST_Q4**, and a local Node 22.17 runtime installed with the workspace. First use downloads about 1.06 GB of public model weights; subsequent inference is local. No model API key or cloud fallback is used. A failed or ambiguous extraction keeps the goal visible and leaves the review closed. Manual entry is a separate action with empty amount fields. Explicit English fixed orders such as `Sell 10 X for at least 10000 sats of BTC. Maximum fee 1000 sats.` are grounded against the original quantities and units; unsupported phrasing requires clarification. Percentage constraints need particular care: the model can misread them, so invalid interpretations are rejected and all drafts require review.
+Natural-language interpretation uses the hackathon's **@kaleidorg/mind 0.11.1** (KaleidoMind) agent engine with **@qvac/sdk 0.21.1**, **QWEN3_5_4B_MULTIMODAL_Q4_K_M**, and the workspace's local Node 22.17 runtime. First use downloads about 2.7 GB of public model weights; subsequent inference stays local, with no model API key or cloud fallback. KaleidoMind selects review/clarification tools and validates or repairs their arguments. The LLM maps wording, direction, asset identities, quantities and units; there is no handwritten trade-verb grammar or language whitelist. Deterministic code converts amounts using asset precision and checks the verified catalog, balances and private policy before showing a draft.
+
+The available action is a fixed BTC/RGB swap order for direct or three-party matching. The assistant does not invent rates or quantities: `get some dusd for 100 sat` needs a minimum DUSD quantity, so it asks for clarification. Update the goal with that quantity and retry. Missing/ambiguous terms keep the review closed; manual entry remains a separate action with empty amount fields. The LLM has no publishing, signing, payment or invoice tools. Natural-language accuracy is bounded by the local model: review all amounts and constraints before confirming.
 
 Example goal: `Sell 100 X for at least 100 DUSD. Fee up to 1000 sats. Do not sell BTC.` The local order form displays **atomic units** (BTC in sats); X and test DUSD have precision 0 in the mock. DUSD is not USDT or a backed dollar.
 
