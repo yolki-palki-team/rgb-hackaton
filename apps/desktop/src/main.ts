@@ -14,7 +14,12 @@ import {
   shell,
   type IpcMainInvokeEvent,
 } from 'electron';
-import { parseOfferLink, validateTradeId, validateWalletRequest } from './security.ts';
+import {
+  parseOfferLink,
+  validateTradeId,
+  validateWalletRequest,
+  walletReadyForDesktop,
+} from './security.ts';
 import { loadDesktopConfig, type DesktopConfig } from './config.ts';
 import type { FundingStatus } from '../../local-client/src/funding-types.ts';
 
@@ -112,8 +117,8 @@ async function startSharedWallet(): Promise<void> {
           signal: AbortSignal.timeout(Math.min(60_000, Math.max(1, deadline - Date.now()))),
         });
         const body = await response.json();
-        if (response.ok && body.result?.mode === 'real' && body.result?.signing === true) {
-          console.log('palka. Wallet ready. Opening the desktop…');
+        if (response.ok && walletReadyForDesktop(body)) {
+          console.log('palka. Wallet service available. Opening the desktop…');
           return;
         }
       } catch {

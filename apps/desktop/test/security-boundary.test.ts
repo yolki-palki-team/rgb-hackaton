@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseOfferLink, validateTradeId, validateWalletRequest } from '../src/security.ts';
+import {
+  parseOfferLink,
+  validateTradeId,
+  validateWalletRequest,
+  walletReadyForDesktop,
+} from '../src/security.ts';
 
 const orderId = 'order-123e4567-e89b-42d3-a456-426614174000';
 const tradeId = '123e4567-e89b-42d3-a456-426614174000';
@@ -70,4 +75,31 @@ test('generic renderer bridge allows only named local operations, with signing i
   assert.equal(validateTradeId('trade-1?token=secret'), false);
   assert.equal(validateTradeId('.'), false);
   assert.equal(validateTradeId('..'), false);
+});
+
+test('desktop opens for an authenticated real wallet that needs reconciliation', () => {
+  const capabilities = {
+    protocolVersion: 1,
+    mode: 'real',
+    network: 'regtest',
+    directSwap: false,
+    ringSwap: false,
+    signing: false,
+    broadcast: false,
+    adapterVersion: 'rgb-cooperative-v1',
+    reason: 'Allocation index requires reconciliation',
+  };
+  assert.equal(walletReadyForDesktop({ protocolVersion: 1, result: capabilities }), true);
+  assert.equal(
+    walletReadyForDesktop({ protocolVersion: 1, result: { ...capabilities, mode: 'mock' } }),
+    false,
+  );
+  assert.equal(
+    walletReadyForDesktop({ protocolVersion: 1, result: { ...capabilities, network: 'mainnet' } }),
+    false,
+  );
+  assert.equal(
+    walletReadyForDesktop({ protocolVersion: 1, error: { code: 'WALLET_REJECTED' } }),
+    false,
+  );
 });

@@ -1,3 +1,6 @@
+import { WalletCapabilitiesSchema } from '@rgb-exchange/contracts';
+import { z } from 'zod';
+
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const orderId = new RegExp(`^order-${UUID}$`, 'i');
 const tradeId = new RegExp(`^${UUID}$`, 'i');
@@ -37,4 +40,14 @@ export function validateWalletRequest(method: unknown, path: unknown): boolean {
 
 export function validateTradeId(value: unknown): value is string {
   return typeof value === 'string' && tradeId.test(value);
+}
+
+export function walletReadyForDesktop(value: unknown): boolean {
+  const parsed = z
+    .object({ protocolVersion: z.literal(1), result: WalletCapabilitiesSchema })
+    .strict()
+    .safeParse(value);
+  return (
+    parsed.success && parsed.data.result.mode === 'real' && parsed.data.result.network === 'regtest'
+  );
 }
