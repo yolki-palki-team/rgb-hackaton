@@ -76,7 +76,9 @@ async function startSharedWallet(): Promise<void> {
   });
   // Drain diagnostics without passing private filesystem or credential data to the UI.
   walletSidecar.stderr?.on('data', () => {});
-  for (let attempt = 0; attempt < 180; attempt++) {
+  const deadline = Date.now() + 180_000;
+  console.log('palka. Connecting to the shared wallet and checking the indexer…');
+  while (Date.now() < deadline) {
     if (failed || walletSidecar.exitCode !== null)
       throw new Error(
         'Automatic wallet setup failed. Stop any manually started sidecar; check server network readiness. Existing wallets were preserved.',
@@ -96,10 +98,13 @@ async function startSharedWallet(): Promise<void> {
             method: 'capabilities',
             params: {},
           }),
-          signal: AbortSignal.timeout(3000),
+          signal: AbortSignal.timeout(Math.min(60_000, Math.max(1, deadline - Date.now()))),
         });
         const body = await response.json();
-        if (response.ok && body.result?.mode === 'real' && body.result?.signing === true) return;
+        if (response.ok && body.result?.mode === 'real' && body.result?.signing === true) {
+          console.log('palka. Wallet ready. Opening the desktop…');
+          return;
+        }
       } catch {
         /* Setup and indexing are still in progress. */
       }
