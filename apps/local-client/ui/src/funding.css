@@ -142,6 +142,7 @@
   font-size: 12px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .funding-actions {
   display: flex;
@@ -154,6 +155,11 @@
 .funding-message[role='alert'] {
   color: #e8b3b3;
 }
+@media (max-width: 800px) {
+  .funding-receive summary {
+    min-height: 44px;
+  }
+}
 @media (max-width: 440px) {
   .funding-section {
     margin-top: 28px;
@@ -163,5 +169,8 @@
   }
   .funding-review dl > div {
     grid-template-columns: minmax(90px, 1fr) minmax(0, 1.5fr);
+  }
+  .funding-actions .ui-button {
+    flex: 1 1 100%;
   }
 }

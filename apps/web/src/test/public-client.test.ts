@@ -1,8 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getPublicHealth, getPublicOrders, getPublicActivity } from '../api';
-import { formatAssetAmount, executionLabels, executionStep } from '../model';
-import type { AssetRef, PublicOrder } from '@rgb-exchange/contracts';
+import { getPublicHealth, getPublicOrders, getPublicActivity, getPublicHistory } from '../api';
+import {
+  formatAssetAmount,
+  executionLabels,
+  executionStep,
+  marketLoadFailed,
+  mergeHistory,
+  orderStatusLabel,
+} from '../model';
+import type {
+  AssetRef,
+  PublicOrder,
+  PublicMarketHistory,
+  PublicMarketOrder,
+} from '@rgb-exchange/contracts';
 
 const btc: AssetRef = { kind: 'btc', network: 'regtest', symbol: 'BTC', precision: 8 };
 const rgb: AssetRef = {
@@ -132,4 +144,117 @@ test('public activity keeps executing and completed orders after expiry, filters
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test('public history retains every terminal status and safely encodes the older-page cursor', async () => {
+  const original = globalThis.fetch;
+  const order: PublicOrder = {
+    id: 'saved-order',
+    ownerId: 'owner',
+    revision: 1,
+    network: 'regtest',
+    giveAsset: btc,
+    giveAmount: '100',
+    receiveAsset: rgb,
+    minReceiveAmount: '100',
+    maxFeeSats: '1000',
+    createdAt: 1,
+    expiresAt: 2,
+    status: 'CANCELLED',
+  };
+  const orders: PublicMarketOrder[] = [
+    { order, execution: { status: 'REJECTED', participants: 2 } },
+    { order: { ...order, id: 'cancelled' }, execution: null },
+    { order: { ...order, id: 'expired', status: 'EXPIRED' }, execution: null },
+    {
+      order: { ...order, id: 'confirmed', status: 'FILLED' },
+      execution: { status: 'CONFIRMED', participants: 3 },
+    },
+  ];
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, '/market-api/history?cursor=order%2Bolder%26private%3Dno');
+    assert.equal(init?.credentials, 'omit');
+    assert.equal(init?.headers, undefined);
+    return Response.json({ orders, nextCursor: 'expired' });
+  };
+  try {
+    const result = await getPublicHistory('order+older&private=no');
+    assert.deepEqual(result.orders.map(orderStatusLabel), [
+      'Declined',
+      'Cancelled',
+      'Expired',
+      'Completed',
+    ]);
+    assert.equal(result.orders.length, 4);
+    assert.equal(result.nextCursor, 'expired');
+    globalThis.fetch = async () =>
+      Response.json({ orders: [{ ...orders[0], reason: 'private' }], nextCursor: null });
+    await assert.rejects(getPublicHistory());
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('poll errors preserve loaded orders and history refresh updates rows without losing older failures', () => {
+  const order: PublicOrder = {
+    id: 'recent',
+    ownerId: 'owner',
+    revision: 1,
+    network: 'regtest',
+    giveAsset: btc,
+    giveAmount: '100',
+    receiveAsset: rgb,
+    minReceiveAmount: '100',
+    maxFeeSats: '1000',
+    createdAt: 2,
+    expiresAt: 3,
+    status: 'RESERVED',
+  };
+  const current: PublicMarketHistory = {
+    orders: [
+      { order, execution: { status: 'BROADCAST', participants: 2 } },
+      {
+        order: { ...order, id: 'old-failure', createdAt: 1, status: 'CANCELLED' },
+        execution: { status: 'REJECTED', participants: 3 },
+      },
+    ],
+    nextCursor: 'older-page',
+  };
+  const failed = marketLoadFailed(
+    { kind: 'ready', orders: current.orders, updatedAt: 123 },
+    'Offline',
+  );
+  assert.equal(failed.kind, 'error');
+  assert.strictEqual(failed.orders, current.orders);
+  assert.ok('updatedAt' in failed && failed.updatedAt === 123);
+  const updated = mergeHistory(
+    current,
+    {
+      orders: [
+        {
+          order: { ...order, status: 'FILLED' },
+          execution: { status: 'CONFIRMED', participants: 2 },
+        },
+      ],
+      nextCursor: 'recent',
+    },
+    false,
+  );
+  assert.deepEqual(updated.orders.map(orderStatusLabel), ['Completed', 'Declined']);
+  assert.equal(updated.nextCursor, 'older-page');
+  const older = mergeHistory(
+    updated,
+    {
+      orders: [
+        { order: { ...order, id: 'oldest', createdAt: 0, status: 'EXPIRED' }, execution: null },
+      ],
+      nextCursor: null,
+    },
+    true,
+  );
+  assert.deepEqual(
+    older.orders.map((entry) => entry.order.id),
+    ['recent', 'old-failure', 'oldest'],
+  );
+  assert.equal(older.nextCursor, null);
 });

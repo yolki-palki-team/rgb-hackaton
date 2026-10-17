@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   MarketSnapshotSchema,
+  MarketHistorySchema,
   OrderDraftSchema,
   PrivatePolicySchema,
   PublicOrderSchema,
@@ -28,7 +29,8 @@ export type ClientStatus = {
   network: string;
   mode: 'mock' | 'real';
   walletLabel: string;
-  wallet: WalletCapabilities;
+  wallet: WalletCapabilities | null;
+  walletError?: string;
   qvacAvailable: boolean;
   qvacReason?: string;
 };
@@ -57,22 +59,29 @@ declare global {
     palkaWallet?: DesktopBridge;
   }
 }
-type Snapshot = {
-  walletError?: string;
-  balances: Balance[];
+type ProgressSnapshot = {
   orders: Order[];
   myOrder: Order | null;
   trade: Trade | null;
-  policy: PrivatePolicy;
+};
+type WalletSnapshot = {
+  walletError?: string;
+  updatedAt: number | null;
+  balances: Balance[];
   policyAssets: { key: string; label: string }[];
 };
+type Snapshot = ProgressSnapshot & WalletSnapshot & { policy: PrivatePolicy };
 
 export class LocalClient {
   private readonly baseUrl: string;
   private readonly token: string;
   private readonly bridge: DesktopBridge | null;
   private status: ClientStatus | null = null;
+  private profileVersion = 0;
   private walletState: WalletState | null = null;
+  private lastWalletState: WalletState | null = null;
+  private walletUpdatedAt: number | null = null;
+  private walletRefresh: Promise<WalletSnapshot> | null = null;
   private marketSnapshot: MarketSnapshot | null = null;
   private policy: PrivatePolicy | null = null;
   private readonly receipts = new Map<string, Receipt>();
@@ -111,11 +120,15 @@ export class LocalClient {
     const health = this.bridge
       ? await this.bridge.connect()
       : await this.request<LocalHealth>('GET', '/api/health');
-    if (!health?.wallet) throw new Error(health?.blockedReason ?? 'Local wallet unavailable.');
     if (
+      !health ||
+      typeof health.ownerId !== 'string' ||
+      !health.ownerId.trim() ||
+      typeof health.network !== 'string' ||
+      !health.network ||
       !['mock', 'real'].includes(health.mode) ||
-      health.wallet.mode !== health.mode ||
-      health.wallet.network !== health.network
+      (health.wallet &&
+        (health.wallet.mode !== health.mode || health.wallet.network !== health.network))
     )
       throw new Error('Invalid local client response.');
     if (
@@ -123,14 +136,25 @@ export class LocalClient {
       (this.status.ownerId !== health.ownerId ||
         this.status.network !== health.network ||
         this.status.mode !== health.mode)
-    )
+    ) {
+      this.profileVersion++;
       this.receipts.clear();
+      this.walletState = null;
+      this.lastWalletState = null;
+      this.walletUpdatedAt = null;
+      this.marketSnapshot = null;
+      this.approval = null;
+    }
+    if (!health.wallet) this.walletState = null;
     this.status = {
       ownerId: health.ownerId,
       network: health.network,
       mode: health.mode,
       walletLabel: health.ownerId.slice(0, 10),
       wallet: health.wallet,
+      walletError: health.wallet
+        ? undefined
+        : (health.blockedReason ?? 'Local wallet unavailable.'),
       qvacAvailable: Boolean(health.qvac?.available),
       qvacReason: health.qvac?.reason,
     };
@@ -140,32 +164,70 @@ export class LocalClient {
   supportsTrade(trade: Trade) {
     return (
       this.status?.mode === 'real' &&
-      this.status.wallet.signing &&
+      this.status.wallet?.signing &&
       (trade.kind === 'ring' ? this.status.wallet.ringSwap : this.status.wallet.directSwap)
     );
   }
 
   async snapshot(): Promise<Snapshot> {
     if (!this.status) throw new Error('Pair the wallet first.');
-    const [stateResult, rawSnapshot, rawPolicy] = await Promise.all([
-      this.request<unknown>('GET', '/api/state').then(
-        (value) => ({ value, error: undefined }),
-        (error: unknown) => ({
-          value: undefined,
-          error: error instanceof Error ? error.message : 'Wallet balances unavailable',
-        }),
-      ),
-      this.request<unknown>('GET', '/api/snapshot'),
-      this.request<unknown>('GET', '/api/policy'),
+    const [progress, wallet, policy] = await Promise.all([
+      this.progressSnapshot(),
+      this.refreshWallet(),
+      this.request('GET', '/api/policy').then((value) => PrivatePolicySchema.parse(value)),
     ]);
-    const state = stateResult.error ? null : WalletStateSchema.parse(stateResult.value);
-    const market = MarketSnapshotSchema.parse(rawSnapshot);
-    const policy = PrivatePolicySchema.parse(rawPolicy);
-    if (state && (state.ownerId !== this.status.ownerId || state.network !== this.status.network))
-      throw new Error('Wallet response does not match the paired profile.');
-    this.walletState = state;
-    this.marketSnapshot = market;
     this.policy = policy;
+    return { ...progress, ...wallet, policy };
+  }
+
+  refreshWallet(): Promise<WalletSnapshot> {
+    if (this.walletRefresh) return this.walletRefresh;
+    // Cached balances remain visible, but only a successful refresh can supply draft assets.
+    this.walletState = null;
+    this.walletRefresh = (async () => {
+      let walletError: string | undefined;
+      try {
+        const profile = this.status;
+        const profileVersion = this.profileVersion;
+        if (!profile) throw new Error('Pair the wallet first.');
+        const state = WalletStateSchema.parse(await this.request('GET', '/api/state'));
+        if (
+          profileVersion !== this.profileVersion ||
+          state.ownerId !== profile.ownerId ||
+          state.network !== profile.network ||
+          state.mode !== profile.mode
+        )
+          throw new Error('Wallet response does not match the paired profile.');
+        this.walletState = state;
+        this.lastWalletState = state;
+        this.walletUpdatedAt = Date.now();
+      } catch (error) {
+        walletError = error instanceof Error ? error.message : 'Wallet balances unavailable';
+      }
+      return {
+        walletError,
+        updatedAt: this.walletUpdatedAt,
+        balances:
+          this.lastWalletState?.balances.map((balance) =>
+            mapBalance(balance.asset, balance.amount),
+          ) ?? [],
+        policyAssets:
+          this.lastWalletState?.balances.map((balance) => ({
+            key: assetKey(balance.asset),
+            label: balance.asset.symbol,
+          })) ?? [],
+      };
+    })().finally(() => {
+      this.walletRefresh = null;
+    });
+    return this.walletRefresh;
+  }
+
+  async progressSnapshot(): Promise<ProgressSnapshot> {
+    if (!this.status) throw new Error('Pair the wallet first.');
+    const rawSnapshot = await this.request<unknown>('GET', '/api/snapshot');
+    const market = MarketSnapshotSchema.parse(rawSnapshot);
+    this.marketSnapshot = market;
     const trade = market.trades[0]
       ? mapTrade(
           market.trades[0],
@@ -206,18 +268,17 @@ export class LocalClient {
       (order) => order.status === 'OPEN' || order.status === 'RESERVED',
     );
     return {
-      walletError: stateResult.error,
-      balances: state?.balances.map((balance) => mapBalance(balance.asset, balance.amount)) ?? [],
       orders: market.orders.map((order) => mapOrder(order)),
       myOrder: activeOrder ? mapOrder(activeOrder, true) : null,
       trade,
-      policy,
-      policyAssets:
-        state?.balances.map((balance) => ({
-          key: assetKey(balance.asset),
-          label: balance.asset.symbol,
-        })) ?? [],
     };
+  }
+
+  async history(cursor?: string) {
+    const path = `/api/history${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`;
+    return MarketHistorySchema.extend({ stale: z.boolean().optional() }).parse(
+      await this.request('GET', path),
+    );
   }
 
   async interpret(
@@ -344,13 +405,13 @@ export class LocalClient {
     if (!trade || !this.status) throw new Error('Trade plan not found.');
     if (
       this.status.mode !== 'real' ||
-      !this.status.wallet.signing ||
+      !this.status.wallet?.signing ||
       !(trade.plan.participants.length === 3
         ? this.status.wallet.ringSwap
         : this.status.wallet.directSwap)
     ) {
       throw new Error(
-        this.status.wallet.reason ?? 'This wallet does not support signing this trade type.',
+        this.status.wallet?.reason ?? 'This wallet does not support signing this trade type.',
       );
     }
     const result = await this.request<{ preview: unknown; approvalToken: string }>(
@@ -367,6 +428,13 @@ export class LocalClient {
     ) {
       throw new Error(preview.reasons.join('; ') || 'Package failed local wallet validation.');
     }
+    const latest = this.marketSnapshot?.trades.find((item) => item.plan.tradeId === tradeId);
+    if (
+      !latest ||
+      latest.plan.digest !== preview.planDigest ||
+      !['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING'].includes(latest.status)
+    )
+      throw new Error('Trade changed during validation. Refresh before approving.');
     const mapped = {
       give: formatAsset(preview.give.asset, preview.give.amount),
       receive: formatAsset(preview.receive.asset, preview.receive.amount),
@@ -433,6 +501,7 @@ export class LocalClient {
     const controller = new AbortController();
     const timeoutMs =
       path === '/api/interpret' ||
+      path === '/api/state' ||
       path.startsWith('/api/funding') ||
       /\/(prepare|preview|sync|approve)$/.test(path)
         ? 90_000
@@ -546,7 +615,9 @@ function mapTrade(
       ? 'The market reports completion. Verify the outcome with the local wallet.'
       : snapshot.reason,
     validatedPreview:
-      approval?.tradeId === plan.tradeId && approval.planDigest === plan.digest
+      approval?.tradeId === plan.tradeId &&
+      approval.planDigest === plan.digest &&
+      ['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING'].includes(snapshot.status)
         ? approval.preview
         : undefined,
   };

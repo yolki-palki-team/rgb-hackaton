@@ -2,8 +2,9 @@ import {
   PROTOCOL_VERSION,
   PublicOrderSchema,
   PublicMarketActivitySchema,
+  PublicMarketHistorySchema,
 } from '@rgb-exchange/contracts';
-import type { PublicOrder, PublicMarketOrder } from '@rgb-exchange/contracts';
+import type { PublicOrder, PublicMarketOrder, PublicMarketHistory } from '@rgb-exchange/contracts';
 import { z } from 'zod';
 
 const PublicOrdersResponse = z.object({ orders: z.array(PublicOrderSchema) }).strict();
@@ -16,7 +17,11 @@ const PublicHealthResponse = z
   .strict();
 
 async function getPublic(
-  path: '/market-api/orders' | '/market-api/health' | '/market-api/activity',
+  path:
+    | '/market-api/orders'
+    | '/market-api/health'
+    | '/market-api/activity'
+    | `/market-api/history${string}`,
 ): Promise<unknown> {
   const response = await fetch(path, {
     method: 'GET',
@@ -50,4 +55,9 @@ export async function getPublicActivity(): Promise<PublicMarketOrder[]> {
         execution !== null || (order.status === 'OPEN' && order.expiresAt > now),
     )
     .sort((a, b) => b.order.createdAt - a.order.createdAt);
+}
+
+export async function getPublicHistory(cursor?: string): Promise<PublicMarketHistory> {
+  const query = cursor ? `?${new URLSearchParams({ cursor })}` : '';
+  return PublicMarketHistorySchema.parse(await getPublic(`/market-api/history${query}`));
 }

@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FundingPanel } from './FundingPanel';
 import { AssetSelect } from './components/ui/asset-select';
 import { MatrixRain } from './components/ui/matrix-rain';
+import { MorphingSquare } from './components/ui/morphing-square';
+import { OrderHistory } from './components/OrderHistory';
 import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './model';
 import type { Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
-import { TradeWorkflow, tradeProgress } from './workflow';
+import { TradeWorkflow, nextTradeAction, tradeProgress } from './workflow';
 import type { PrivatePolicy } from '@rgb-exchange/contracts';
 
 const goalExamples = [
@@ -35,6 +37,10 @@ function App() {
   const [sampleTradeKind, setSampleTradeKind] = useState<'direct' | 'ring'>('ring');
   const [samplePreview, setSamplePreview] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [walletUpdatedAt, setWalletUpdatedAt] = useState<number | null>(null);
+  const [walletRefreshing, setWalletRefreshing] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(false);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const desktopConnectStarted = useRef(false);
   const [goal, setGoal] = useState('');
@@ -47,15 +53,31 @@ function App() {
   const workflow = useRef(new TradeWorkflow());
   const foregroundBusy = useRef(busy);
   foregroundBusy.current = busy;
+  const currentView = useRef(view);
+  currentView.current = view;
   const [workflowRunning, setWorkflowRunning] = useState(false);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [workflowPaused, setWorkflowPaused] = useState(false);
   const connected = Boolean(client && status);
   const desktop = Boolean(window.palkaWallet);
   const isMock = status?.mode === 'mock';
-  const ready = connected && !syncError && balances.length > 0;
+  const ready =
+    connected &&
+    Boolean(status?.wallet) &&
+    !syncError &&
+    !walletError &&
+    !walletRefreshing &&
+    balances.length > 0;
+  const connectionError = syncError ?? status?.walletError ?? walletError;
   const visibleBalances = connected ? balances : samplePreview ? sampleBalances : [];
   const visibleOrders = connected ? orders : samplePreview ? sampleOrders : [];
+  const loadHistory = useCallback(
+    (cursor?: string) => {
+      if (!client) throw new Error('Pair the wallet first.');
+      return client.history(cursor);
+    },
+    [client],
+  );
 
   useEffect(() => {
     if (!draftOpen) return;
@@ -108,16 +130,24 @@ function App() {
       setConnectionOpen(false);
       setSamplePreview(false);
       setSyncError(null);
+      setWalletError(null);
+      setWalletUpdatedAt(null);
+      setWalletRefreshing(false);
       setBalances([]);
       setOrders([]);
       setMyOrder(null);
       setTrade(null);
       setPolicyAssets([]);
       workflow.current = new TradeWorkflow();
+      setWorkflowRunning(false);
+      setWorkflowError(null);
+      setWorkflowPaused(false);
       setPairToken('');
       setNotice({
         tone: 'success',
-        text: `Welcome back. Your ${health.network} wallet is connected.`,
+        text: health.wallet
+          ? `Welcome back. Your ${health.network} wallet is connected.`
+          : 'Local profile connected. Order history is available while the wallet reconnects.',
       });
     } catch (error) {
       setNotice({ tone: 'error', text: `Could not connect: ${messageOf(error)}` });
@@ -128,20 +158,90 @@ function App() {
 
   useEffect(() => {
     if (!client) return;
+    setMarketLoading(true);
     let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    let healthChecked = 0;
-    const refresh = async () => {
+    let progressTimer: ReturnType<typeof setTimeout>;
+    let walletTimer: ReturnType<typeof setTimeout>;
+    let healthChecked = Date.now();
+    let marketLoaded = false;
+    let latestTrade: Trade | null = null;
+    const currentWorkflow = workflow.current;
+    const refreshProgress = async () => {
       try {
-        if (foregroundBusy.current) return;
-        const data = await client.snapshot();
-        if (!active || foregroundBusy.current) return;
-        setBalances(data.balances);
+        const data = await client.progressSnapshot();
+        if (!active) return;
+        marketLoaded = true;
+        latestTrade = data.trade;
         setOrders(data.orders);
         setMyOrder(data.myOrder);
-        setTrade(data.trade);
+        setTrade(
+          data.trade && foregroundBusy.current === 'approve'
+            ? { ...data.trade, validatedPreview: undefined }
+            : data.trade,
+        );
+        setSyncError(null);
+        if (
+          data.trade &&
+          !foregroundBusy.current &&
+          !currentWorkflow.running &&
+          client.supportsTrade(data.trade)
+        ) {
+          setWorkflowRunning(true);
+          // Status reads continue while the wallet prepares or reconciles a trade.
+          void currentWorkflow.advance(client, data.trade).then((checked) => {
+            if (!active) return;
+            if (checked && !foregroundBusy.current)
+              setTrade((current) =>
+                current && current.id === data.trade?.id && nextTradeAction(current) === 'preview'
+                  ? { ...current, validatedPreview: checked }
+                  : current,
+              );
+            setWorkflowError(currentWorkflow.error);
+            setWorkflowPaused(currentWorkflow.paused);
+            setWorkflowRunning(false);
+          });
+        }
+      } catch (error) {
+        if (active) setSyncError(messageOf(error));
+      } finally {
+        if (active) {
+          setMarketLoading(false);
+          progressTimer = setTimeout(() => void refreshProgress(), 3000);
+        }
+      }
+    };
+    const refreshBalances = async () => {
+      let delay = 3000;
+      try {
+        if (
+          !marketLoaded ||
+          foregroundBusy.current ||
+          currentWorkflow.running ||
+          currentView.current === 'topup'
+        )
+          return;
+        if (Date.now() - healthChecked >= 30_000) {
+          const health = await client.connect();
+          if (!active) return;
+          setStatus(health);
+          healthChecked = Date.now();
+        }
+        if (
+          latestTrade &&
+          !['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
+            latestTrade.status,
+          )
+        )
+          return;
+        if (foregroundBusy.current || currentWorkflow.running) return;
+        delay = 30_000;
+        setWalletRefreshing(true);
+        const data = await client.refreshWallet();
+        if (!active) return;
+        setBalances(data.balances);
         setPolicyAssets(data.policyAssets);
-        setSyncError(data.walletError ?? null);
+        setWalletError(data.walletError ?? null);
+        setWalletUpdatedAt(data.updatedAt);
         const codes = data.balances.map((balance) => balance.code);
         if (codes.length >= 2)
           setDraft((current) =>
@@ -149,47 +249,21 @@ function App() {
               ? current
               : { ...current, giveAsset: codes[0], receiveAsset: codes[1] },
           );
-        if (
-          (!data.trade ||
-            ['CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
-              data.trade.status,
-            )) &&
-          Date.now() - healthChecked > 30_000
-        ) {
-          const health = await client.connect();
-          if (!active) return;
-          setStatus(health);
-          healthChecked = Date.now();
-        }
-        if (data.trade && !foregroundBusy.current && client.supportsTrade(data.trade)) {
-          // Recovery must continue even while the RGB balance index is catching up.
-          setWorkflowRunning(true);
-          const checked = await workflow.current.advance(client, data.trade);
-          if (!active) return;
-          if (checked)
-            setTrade((current) =>
-              current && current.id === data.trade?.id
-                ? { ...current, validatedPreview: checked }
-                : current,
-            );
-          setWorkflowError(workflow.current.error);
-          setWorkflowPaused(workflow.current.paused);
-        }
       } catch (error) {
-        // Retain the last view but disable actions until fresh wallet data arrives.
-        if (active) setSyncError(messageOf(error));
+        if (active) setWalletError(messageOf(error));
       } finally {
         if (active) {
-          setWorkflowRunning(false);
-          // Schedule from completion: native wallet calls must never overlap.
-          timer = setTimeout(() => void refresh(), 3000);
+          setWalletRefreshing(false);
+          walletTimer = setTimeout(() => void refreshBalances(), delay);
         }
       }
     };
-    void refresh();
+    void refreshProgress();
+    void refreshBalances();
     return () => {
       active = false;
-      clearTimeout(timer);
+      clearTimeout(progressTimer);
+      clearTimeout(walletTimer);
     };
   }, [client]);
 
@@ -232,6 +306,12 @@ function App() {
     setPolicyAssets([]);
     workflow.current = new TradeWorkflow();
     setSyncError(null);
+    setWalletError(null);
+    setWalletUpdatedAt(null);
+    setWalletRefreshing(false);
+    setWorkflowRunning(false);
+    setWorkflowError(null);
+    setWorkflowPaused(false);
     setNotice({ tone: 'info', text: 'Local wallet disconnected.' });
   };
 
@@ -402,53 +482,65 @@ function App() {
           </nav>
         </header>
         <main className="content">
-          <div className={`mode-banner ${connected && !isMock ? 'real' : 'mock'}`} role="status">
-            <Icon name="info" size={17} />
-            <div>
-              <strong>
-                {!connected
-                  ? samplePreview
-                    ? 'Sample preview · disconnected'
-                    : 'Local wallet unavailable'
-                  : syncError
-                    ? 'Reconnecting to your wallet'
-                    : isMock
-                      ? 'Mock wallet connected'
-                      : 'Real local wallet connected'}
-              </strong>
-              <span>
-                {!connected
-                  ? samplePreview
-                    ? 'Synthetic balances and plans are shown for UI preview only. Trading and signing are unavailable.'
-                    : 'Pair the local wallet to load balances, network, orders, and QVAC status.'
-                  : syncError
-                    ? 'We’re refreshing your wallet data. New orders and signatures will be available once the connection is restored.'
-                    : isMock
-                      ? 'Demo wallet: matching works, BTC/RGB signing and broadcast are unsupported.'
-                      : 'Your keys stay on this device. You decide when to sign.'}
-              </span>
-              {syncError && (
-                <details className="technical-details">
-                  <summary>Connection details</summary>
-                  <p>{syncError}</p>
-                </details>
+          {(!connected || isMock || connectionError || busy === 'connect') && (
+            <div className={`mode-banner ${connected && !isMock ? 'real' : 'mock'}`} role="status">
+              {busy === 'connect' && (
+                <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
+              )}
+              <div>
+                <strong>
+                  {busy === 'connect'
+                    ? 'Connecting…'
+                    : !connected
+                      ? samplePreview
+                        ? 'Sample preview · disconnected'
+                        : 'Local wallet unavailable'
+                      : connectionError
+                        ? syncError
+                          ? 'Refreshing market progress'
+                          : 'Wallet balances unavailable'
+                        : 'Mock wallet connected'}
+                </strong>
+                {busy !== 'connect' && (
+                  <span>
+                    {!connected
+                      ? samplePreview
+                        ? 'Synthetic balances and plans are shown for UI preview only. Trading and signing are unavailable.'
+                        : 'Pair the local wallet to load balances, network, orders, and QVAC status.'
+                      : connectionError
+                        ? syncError
+                          ? 'The last known orders and swap status are shown while the market reconnects.'
+                          : 'Order history and swap progress remain available. Cached balances cannot validate a new order; your wallet rechecks every signature.'
+                        : 'Demo wallet: matching works, BTC/RGB signing and broadcast are unsupported.'}
+                  </span>
+                )}
+                {connectionError && (
+                  <details className="technical-details">
+                    <summary>Connection details</summary>
+                    <p>{connectionError}</p>
+                  </details>
+                )}
+              </div>
+              {!connected && busy !== 'connect' && (
+                <Button
+                  className="text-button"
+                  type="button"
+                  onClick={() => setConnectionOpen(true)}
+                >
+                  {desktop ? 'Reconnect' : 'Connect wallet'}
+                </Button>
+              )}
+              {!connected && busy !== 'connect' && (
+                <Button
+                  className="text-button sample-action"
+                  type="button"
+                  onClick={() => setSamplePreview((current) => !current)}
+                >
+                  {samplePreview ? 'Exit sample preview' : 'Preview sample data'}
+                </Button>
               )}
             </div>
-            {!connected && (
-              <Button className="text-button" type="button" onClick={() => setConnectionOpen(true)}>
-                {desktop ? 'Reconnect' : 'Connect wallet'}
-              </Button>
-            )}
-            {!connected && (
-              <Button
-                className="text-button sample-action"
-                type="button"
-                onClick={() => setSamplePreview((current) => !current)}
-              >
-                {samplePreview ? 'Exit sample preview' : 'Preview sample data'}
-              </Button>
-            )}
-          </div>
+          )}
           {notice && (
             <div className={`notice ${notice.tone}`} role="alert">
               <span>{notice.text}</span>
@@ -460,7 +552,9 @@ function App() {
 
           {trade &&
             view !== 'trade' &&
-            !['CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(trade.status) && (
+            !['REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
+              trade.status,
+            ) && (
               <button className="trade-notification" onClick={() => setView('trade')}>
                 <span>
                   <strong>{tradeProgress(trade, busy === 'approve').title}</strong>
@@ -468,7 +562,14 @@ function App() {
                     {trade.kind === 'ring' ? 'Three-party ring' : 'Direct swap'} · View your swap
                   </small>
                 </span>
-                <Icon name="arrow" size={20} />
+                {tradeProgress(trade, busy === 'approve').waiting &&
+                !workflowPaused &&
+                !syncError &&
+                client?.supportsTrade(trade) ? (
+                  <MorphingSquare className="h-5 w-5 bg-current" aria-hidden="true" />
+                ) : (
+                  <Icon name="arrow" size={20} />
+                )}
               </button>
             )}
           {view === 'home' && (
@@ -576,6 +677,11 @@ function App() {
                             </div>
                           </article>
                         ))
+                      ) : connected && marketLoading ? (
+                        <MorphingSquare
+                          message="Loading orders…"
+                          wrapperClassName="empty-state py-8"
+                        />
                       ) : (
                         <p className="empty-state">
                           {connected
@@ -607,9 +713,13 @@ function App() {
                           type="button"
                           className="outline-button"
                           onClick={() => void cancelOrder()}
-                          disabled={busy !== null || !ready}
+                          disabled={busy !== null || !connected || Boolean(syncError)}
+                          aria-busy={busy === 'cancel'}
                         >
-                          Cancel order
+                          {busy === 'cancel' && (
+                            <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
+                          )}
+                          {busy === 'cancel' ? 'Canceling order…' : 'Cancel order'}
                         </Button>
                       ) : (
                         <Button
@@ -630,9 +740,25 @@ function App() {
                         <span className="eyebrow">YOUR WALLET</span>
                         <h2 id="balance-heading">Your assets</h2>
                       </div>
-                      <span className="section-note">
-                        {connected ? 'Local' : samplePreview ? 'Synthetic preview' : 'Unavailable'}
-                      </span>
+                      <div className="section-note">
+                        {connected ? (
+                          walletRefreshing ? (
+                            <MorphingSquare
+                              message="Refreshing…"
+                              messagePlacement="right"
+                              className="h-3 w-3 bg-current"
+                            />
+                          ) : walletError ? (
+                            'Cached'
+                          ) : (
+                            'Last checked'
+                          )
+                        ) : samplePreview ? (
+                          'Synthetic preview'
+                        ) : (
+                          'Unavailable'
+                        )}
+                      </div>
                     </div>
                     {visibleBalances.length ? (
                       <ul className="asset-list" aria-label="Wallet balances">
@@ -640,25 +766,50 @@ function App() {
                           <AssetRow key={balance.code} balance={balance} />
                         ))}
                       </ul>
+                    ) : connected && walletRefreshing ? (
+                      <MorphingSquare
+                        message="Loading your assets…"
+                        wrapperClassName="empty-state py-8"
+                      />
                     ) : (
                       <p className="empty-state" role="status">
                         {connected
-                          ? syncError
+                          ? walletError || status?.walletError
                             ? 'Wallet balances are unavailable. Check the local backend.'
-                            : 'Loading your assets…'
+                            : trade &&
+                                ![
+                                  'CONFIRMED',
+                                  'REJECTED',
+                                  'CANCELLED',
+                                  'EXPIRED',
+                                  'FAILED',
+                                  'UNSUPPORTED',
+                                ].includes(trade.status)
+                              ? 'Balances refresh after the active swap. Progress and signing checks remain available.'
+                              : walletUpdatedAt
+                                ? 'No assets found in this wallet.'
+                                : 'Waiting for the next balance check.'
                           : 'No wallet connected. Pair the local backend to load balances.'}
                       </p>
                     )}
+                    {walletUpdatedAt && (
+                      <p className="asset-disclaimer" role="status">
+                        Updated{' '}
+                        <time dateTime={new Date(walletUpdatedAt).toISOString()}>
+                          {new Date(walletUpdatedAt).toLocaleTimeString()}
+                        </time>
+                        {walletError && ' · Refresh failed; showing saved balances.'}
+                      </p>
+                    )}
                   </Panel>
-                  {visibleBalances.some((balance) => balance.code === 'DUSD') && (
-                    <p className="asset-disclaimer">
-                      DUSD: regtest asset, not dollar-backed or USDT.
-                    </p>
-                  )}
                 </section>
               </div>
             </>
           )}
+
+          <div hidden={view !== 'home'}>
+            {connected && status && <OrderHistory key={status.ownerId} loadPage={loadHistory} />}
+          </div>
 
           {/* Keep funding state mounted so switching tabs cannot reset an approval attempt. */}
           <div hidden={view !== 'topup'}>
@@ -688,12 +839,12 @@ function App() {
               )}
               {trade &&
                 status &&
-                !(trade.kind === 'ring' ? status.wallet.ringSwap : status.wallet.directSwap) && (
+                !(trade.kind === 'ring' ? status.wallet?.ringSwap : status.wallet?.directSwap) && (
                   <div className="capability-warning" role="status">
-                    <Icon name="info" size={17} />
                     <span>
                       {trade.kind === 'ring' ? 'Three-party atomic swap' : 'Direct atomic swap'} is
-                      not supported by this wallet. {status.wallet.reason ?? 'Signing unavailable.'}
+                      not supported by this wallet.{' '}
+                      {status.wallet?.reason ?? status.walletError ?? 'Signing unavailable.'}
                     </span>
                   </div>
                 )}
@@ -706,14 +857,19 @@ function App() {
                     : 'No wallet connected. Pair the local backend to view trades.'}
                 </div>
               )}
-              {trade && client?.supportsTrade(trade) && (
+              {trade && connected && (
                 <section className="swap-progress" aria-label="Swap progress" aria-live="polite">
                   <div className="progress-heading">
-                    {tradeProgress(trade, busy === 'approve').waiting && !workflowPaused ? (
-                      <span className="spinner" aria-hidden="true" />
-                    ) : (
-                      <Icon name="shield" size={24} />
-                    )}
+                    {tradeProgress(trade, busy === 'approve').waiting &&
+                      !workflowPaused &&
+                      !syncError &&
+                      client?.supportsTrade(trade) && (
+                        <MorphingSquare
+                          className="h-6 w-6"
+                          wrapperClassName="mt-1 shrink-0"
+                          aria-hidden="true"
+                        />
+                      )}
                     <div>
                       <h2>
                         {workflowPaused
@@ -854,12 +1010,7 @@ function App() {
                         <strong>{shownTrade.feeSats} sats</strong>
                       </div>
                     </div>
-                    {shownTrade.reason && (
-                      <div className="reason">
-                        <Icon name="info" size={16} />
-                        {shownTrade.reason}
-                      </div>
-                    )}
+                    {shownTrade.reason && <div className="reason">{shownTrade.reason}</div>}
                   </Panel>
                   <aside className="market-side">
                     <Panel className="panel approval-panel">
@@ -896,17 +1047,23 @@ function App() {
                             className="primary-button full"
                             type="button"
                             onClick={() => void approve()}
-                            disabled={busy !== null || workflowRunning || !ready || isMock}
+                            disabled={
+                              busy !== null ||
+                              workflowRunning ||
+                              Boolean(syncError) ||
+                              !client?.supportsTrade(trade)
+                            }
                           >
                             {busy === 'approve' ? 'Waiting for approval…' : 'Review & sign'}{' '}
-                            <Icon name="arrow" size={16} />
+                            {busy === 'approve' ? (
+                              <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
+                            ) : (
+                              <Icon name="arrow" size={16} />
+                            )}
                           </Button>
                         </>
                       ) : (
                         <>
-                          <div className="approval-lock">
-                            <Icon name="shield" size={26} />
-                          </div>
                           <p>
                             {trade
                               ? tradeProgress(trade, busy === 'approve').detail
@@ -927,8 +1084,12 @@ function App() {
                             type="button"
                             onClick={() => void reject()}
                             disabled={busy !== null || workflowRunning}
+                            aria-busy={busy === 'reject'}
                           >
-                            Cancel swap
+                            {busy === 'reject' && (
+                              <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
+                            )}
+                            {busy === 'reject' ? 'Canceling swap…' : 'Cancel swap'}
                           </Button>
                         )}
                       <div className="approval-foot">
@@ -967,9 +1128,6 @@ function App() {
             aria-labelledby="connection-title"
           >
             <div className="modal-head">
-              <div className="modal-icon">
-                <Icon name="wallet" size={21} />
-              </div>
               <Button type="button" onClick={() => setConnectionOpen(false)} aria-label="Close">
                 <Icon name="close" size={18} />
               </Button>
@@ -1018,9 +1176,14 @@ function App() {
                 className="primary-button"
                 onClick={() => void connect()}
                 disabled={busy !== null || (!desktop && !pairToken.trim())}
+                aria-busy={busy === 'connect'}
               >
                 {busy === 'connect' ? 'Connecting…' : desktop ? 'Reconnect' : 'Pair wallet'}{' '}
-                <Icon name="arrow" size={16} />
+                {busy === 'connect' ? (
+                  <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
+                ) : (
+                  <Icon name="arrow" size={16} />
+                )}
               </Button>
             </div>
           </Panel>
@@ -1115,7 +1278,6 @@ function App() {
               </div>
             </div>
             <div className="draft-note">
-              <Icon name="shield" size={17} />
               {ready
                 ? 'Amounts and fees are checked locally. Signing requires your approval.'
                 : 'Connect your wallet to check limits and publish.'}
@@ -1126,9 +1288,14 @@ function App() {
                 type="button"
                 onClick={() => void publish()}
                 disabled={!ready || busy !== null}
+                aria-busy={busy === 'publish'}
               >
                 {busy === 'publish' ? 'Checking & publishing…' : 'Publish order'}{' '}
-                <Icon name="arrow" size={16} />
+                {busy === 'publish' ? (
+                  <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
+                ) : (
+                  <Icon name="arrow" size={16} />
+                )}
               </Button>
             </div>
           </Panel>

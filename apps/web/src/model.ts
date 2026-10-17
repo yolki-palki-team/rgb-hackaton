@@ -1,9 +1,47 @@
-import type { AssetRef, PublicMarketOrder, TradeStatus } from '@rgb-exchange/contracts';
+import type {
+  AssetRef,
+  PublicMarketHistory,
+  PublicMarketOrder,
+  TradeStatus,
+} from '@rgb-exchange/contracts';
 
 export type MarketState =
   | { kind: 'loading'; orders: PublicMarketOrder[] }
   | { kind: 'ready'; orders: PublicMarketOrder[]; updatedAt: number }
-  | { kind: 'error'; orders: PublicMarketOrder[]; message: string };
+  | { kind: 'error'; orders: PublicMarketOrder[]; updatedAt?: number; message: string };
+
+export function marketLoadFailed(current: MarketState, message: string): MarketState {
+  return { ...current, kind: 'error', message };
+}
+
+export function mergeHistory(
+  current: PublicMarketHistory,
+  page: PublicMarketHistory,
+  older: boolean,
+): PublicMarketHistory {
+  const orders = new Map(current.orders.map((entry) => [entry.order.id, entry]));
+  for (const entry of page.orders) {
+    if ((orders.get(entry.order.id)?.order.revision ?? -1) <= entry.order.revision)
+      orders.set(entry.order.id, entry);
+  }
+  return {
+    orders: [...orders.values()].sort(
+      (a, b) => b.order.createdAt - a.order.createdAt || b.order.id.localeCompare(a.order.id),
+    ),
+    nextCursor: older || current.orders.length === 0 ? page.nextCursor : current.nextCursor,
+  };
+}
+
+export function orderStatusLabel(entry: PublicMarketOrder): string {
+  if (entry.execution) return executionLabels[entry.execution.status];
+  return {
+    OPEN: 'Waiting',
+    RESERVED: 'Matched',
+    FILLED: 'Filled',
+    CANCELLED: 'Cancelled',
+    EXPIRED: 'Expired',
+  }[entry.order.status];
+}
 
 export function formatAssetAmount(asset: AssetRef, atomic: string): string {
   const precision = asset.precision;
