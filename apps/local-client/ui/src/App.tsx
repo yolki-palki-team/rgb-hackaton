@@ -372,16 +372,18 @@ function App() {
 
   return (
     <div className="app-shell">
-      <MatrixRain
-        className="wallet-rain"
-        background="#080808"
-        color="#b5b5b5"
-        highlight="#eeeeee"
-        density={0.55}
-        fontSize={18}
-        glow={1}
-        speed={0.65}
-      />
+      {!desktop && (
+        <MatrixRain
+          className="wallet-rain"
+          background="#080808"
+          color="#b5b5b5"
+          highlight="#eeeeee"
+          density={0.55}
+          fontSize={18}
+          glow={1}
+          speed={0.65}
+        />
+      )}
       <div className="main-area">
         <header className="topbar">
           <button className="site-brand" onClick={() => setView('home')} aria-label="pálka. home">
