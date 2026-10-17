@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   WalletCapabilitiesSchema,
   WalletStateSchema,
+  FundingTargetSchema,
   WalletPreviewSchema,
   PrepareResultSchema,
   SignatureResultSchema,
@@ -81,6 +82,9 @@ export class HttpWalletAdapter implements WalletAdapter {
   }
   async state() {
     return WalletStateSchema.parse(await this.call('state', {}));
+  }
+  async fundingTarget() {
+    return FundingTargetSchema.parse(await this.call('fundingTarget', {}));
   }
   async reserve(plan: TradePlan) {
     return z

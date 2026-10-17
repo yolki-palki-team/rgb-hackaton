@@ -117,6 +117,16 @@ export const WalletStateSchema = z
     'Invalid or duplicate wallet assets',
   );
 export type WalletState = z.infer<typeof WalletStateSchema>;
+/** A vanilla BTC receive address owned by the local RGB wallet on regtest. */
+export const FundingTargetSchema = z
+  .object({
+    walletId: IdSchema,
+    ownerId: IdSchema,
+    network: z.literal('regtest'),
+    address: z.string().regex(/^bcrt1[ac-hj-np-z02-9]{8,87}$/),
+  })
+  .strict();
+export type FundingTarget = z.infer<typeof FundingTargetSchema>;
 export const WalletCapabilitiesSchema = z
   .object({
     protocolVersion: z.literal(1),
@@ -367,6 +377,8 @@ export type Receipt = z.infer<typeof ReceiptSchema>;
 export interface WalletAdapter {
   capabilities(): Promise<WalletCapabilities>;
   state(): Promise<WalletState>;
+  /** Returns only a local wallet-owned vanilla BTC receive address. */
+  fundingTarget?(): Promise<FundingTarget>;
   reserve(plan: TradePlan): Promise<{ reservationId: string }>;
   release(tradeId: string): Promise<void>;
   prepare(

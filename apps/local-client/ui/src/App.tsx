@@ -13,20 +13,7 @@ import {
   StatusBadge,
 } from './components/ui/wallet-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AssetCard,
-  AssetIcon,
-  Button,
-  DataTable,
-  Icon,
-  Input,
-  Panel,
-  Select,
-  Textarea,
-  SectionTitle,
-  Sidebar,
-  StatusBadge,
-} from './components/ui/wallet-kit';
+import { FundingPanel } from './FundingPanel';
 import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './model';
 import type { AssetCode, Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
@@ -535,10 +522,11 @@ function App() {
                   </p>
                 )}
               </section>
+              <FundingPanel client={client} wallet={status} />
               <section className="goal-section" aria-labelledby="goal-heading">
                 <SectionTitle
                   id="goal-heading"
-                  kicker="02 / NEW ORDER"
+                  kicker="03 / NEW ORDER"
                   title="What would you like to swap?"
                 />
                 <Panel className="goal-card">
