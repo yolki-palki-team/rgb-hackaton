@@ -46,6 +46,7 @@ export class UnavailableWalletAdapter implements WalletAdapter {
 }
 export class HttpWalletAdapter implements WalletAdapter {
   private readonly url: URL;
+  private readonly pendingReads = new Map<string, Promise<unknown>>();
   constructor(
     url: string,
     private readonly token: string,
@@ -53,7 +54,19 @@ export class HttpWalletAdapter implements WalletAdapter {
     this.url = requireLoopback(url);
     if (token.length < 16) throw new Error('WALLET_RPC_TOKEN must contain at least 16 characters');
   }
-  private async call(method: string, params: object): Promise<unknown> {
+  private call(method: string, params: object): Promise<unknown> {
+    // Share concurrent reads only; never cache results or coalesce mutations.
+    if (!['state', 'capabilities', 'fundingTarget'].includes(method))
+      return this.performCall(method, params);
+    const pending = this.pendingReads.get(method);
+    if (pending) return pending;
+    const request = this.performCall(method, params).finally(() => {
+      this.pendingReads.delete(method);
+    });
+    this.pendingReads.set(method, request);
+    return request;
+  }
+  private async performCall(method: string, params: object): Promise<unknown> {
     const response = await fetch(new URL('/rpc', this.url), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` },

@@ -199,13 +199,8 @@ async function requestLocal(
     },
     body: payload,
     redirect: 'error',
-    signal: AbortSignal.timeout(
-      path === '/api/interpret' ||
-        path.startsWith('/api/funding') ||
-        /\/(prepare|preview|sync|approve)$/.test(path)
-        ? 90_000
-        : 15_000,
-    ),
+    // The local adapter can spend up to 60 seconds checking the shared chain.
+    signal: AbortSignal.timeout(90_000),
   }).catch(() => {
     throw new Error('Local wallet service is unavailable');
   });
@@ -222,12 +217,11 @@ async function requestLocal(
   }
   return result;
 }
-async function waitForBackend(): Promise<void> {
+async function waitForBackend(): Promise<unknown> {
   for (let attempt = 0; attempt < 40; attempt++) {
     if (!backend || backend.exitCode !== null) break;
     try {
-      await requestLocal('GET', '/api/health');
-      return;
+      return await requestLocal('GET', '/api/health');
     } catch {
       await delay(150);
     }
@@ -415,8 +409,7 @@ else {
     });
   ipcMain.handle('wallet:connect', async (event) => {
     validatedSender(event);
-    await waitForBackend();
-    return requestLocal('GET', '/api/health');
+    return waitForBackend();
   });
   ipcMain.handle(
     'wallet:request',

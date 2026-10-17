@@ -81,6 +81,11 @@ test('wallet HTTP boundary validates protocol, authenticates, and never retries 
   );
   try {
     assert.equal((await adapter.capabilities()).mode, 'mock');
+    const beforeReads = calls;
+    await Promise.all([adapter.capabilities(), adapter.capabilities(), adapter.capabilities()]);
+    assert.equal(calls, beforeReads + 1, 'concurrent reads share one sidecar request');
+    await adapter.capabilities();
+    assert.equal(calls, beforeReads + 2, 'completed reads are not cached');
     wrongVersion = true;
     await assert.rejects(adapter.capabilities());
     wrongVersion = false;
