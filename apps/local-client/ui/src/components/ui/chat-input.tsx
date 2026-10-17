@@ -51,7 +51,7 @@ export function ChatInputTextArea({
     const tick = () => {
       length += deleting ? -1 : 1;
       setExample(examples[index].slice(0, length));
-      let delay = deleting ? 25 : 55;
+      let delay = deleting ? 20 : 44;
       if (length === 0) {
         index = (index + 1) % examples.length;
         deleting = false;
