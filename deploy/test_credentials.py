@@ -23,8 +23,14 @@ class CredentialTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((self.state / "market.env").stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(self.state.stat().st_mode), 0o700)
 
-    def test_rejects_empty_and_invalid_id_before_creating_state(self):
-        for owners in ([], ["ok", "bad\nID"], ["space here"], ["x" * 201]):
+    def test_empty_setup_allows_automatic_registration_without_default_users(self):
+        self.assertEqual(provision(self.state, []), {})
+        self.assertEqual(load_tokens(self.state / "market.env"), {})
+        existing = provision(self.state, ["legacy-owner"])
+        self.assertEqual(provision(self.state, []), existing)
+
+    def test_rejects_invalid_id_before_creating_state(self):
+        for owners in (["ok", "bad\nID"], ["space here"], ["x" * 201]):
             with self.assertRaises(ValueError):
                 provision(self.state, owners)
         self.assertFalse(self.state.exists())

@@ -15,6 +15,7 @@ services:
       MARKET_HOST: '0.0.0.0'
       MARKET_PORT: '4100'
       MARKET_DB_PATH: /app/.state/market.sqlite
+      MARKET_SELF_REGISTRATION: '${PALKA_SELF_REGISTRATION:-true}'
     ports:
       - '127.0.0.1:44100:4100'
     volumes:

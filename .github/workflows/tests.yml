@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Create ephemeral test credentials
-        run: bash deploy/server.sh init ci-participant
+        run: bash deploy/server.sh init
       - name: Build and start server profile
         run: bash deploy/server.sh up
       - name: Check public web and coordinator

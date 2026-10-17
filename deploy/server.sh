@@ -7,7 +7,7 @@ compose=(docker compose --project-name palka-demo --project-directory "$deploy_d
 usage() {
   cat <<'HELP'
 Usage: bash deploy/server.sh COMMAND [OWNER_ID ...]
-  init OWNER_ID ...   Add participants; preserve existing identities and tokens
+  init [OWNER_ID ...] Prepare automatic registration; optionally add legacy users
   user OWNER_ID      Print this participant's private desktop credentials
   up                 Build sequentially and start web + market
   start              Start/reconcile existing images (also applies added users)
@@ -35,8 +35,10 @@ if (($#)); then
   exit 1
 fi
 if [[ ! -f "$deploy_dir/.state/market.env" ]]; then
-  echo 'Run init with your participant IDs first; no default users are created.' >&2
-  exit 1
+  case "$action" in
+    up|start) python3 "$deploy_dir/credentials.py" init ;;
+    *) echo 'Run init or up first.' >&2; exit 1 ;;
+  esac
 fi
 
 case "$action" in

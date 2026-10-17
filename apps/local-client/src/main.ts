@@ -24,6 +24,8 @@ if (!process.env.MARKET_TOKEN) throw new Error('Set MARKET_TOKEN for this profil
 const market = new MarketClient(
   process.env.MARKET_URL ?? 'http://127.0.0.1:4100',
   process.env.MARKET_TOKEN,
+  undefined,
+  process.env.MARKET_AUTO_REGISTER === 'true' ? owner : undefined,
 );
 const store = new LocalStore(resolve(stateDir, 'local.sqlite'));
 const wallet =
