@@ -7,12 +7,14 @@ import test from 'node:test';
 import { createLocalServer } from '../src/server.ts';
 import type { LocalService } from '../src/service.ts';
 import { LocalStore } from '../src/store.ts';
+import { MarketHttpError } from '../src/market-client.ts';
 
 test('progress and authenticated history reads do not wait for wallet operations', async () => {
   const requests: string[] = [];
   const history = { myOrders: [], trades: [], nextCursor: null };
   let invalidHistory = false;
   let offline = false;
+  let missingHistory = false;
   const directory = mkdtempSync(join(tmpdir(), 'palka-history-read-'));
   const database = join(directory, 'local.sqlite');
   const service = {
@@ -23,6 +25,7 @@ test('progress and authenticated history reads do not wait for wallet operations
       snapshot: async () => ({ myOrders: [], trades: [] }),
       request: async (path: string) => {
         requests.push(path);
+        if (missingHistory) throw new MarketHttpError('NOT_FOUND', 404);
         if (offline) throw new Error('Market unavailable');
         return invalidHistory ? { ...history, secret: 'must-not-be-relayed' } : history;
       },
@@ -79,6 +82,19 @@ test('progress and authenticated history reads do not wait for wallet operations
     Object.assign(service, { ownerId: 'test-owner' });
     Object.assign(service.market, { url: 'http://127.0.0.1:4109' });
     assert.equal((await fetch(`${base}/api/history`, { headers })).status, 400);
+    offline = false;
+    missingHistory = true;
+    const unsupported = await fetch(`${base}/api/history`, { headers });
+    assert.equal(unsupported.status, 503);
+    assert.deepEqual(await unsupported.json(), {
+      error:
+        'Order history requires an updated market server. Restart the market with the current project version.',
+      code: 'HISTORY_UNAVAILABLE',
+    });
+    Object.assign(service.market, { url: 'http://127.0.0.1:4100' });
+    const olderServer = await fetch(`${base}/api/history`, { headers });
+    assert.equal(olderServer.status, 200);
+    assert.deepEqual(await olderServer.json(), { ...history, stale: true });
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     service.store.close();

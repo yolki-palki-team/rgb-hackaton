@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { LocalError, LocalService } from './service.ts';
 import { serveLocalUi } from './ui.ts';
 import { FundingError, type WdkFunding } from './wdk-funding.ts';
+import { MarketHttpError } from './market-client.ts';
 
 type ServerOptions = {
   token: string;
@@ -109,7 +110,15 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
             result = await service.market.request(`/history/me${query}`);
           } catch (error) {
             const cached = service.store.get(cacheKey);
-            if (!cached) throw error;
+            if (!cached) {
+              if (error instanceof MarketHttpError && error.status === 404)
+                throw new LocalError(
+                  'Order history requires an updated market server. Restart the market with the current project version.',
+                  503,
+                  'HISTORY_UNAVAILABLE',
+                );
+              throw error;
+            }
             return json(response, 200, { ...MarketHistorySchema.parse(cached), stale: true });
           }
           const history = MarketHistorySchema.parse(result);

@@ -7,7 +7,7 @@ import {
   type EventEnvelope,
 } from '@rgb-exchange/contracts';
 
-class MarketHttpError extends Error {
+export class MarketHttpError extends Error {
   constructor(
     message: string,
     readonly status: number,
