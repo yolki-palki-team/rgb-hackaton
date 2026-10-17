@@ -22,6 +22,9 @@ export type Order = {
 };
 export type Trade = {
   id: string;
+  txid?: string;
+  chainConfirmed?: boolean;
+  rgbAccepted?: boolean;
   kind: 'direct' | 'ring';
   status: string;
   participants: { name: string; give: string; receive: string; mine?: boolean }[];

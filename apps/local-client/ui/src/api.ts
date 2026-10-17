@@ -54,6 +54,7 @@ declare global {
   }
 }
 type Snapshot = {
+  walletError?: string;
   balances: Balance[];
   orders: Order[];
   myOrder: Order | null;
@@ -134,15 +135,21 @@ export class LocalClient {
 
   async snapshot(): Promise<Snapshot> {
     if (!this.status) throw new Error('Pair the wallet first.');
-    const [rawState, rawSnapshot, rawPolicy] = await Promise.all([
-      this.request<unknown>('GET', '/api/state'),
+    const [stateResult, rawSnapshot, rawPolicy] = await Promise.all([
+      this.request<unknown>('GET', '/api/state').then(
+        (value) => ({ value, error: undefined }),
+        (error: unknown) => ({
+          value: undefined,
+          error: error instanceof Error ? error.message : 'Wallet balances unavailable',
+        }),
+      ),
       this.request<unknown>('GET', '/api/snapshot'),
       this.request<unknown>('GET', '/api/policy'),
     ]);
-    const state = WalletStateSchema.parse(rawState);
+    const state = stateResult.error ? null : WalletStateSchema.parse(stateResult.value);
     const market = MarketSnapshotSchema.parse(rawSnapshot);
     const policy = PrivatePolicySchema.parse(rawPolicy);
-    if (state.ownerId !== this.status.ownerId || state.network !== this.status.network)
+    if (state && (state.ownerId !== this.status.ownerId || state.network !== this.status.network))
       throw new Error('Wallet response does not match the paired profile.');
     this.walletState = state;
     this.marketSnapshot = market;
@@ -159,15 +166,17 @@ export class LocalClient {
       (order) => order.status === 'OPEN' || order.status === 'RESERVED',
     );
     return {
-      balances: state.balances.map((balance) => mapBalance(balance.asset, balance.amount)),
+      walletError: stateResult.error,
+      balances: state?.balances.map((balance) => mapBalance(balance.asset, balance.amount)) ?? [],
       orders: market.orders.map((order) => mapOrder(order)),
       myOrder: activeOrder ? mapOrder(activeOrder, true) : null,
       trade,
       policy,
-      policyAssets: state.balances.map((balance) => ({
-        key: assetKey(balance.asset),
-        label: balance.asset.symbol,
-      })),
+      policyAssets:
+        state?.balances.map((balance) => ({
+          key: assetKey(balance.asset),
+          label: balance.asset.symbol,
+        })) ?? [],
     };
   }
 
@@ -444,6 +453,9 @@ function mapTrade(
   const fee = plan.fees.find((item) => item.ownerId === ownerId)?.feeSats ?? '0';
   return {
     id: plan.tradeId,
+    txid: receipt?.txid,
+    chainConfirmed: receipt?.chainConfirmed,
+    rgbAccepted: receipt?.rgbAccepted,
     kind: participants.length === 3 ? 'ring' : 'direct',
     status: needsLocalConfirmation ? 'RECONCILING' : snapshot.status,
     participants,

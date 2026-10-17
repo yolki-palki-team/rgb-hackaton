@@ -106,7 +106,7 @@ function App() {
         setTrade(data.trade);
         setPolicy((current) => current ?? data.policy);
         setPolicyAssets(data.policyAssets);
-        setSyncError(null);
+        setSyncError(data.walletError ?? null);
         const codes = data.balances.map((balance) => balance.code);
         if (codes.length >= 2)
           setDraft((current) =>
@@ -861,6 +861,14 @@ function App() {
                         </span>
                         <h2>{shownTrade.kind === 'direct' ? 'Direct swap' : 'Ring swap'}</h2>
                         <small>Plan {shownTrade.id}</small>
+                        {shownTrade.txid && (
+                          <p className="reason">
+                            Bitcoin transaction: {shownTrade.txid}
+                            <br />
+                            Bitcoin {shownTrade.chainConfirmed ? 'confirmed' : 'unconfirmed'} · RGB{' '}
+                            {shownTrade.rgbAccepted ? 'accepted' : 'not accepted'}
+                          </p>
+                        )}
                       </div>
                       <StatusBadge className={`status-pill ${trade ? 'open' : 'sample'}`}>
                         {trade ? statusLabel(shownTrade.status) : shownTrade.status}
@@ -966,7 +974,7 @@ function App() {
                               : 'This is a sample plan. There is no final package or wallet validation.'}
                           </p>
                           {trade &&
-                            trade.status === 'RESERVED' &&
+                            ['RESERVED', 'PREPARING'].includes(trade.status) &&
                             approvalAttemptedTradeId !== trade.id && (
                               <Button
                                 className="outline-button full"
@@ -979,7 +987,9 @@ function App() {
                             )}
                           {trade &&
                             !isMock &&
-                            trade.status === 'AWAITING_APPROVAL' &&
+                            ['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING'].includes(
+                              trade.status,
+                            ) &&
                             approvalAttemptedTradeId !== trade.id && (
                               <Button
                                 className="outline-button full"
