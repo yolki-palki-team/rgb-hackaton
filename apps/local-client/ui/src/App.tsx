@@ -6,7 +6,6 @@ import {
   Input,
   Panel,
   Select,
-  SectionTitle,
   StatusBadge,
 } from './components/ui/wallet-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -18,9 +17,13 @@ import { TradeWorkflow, tradeProgress } from './workflow';
 import type { PrivatePolicy } from '@rgb-exchange/contracts';
 
 const sampleAssetCodes: AssetCode[] = ['BTC', 'X', 'DUSD'];
+const goalExamples = [
+  'Can I swap 10 X for at least 5 DUSD?',
+  'What can I get for 0.0001 BTC?',
+  'Can I swap 5 X with a 500-sat fee limit?',
+];
 const navItems: { key: View; label: string; subtitle: string; icon: string }[] = [
   { key: 'home', label: 'Overview', subtitle: 'Balances and goal', icon: 'grid' },
-  { key: 'market', label: 'Market', subtitle: 'Orders', icon: 'arrows' },
   { key: 'trade', label: 'Trade', subtitle: 'Review and sign', icon: 'route' },
   { key: 'topup', label: 'Top up', subtitle: 'Add BTC', icon: 'wallet' },
 ];
@@ -178,7 +181,7 @@ function App() {
     const selectOffer = (orderId: string) => {
       if (active) {
         setSelectedOfferId(orderId);
-        setView('market');
+        setView('home');
       }
     };
     const unsubscribe = bridge.onOfferSelected(selectOffer);
@@ -266,7 +269,7 @@ function App() {
       const order = await client.publishDraft(draft, policy);
       setMyOrder(order);
       setDraftOpen(false);
-      setView('market');
+      setView('home');
       setNotice({
         tone: 'success',
         text: 'Order published. We’ll let you know when a match is ready.',
@@ -341,8 +344,8 @@ function App() {
     <div className="app-shell">
       <div className="main-area">
         <header className="topbar">
-          <button className="site-brand" onClick={() => setView('home')} aria-label="palka. home">
-            palka.
+          <button className="site-brand" onClick={() => setView('home')} aria-label="pálka. home">
+            p<span className="brand-stress">a</span>lka.
           </button>
           <nav className="site-nav" aria-label="Wallet navigation">
             {navItems.map((item) => (
@@ -484,7 +487,7 @@ function App() {
                     id="goal"
                     aria-label="Describe your swap and limits"
                     aria-describedby="goal-help"
-                    placeholder="What would you give, and what would you like in return?"
+                    examples={goalExamples}
                   />
                   <div className="composer-actions">
                     <Button
@@ -509,72 +512,6 @@ function App() {
                   approval.
                 </p>
               </section>
-              <section aria-labelledby="balance-heading">
-                <SectionTitle
-                  id="balance-heading"
-                  kicker="YOUR WALLET"
-                  title="Your assets"
-                  action={
-                    <span className="section-note">
-                      {connected
-                        ? 'Local wallet balances'
-                        : samplePreview
-                          ? 'Synthetic preview'
-                          : 'Unavailable'}
-                    </span>
-                  }
-                />
-                {visibleBalances.length ? (
-                  <ul className="asset-list" aria-label="Wallet balances">
-                    {visibleBalances.map((balance) => (
-                      <AssetRow key={balance.code} balance={balance} />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="empty-state" role="status">
-                    {connected
-                      ? syncError
-                        ? 'Wallet balances are unavailable. Check the local backend.'
-                        : 'Loading your assets…'
-                      : 'No wallet connected. Pair the local backend to load balances.'}
-                  </p>
-                )}
-                {visibleBalances.some((balance) => balance.code === 'DUSD') && (
-                  <p className="asset-disclaimer">
-                    DUSD: regtest asset, not dollar-backed or USDT.
-                  </p>
-                )}
-              </section>
-            </>
-          )}
-
-          {/* Keep funding state mounted so switching tabs cannot reset an approval attempt. */}
-          <div hidden={view !== 'topup'}>
-            <FundingPanel client={client} wallet={status} />
-          </div>
-
-          {view === 'market' && (
-            <>
-              <div className="page-heading compact">
-                <div>
-                  <div className="eyebrow">A2A / ORDERS</div>
-                  <h1>
-                    Swap market<span className="accent-stop">.</span>
-                  </h1>
-                  <p>Fixed amounts and full fills. Direct pairs and three-party rings.</p>
-                </div>
-                <Button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => {
-                    setView('home');
-                    setDraftOpen(true);
-                  }}
-                  disabled={!ready}
-                >
-                  New order <Icon name="arrow" size={16} />
-                </Button>
-              </div>
               {selectedOfferId && (
                 <div className="selected-offer" role="status">
                   <strong>Selected public offer</strong>
@@ -586,129 +523,137 @@ function App() {
                   </p>
                 </div>
               )}
-              <div className="market-layout">
-                <Panel className="panel orderbook">
-                  <div className="panel-heading">
-                    <div>
-                      <span className="eyebrow">OPEN OFFERS</span>
-                      <h2>Order book</h2>
+              <div className="overview-layout">
+                <div className="overview-orders">
+                  <Panel className="panel orderbook">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">OPEN OFFERS</span>
+                        <h2>Order book</h2>
+                      </div>
+                      <StatusBadge className="count-pill">{visibleOrders.length}</StatusBadge>
                     </div>
-                    <StatusBadge className="count-pill">{visibleOrders.length}</StatusBadge>
-                  </div>
-                  <div className="order-list">
-                    {visibleOrders.length ? (
-                      visibleOrders.map((order) => (
-                        <article
-                          key={order.id}
-                          className={`offer-card ${selectedOfferId === order.id ? 'selected-order' : ''}`}
-                        >
-                          <div className="offer-meta">
-                            <span>{order.owner}</span>
-                            <StatusBadge className="status-pill">{order.status}</StatusBadge>
-                          </div>
-                          <div className="offer-amounts">
-                            <div>
-                              <small>Gives</small>
-                              <strong>
-                                {order.giveAmount}{' '}
-                                {order.giveAsset !== 'BTC' ? order.giveAsset : ''}
-                              </strong>
-                            </div>
-                            <Icon name="arrow" size={20} />
-                            <div>
-                              <small>Receives at least</small>
-                              <strong>
-                                {order.minReceiveAmount}{' '}
-                                {order.receiveAsset !== 'BTC' &&
-                                !order.minReceiveAmount.includes(order.receiveAsset)
-                                  ? order.receiveAsset
-                                  : ''}
-                              </strong>
-                            </div>
-                          </div>
-                        </article>
-                      ))
-                    ) : (
-                      <p className="empty-state">
-                        {connected
-                          ? 'No open orders yet. Your next swap starts with an order.'
-                          : 'Connect your wallet to see open orders.'}
-                      </p>
-                    )}
-                  </div>
-                  <div className="panel-footer">
-                    {connected
-                      ? 'Public orders are visible to the market. Private instructions stay local.'
-                      : samplePreview
-                        ? 'Synthetic preview only. Pair the wallet for live orders.'
-                        : 'Local backend unavailable. No orders loaded.'}
-                  </div>
-                </Panel>
-                <aside className="market-side">
-                  <Panel className="panel my-order">
-                    <span className="eyebrow">MY ORDER</span>
-                    {myOrder ? (
-                      <>
-                        <h3>
-                          {myOrder.giveAmount} {myOrder.giveAsset} <span>→</span>{' '}
-                          {myOrder.minReceiveAmount} {myOrder.receiveAsset}
-                        </h3>
-                        <p>
-                          Status: {myOrder.status}. Publishing an order does not authorize signing.
-                        </p>
-                        {myOrder.status === 'Open' ? (
-                          <Button
-                            type="button"
-                            className="outline-button"
-                            onClick={() => void cancelOrder()}
-                            disabled={busy !== null || !ready}
+                    <div className="order-list">
+                      {visibleOrders.length ? (
+                        visibleOrders.map((order) => (
+                          <article
+                            key={order.id}
+                            className={`offer-card ${selectedOfferId === order.id ? 'selected-order' : ''}`}
                           >
-                            Cancel order
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            className="outline-button"
-                            onClick={() => setView('trade')}
-                          >
-                            View trade <Icon name="arrow" size={15} />
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <h3>{connected ? 'No active order' : 'Wallet unavailable'}</h3>
-                        <p>
+                            <div className="offer-meta">
+                              <span>{order.owner}</span>
+                              <StatusBadge className="status-pill">{order.status}</StatusBadge>
+                            </div>
+                            <div className="offer-amounts">
+                              <div>
+                                <small>Gives</small>
+                                <strong>
+                                  {order.giveAmount}{' '}
+                                  {order.giveAsset !== 'BTC' ? order.giveAsset : ''}
+                                </strong>
+                              </div>
+                              <Icon name="arrow" size={20} />
+                              <div>
+                                <small>Receives at least</small>
+                                <strong>
+                                  {order.minReceiveAmount}{' '}
+                                  {order.receiveAsset !== 'BTC' &&
+                                  !order.minReceiveAmount.includes(order.receiveAsset)
+                                    ? order.receiveAsset
+                                    : ''}
+                                </strong>
+                              </div>
+                            </div>
+                          </article>
+                        ))
+                      ) : (
+                        <p className="empty-state">
                           {connected
-                            ? 'Create an order with QVAC or enter terms manually.'
-                            : 'Pair the local backend to view or publish your orders.'}
+                            ? 'No open orders yet. Your next swap starts with an order.'
+                            : 'Connect your wallet to see open orders.'}
                         </p>
+                      )}
+                    </div>
+                    <div className="panel-footer">
+                      {connected
+                        ? 'Public orders are visible to the market. Private instructions stay local.'
+                        : samplePreview
+                          ? 'Synthetic preview only. Pair the wallet for live orders.'
+                          : 'Local backend unavailable. No orders loaded.'}
+                    </div>
+                  </Panel>
+                  {myOrder && (
+                    <Panel className="panel my-order">
+                      <span className="eyebrow">MY ORDER</span>
+                      <h3>
+                        {myOrder.giveAmount} {myOrder.giveAsset} <span>→</span>{' '}
+                        {myOrder.minReceiveAmount} {myOrder.receiveAsset}
+                      </h3>
+                      <p>
+                        Status: {myOrder.status}. Publishing an order does not authorize signing.
+                      </p>
+                      {myOrder.status === 'Open' ? (
                         <Button
                           type="button"
                           className="outline-button"
-                          onClick={() => {
-                            setView('home');
-                            setDraftOpen(true);
-                          }}
-                          disabled={!ready}
+                          onClick={() => void cancelOrder()}
+                          disabled={busy !== null || !ready}
                         >
-                          Create order <Icon name="arrow" size={15} />
+                          Cancel order
                         </Button>
-                      </>
+                      ) : (
+                        <Button
+                          type="button"
+                          className="outline-button"
+                          onClick={() => setView('trade')}
+                        >
+                          View trade <Icon name="arrow" size={15} />
+                        </Button>
+                      )}
+                    </Panel>
+                  )}
+                </div>
+                <section className="overview-assets" aria-labelledby="balance-heading">
+                  <Panel className="panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">YOUR WALLET</span>
+                        <h2 id="balance-heading">Your assets</h2>
+                      </div>
+                      <span className="section-note">
+                        {connected ? 'Local' : samplePreview ? 'Synthetic preview' : 'Unavailable'}
+                      </span>
+                    </div>
+                    {visibleBalances.length ? (
+                      <ul className="asset-list" aria-label="Wallet balances">
+                        {visibleBalances.map((balance) => (
+                          <AssetRow key={balance.code} balance={balance} />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="empty-state" role="status">
+                        {connected
+                          ? syncError
+                            ? 'Wallet balances are unavailable. Check the local backend.'
+                            : 'Loading your assets…'
+                          : 'No wallet connected. Pair the local backend to load balances.'}
+                      </p>
                     )}
                   </Panel>
-                  <div className="market-tip">
-                    <Icon name="shield" size={20} />
-                    <strong>How does matching work?</strong>
-                    <p>
-                      Direct pairs come first, then rings. Exact amounts and fees appear before
-                      signing.
+                  {visibleBalances.some((balance) => balance.code === 'DUSD') && (
+                    <p className="asset-disclaimer">
+                      DUSD: regtest asset, not dollar-backed or USDT.
                     </p>
-                  </div>
-                </aside>
+                  )}
+                </section>
               </div>
             </>
           )}
+
+          {/* Keep funding state mounted so switching tabs cannot reset an approval attempt. */}
+          <div hidden={view !== 'topup'}>
+            <FundingPanel client={client} wallet={status} />
+          </div>
 
           {view === 'trade' && (
             <>
@@ -986,7 +931,9 @@ function App() {
           )}
         </main>
         <footer className="footer">
-          <span>palka</span>
+          <span aria-label="pálka">
+            p<span className="brand-stress">a</span>lka
+          </span>
           <span>
             {connected
               ? `Bitcoin ${status?.network} · ${status?.mode.toUpperCase()} wallet`

@@ -111,6 +111,22 @@ a {
     serif;
   letter-spacing: -0.07em;
 }
+.brand-stress {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+}
+.brand-stress::after {
+  content: '';
+  position: absolute;
+  top: 0.19em;
+  left: 60%;
+  width: 0.14em;
+  height: 0.045em;
+  border-radius: 1px;
+  background: currentColor;
+  transform: translateX(-50%) rotate(-55deg);
+}
 .video-hero-links {
   display: flex;
   align-items: center;

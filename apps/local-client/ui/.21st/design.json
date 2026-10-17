@@ -30,6 +30,14 @@
       "source": "User request and public 21st Wallet Card 2 preview, 2026-10-17",
       "reference": "https://21st.dev/@beratberkayg/components/wallet-card-2",
       "implementation": "Adapted with existing wallet-kit primitives; registry CLI requires sign-in."
+    },
+    {
+      "decision": "Show the order book and exact wallet balances in aligned Overview columns, stacking on mobile. Remove the wallet Market tab. Use a short accent on the first a in pálka. navbars and pálka without a dot in footers.",
+      "source": "User correction, 2026-10-17"
+    },
+    {
+      "decision": "Cycle English swap examples with a type-and-erase placeholder. Keep user input untouched, stop while it is nonempty, and show static text for reduced motion.",
+      "source": "User request, 2026-10-17"
     }
   ]
 }

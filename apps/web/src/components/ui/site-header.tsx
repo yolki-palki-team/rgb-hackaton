@@ -2,8 +2,8 @@ import { walletUrl } from '../../wallet-url';
 export default function SiteHeader({ active }: { active: 'home' | 'market' }) {
   return (
     <nav className="video-hero-nav" aria-label="Primary">
-      <a className="video-hero-brand" href="/" aria-label="palka. home">
-        palka.
+      <a className="video-hero-brand" href="/" aria-label="pálka. home">
+        p<span className="brand-stress">a</span>lka.
       </a>
       <div className="video-hero-links">
         <a href="/" aria-current={active === 'home' ? 'page' : undefined}>

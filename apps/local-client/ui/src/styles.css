@@ -86,6 +86,22 @@ p {
     serif;
   letter-spacing: -0.07em;
 }
+.brand-stress {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+}
+.brand-stress::after {
+  content: '';
+  position: absolute;
+  top: 0.19em;
+  left: 60%;
+  width: 0.14em;
+  height: 0.045em;
+  border-radius: 1px;
+  background: currentColor;
+  transform: translateX(-50%) rotate(-55deg);
+}
 .site-nav {
   display: flex;
   flex-wrap: wrap;
@@ -487,13 +503,21 @@ textarea {
 .ui-input::placeholder {
   color: #888;
 }
-.market-layout,
+.overview-layout,
 .trade-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(290px, 1fr);
   gap: 24px;
   align-items: start;
 }
+.overview-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.overview-assets .asset-list {
+  width: 100%;
+  border-radius: 0 0 14px 14px;
+}
+.overview-orders,
 .market-side {
   display: grid;
   gap: 24px;
@@ -576,21 +600,6 @@ textarea {
 .approval-panel p {
   font-size: 14px;
   color: #aaa;
-}
-.market-tip {
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: 15px;
-}
-.market-tip strong {
-  display: block;
-  font-weight: 500;
-  margin: 14px 0 8px;
-}
-.market-tip p {
-  color: #aaa;
-  font-size: 13px;
-  margin-bottom: 0;
 }
 .empty-state,
 .selected-offer,
@@ -977,7 +986,6 @@ textarea {
   .network-pill {
     display: none;
   }
-  .market-layout,
   .trade-layout {
     grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr);
   }
@@ -1009,7 +1017,7 @@ textarea {
   .page-heading h1 {
     font-size: 52px;
   }
-  .market-layout,
+  .overview-layout,
   .trade-layout {
     grid-template-columns: 1fr;
   }
