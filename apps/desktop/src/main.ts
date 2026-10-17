@@ -56,6 +56,10 @@ let pendingOffer: string | null = null;
 let backendToken = '';
 let config: DesktopConfig;
 let startupStage = 'configuration';
+let markBackendReady: () => void;
+const backendReady = new Promise<void>((resolveReady) => {
+  markBackendReady = resolveReady;
+});
 
 async function startSharedWallet(): Promise<void> {
   if (
@@ -171,7 +175,7 @@ async function requestLocal(
     body: payload,
     redirect: 'error',
     // The local adapter can spend up to 60 seconds checking the shared chain.
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(path === '/api/interpret' ? 240_000 : 90_000),
   }).catch(() => {
     throw new Error('Local wallet service is unavailable');
   });
@@ -334,15 +338,11 @@ else {
         process.env.PALKA_PUBLIC_MARKET_URL = 'https://owlpeer.com/market';
       }
       config = loadDesktopConfig(app.getPath('userData'));
-      startupStage = 'connecting and funding the shared regtest wallet';
-      await startSharedWallet();
       startupStage = 'registering the local UI protocol';
       protocol.handle('palka-app', (request) => bundledUi(request.url));
       session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
         callback(false),
       );
-      startupStage = 'starting the local wallet service';
-      startBackend();
       startupStage = 'creating the wallet window';
       const preload = join(appRoot, 'apps', 'desktop', 'dist', 'preload.cjs');
       window = new BrowserWindow({
@@ -351,6 +351,7 @@ else {
         minWidth: 900,
         minHeight: 650,
         show: false,
+        backgroundColor: '#080808',
         webPreferences: {
           preload,
           contextIsolation: true,
@@ -369,6 +370,13 @@ else {
       startupStage = 'loading the bundled wallet UI';
       await window.loadURL(APP_URL);
       window.show();
+      // Show the startup skeleton while native services connect and index the wallet.
+      // The bridge waits for this gate before making any local health requests.
+      startupStage = 'connecting and funding the shared regtest wallet';
+      await startSharedWallet();
+      startupStage = 'starting the local wallet service';
+      startBackend();
+      markBackendReady();
     })
     .catch(() => {
       console.error(`palka. startup failed while ${startupStage}`);
@@ -380,6 +388,7 @@ else {
     });
   ipcMain.handle('wallet:connect', async (event) => {
     validatedSender(event);
+    await backendReady;
     return waitForBackend();
   });
   ipcMain.handle(

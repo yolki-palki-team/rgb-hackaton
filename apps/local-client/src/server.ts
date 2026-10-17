@@ -130,6 +130,7 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
             await options.funding.exclusive(() => options.funding!.status()),
           );
         }
+        if (path === '/api/qvac/health') return json(response, 200, await service.qvacHealth());
         if (path === '/api/health') return json(response, 200, await service.health());
         if (path === '/api/state') return json(response, 200, await service.state());
         if (path === '/api/policy') return json(response, 200, await service.policy());

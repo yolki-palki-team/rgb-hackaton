@@ -44,9 +44,9 @@ export type Trade = {
 
 export const initialDraft: Draft = {
   giveAsset: 'X',
-  giveAmount: '100',
+  giveAmount: '',
   receiveAsset: 'DUSD',
-  minReceiveAmount: '100',
+  minReceiveAmount: '',
   maxFeeSats: '1000',
   expiresMinutes: '30',
 };

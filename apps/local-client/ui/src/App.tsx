@@ -1,5 +1,13 @@
 import { ChatInput, ChatInputTextArea, ChatInputSubmit } from './components/ui/chat-input';
-import { AssetRow, Button, Icon, Input, Panel, StatusBadge } from './components/ui/wallet-kit';
+import {
+  AssetRow,
+  Button,
+  Icon,
+  Input,
+  Panel,
+  StatusBadge,
+  WalletSkeleton,
+} from './components/ui/wallet-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FundingPanel } from './FundingPanel';
 import { AssetSelect } from './components/ui/asset-select';
@@ -10,6 +18,7 @@ import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './mode
 import type { Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
 import { TradeWorkflow, nextTradeAction, tradeProgress } from './workflow';
+import { requestGoalReview } from './goal-review';
 import type { PrivatePolicy } from '@rgb-exchange/contracts';
 
 const goalExamples = [
@@ -49,7 +58,8 @@ function App() {
   const [notice, setNotice] = useState<{ tone: 'error' | 'success' | 'info'; text: string } | null>(
     null,
   );
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(window.palkaWallet ? 'connect' : null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
   const workflow = useRef(new TradeWorkflow());
   const foregroundBusy = useRef(busy);
   foregroundBusy.current = busy;
@@ -60,6 +70,7 @@ function App() {
   const [workflowPaused, setWorkflowPaused] = useState(false);
   const connected = Boolean(client && status);
   const desktop = Boolean(window.palkaWallet);
+  const initialLoading = busy === 'connect' || snapshotLoading;
   const isMock = status?.mode === 'mock';
   const ready =
     connected &&
@@ -121,6 +132,7 @@ function App() {
 
   const connect = useCallback(async () => {
     setBusy('connect');
+    setSnapshotLoading(true);
     setNotice(null);
     try {
       const next = new LocalClient(desktop ? undefined : pairToken);
@@ -150,6 +162,7 @@ function App() {
           : 'Local profile connected. Order history is available while the wallet reconnects.',
       });
     } catch (error) {
+      setSnapshotLoading(false);
       setNotice({ tone: 'error', text: `Could not connect: ${messageOf(error)}` });
     } finally {
       setBusy(null);
@@ -206,6 +219,7 @@ function App() {
       } finally {
         if (active) {
           setMarketLoading(false);
+          setSnapshotLoading(false);
           progressTimer = setTimeout(() => void refreshProgress(), 3000);
         }
       }
@@ -268,6 +282,37 @@ function App() {
   }, [client]);
 
   useEffect(() => {
+    if (!client) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refreshModel = async () => {
+      try {
+        const health = await client.qvacHealth();
+        if (active)
+          setStatus((current) =>
+            current
+              ? {
+                  ...current,
+                  qvacAvailable: health.available,
+                  qvacState: health.state,
+                  qvacReason: health.reason,
+                }
+              : current,
+          );
+      } catch {
+        // A transport failure is not evidence that the model is unavailable.
+      } finally {
+        if (active) timer = setTimeout(() => void refreshModel(), 10_000);
+      }
+    };
+    void refreshModel();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [client]);
+
+  useEffect(() => {
     if (!desktop || desktopConnectStarted.current) return;
     desktopConnectStarted.current = true;
     void connect();
@@ -312,6 +357,7 @@ function App() {
     setWorkflowRunning(false);
     setWorkflowError(null);
     setWorkflowPaused(false);
+    setSnapshotLoading(false);
     setNotice({ tone: 'info', text: 'Local wallet disconnected.' });
   };
 
@@ -323,40 +369,38 @@ function App() {
       });
       return;
     }
-    if (!status?.qvacAvailable) {
-      setDraftOpen(true);
-
-      setNotice({
-        tone: 'info',
-        text: `QVAC unavailable: ${status?.qvacReason ?? 'The local model is not ready.'} Use the manual form.`,
-      });
-      return;
-    }
     setBusy('interpret');
-    setNotice(null);
     try {
-      const result = await client.interpret(goal);
-      if (result.draft) setDraft(result.draft);
-      setDraftOpen(true);
-
-      setNotice(
-        result.draft
-          ? {
+      await requestGoalReview(
+        (text) => client.interpret(text),
+        goal,
+        (review) => {
+          setDraftOpen(review.state === 'review');
+          if (review.state === 'loading') {
+            setDraft({ ...initialDraft });
+            setNotice(null);
+            return;
+          }
+          if (review.state === 'error') {
+            setNotice({ tone: 'error', text: `Could not interpret the goal: ${review.message}` });
+            return;
+          }
+          setStatus((current) =>
+            current
+              ? { ...current, qvacAvailable: true, qvacState: 'ready', qvacReason: undefined }
+              : current,
+          );
+          if (review.state === 'review') {
+            setDraft(review.draft);
+            setNotice({
               tone: 'success',
               text: 'QVAC interpreted the goal locally. Review and confirm the order terms.',
-            }
-          : {
-              tone: 'info',
-              text:
-                result.clarification ?? 'The goal needs clarification. Fill in the terms manually.',
-            },
+            });
+          } else {
+            setNotice({ tone: 'info', text: review.message });
+          }
+        },
       );
-    } catch (error) {
-      setDraftOpen(true);
-      setNotice({
-        tone: 'error',
-        text: `QVAC unavailable: ${messageOf(error)}. Use the manual form.`,
-      });
     } finally {
       setBusy(null);
     }
@@ -572,18 +616,37 @@ function App() {
                 )}
               </button>
             )}
-          {view === 'home' && (
+          {initialLoading && (
+            <>
+              {busy !== 'connect' && (
+                <MorphingSquare message="Loading wallet data…" wrapperClassName="py-8" />
+              )}
+              <WalletSkeleton />
+            </>
+          )}
+          {view === 'home' && !initialLoading && (
             <>
               <section className="goal-section" aria-labelledby="goal-heading">
                 <div className="composer-heading">
                   <h1 id="goal-heading">What would you like to swap?</h1>
                   <StatusBadge className="ai-status">
-                    QVAC · {status?.qvacAvailable ? 'LOCAL' : connected ? 'UNAVAILABLE' : 'OFFLINE'}
+                    {status?.qvacState === 'loading' && (
+                      <MorphingSquare className="h-3 w-3 bg-current" aria-hidden="true" />
+                    )}
+                    QVAC ·{' '}
+                    {status?.qvacAvailable
+                      ? 'LOCAL'
+                      : status?.qvacState === 'loading'
+                        ? 'LOADING'
+                        : connected
+                          ? 'UNAVAILABLE'
+                          : 'OFFLINE'}
                   </StatusBadge>
                 </div>
                 {connected && !status?.qvacAvailable && (
                   <p className="qvac-reason" role="status">
-                    {status?.qvacReason ?? 'Local model unavailable.'} Use the manual form.
+                    {status?.qvacReason ??
+                      'Local model unavailable. Retry the goal or fill in the terms manually.'}
                   </p>
                 )}
                 <ChatInput
@@ -605,8 +668,14 @@ function App() {
                       className="text-button"
                       disabled={busy !== null}
                       onClick={() => {
-                        if (connected || samplePreview) setDraftOpen(true);
-                        else
+                        if (connected || samplePreview) {
+                          setDraft({
+                            ...initialDraft,
+                            giveAsset: visibleBalances[0]?.code ?? 'X',
+                            receiveAsset: visibleBalances[1]?.code ?? 'DUSD',
+                          });
+                          setDraftOpen(true);
+                        } else
                           setNotice({
                             tone: 'info',
                             text: 'Pair a local wallet before creating an order.',
@@ -619,8 +688,9 @@ function App() {
                   </div>
                 </ChatInput>
                 <p className="composer-help" id="goal-help">
-                  Private on this device. Review terms before publishing; signing needs your
-                  approval.
+                  {busy === 'interpret'
+                    ? 'QVAC is preparing your order locally. First use may take longer while the model loads.'
+                    : 'Private on this device. Review terms before publishing; signing needs your approval.'}
                 </p>
               </section>
               {selectedOfferId && (
@@ -714,12 +784,10 @@ function App() {
                           className="outline-button"
                           onClick={() => void cancelOrder()}
                           disabled={busy !== null || !connected || Boolean(syncError)}
-                          aria-busy={busy === 'cancel'}
+                          loading={busy === 'cancel'}
+                          loadingText="Canceling order…"
                         >
-                          {busy === 'cancel' && (
-                            <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                          )}
-                          {busy === 'cancel' ? 'Canceling order…' : 'Cancel order'}
+                          Cancel order
                         </Button>
                       ) : (
                         <Button
@@ -812,11 +880,15 @@ function App() {
           </div>
 
           {/* Keep funding state mounted so switching tabs cannot reset an approval attempt. */}
-          <div hidden={view !== 'topup'}>
-            <FundingPanel client={client} wallet={status} visible={view === 'topup'} />
+          <div hidden={view !== 'topup' || initialLoading}>
+            <FundingPanel
+              client={client}
+              wallet={status}
+              visible={view === 'topup' && !initialLoading}
+            />
           </div>
 
-          {view === 'trade' && (
+          {view === 'trade' && !initialLoading && (
             <>
               {!connected && samplePreview && (
                 <div className="sample-switch" role="group" aria-label="Sample trade type">
@@ -1043,24 +1115,6 @@ function App() {
                               <dd>{trade.validatedPreview.btcDeltaSats} sats</dd>
                             </div>
                           </dl>
-                          <Button
-                            className="primary-button full"
-                            type="button"
-                            onClick={() => void approve()}
-                            disabled={
-                              busy !== null ||
-                              workflowRunning ||
-                              Boolean(syncError) ||
-                              !client?.supportsTrade(trade)
-                            }
-                          >
-                            {busy === 'approve' ? 'Waiting for approval…' : 'Review & sign'}{' '}
-                            {busy === 'approve' ? (
-                              <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                            ) : (
-                              <Icon name="arrow" size={16} />
-                            )}
-                          </Button>
                         </>
                       ) : (
                         <>
@@ -1076,6 +1130,23 @@ function App() {
                           )}
                         </>
                       )}
+                      {(trade?.validatedPreview || busy === 'approve') && (
+                        <Button
+                          className="primary-button full"
+                          onClick={() => void approve()}
+                          disabled={
+                            busy !== null ||
+                            workflowRunning ||
+                            Boolean(syncError) ||
+                            !trade?.validatedPreview ||
+                            !client?.supportsTrade(trade)
+                          }
+                          loading={busy === 'approve'}
+                          loadingText="Signing transaction…"
+                        >
+                          Review & sign <Icon name="arrow" size={16} />
+                        </Button>
+                      )}
                       {trade &&
                         !trade.recoveryRequired &&
                         ['RESERVED', 'PREPARING', 'AWAITING_APPROVAL'].includes(trade.status) && (
@@ -1083,13 +1154,11 @@ function App() {
                             className="text-button danger reject-button"
                             type="button"
                             onClick={() => void reject()}
+                            loading={busy === 'reject'}
+                            loadingText="Cancelling swap…"
                             disabled={busy !== null || workflowRunning}
-                            aria-busy={busy === 'reject'}
                           >
-                            {busy === 'reject' && (
-                              <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                            )}
-                            {busy === 'reject' ? 'Canceling swap…' : 'Cancel swap'}
+                            Cancel swap
                           </Button>
                         )}
                       <div className="approval-foot">
@@ -1107,9 +1176,11 @@ function App() {
             p<span className="brand-stress">a</span>lka
           </span>
           <span>
-            {connected
-              ? `Bitcoin ${status?.network} · ${status?.mode.toUpperCase()} wallet`
-              : 'No wallet connected'}
+            {initialLoading
+              ? 'Loading local wallet…'
+              : connected
+                ? `Bitcoin ${status?.network} · ${status?.mode.toUpperCase()} wallet`
+                : 'No wallet connected'}
           </span>
         </footer>
       </div>
@@ -1175,15 +1246,11 @@ function App() {
                 type="button"
                 className="primary-button"
                 onClick={() => void connect()}
+                loading={busy === 'connect'}
+                loadingText="Connecting…"
                 disabled={busy !== null || (!desktop && !pairToken.trim())}
-                aria-busy={busy === 'connect'}
               >
-                {busy === 'connect' ? 'Connecting…' : desktop ? 'Reconnect' : 'Pair wallet'}{' '}
-                {busy === 'connect' ? (
-                  <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                ) : (
-                  <Icon name="arrow" size={16} />
-                )}
+                {desktop ? 'Reconnect' : 'Pair wallet'} <Icon name="arrow" size={16} />
               </Button>
             </div>
           </Panel>
@@ -1287,15 +1354,11 @@ function App() {
                 className="primary-button"
                 type="button"
                 onClick={() => void publish()}
+                loading={busy === 'publish'}
+                loadingText="Checking & publishing…"
                 disabled={!ready || busy !== null}
-                aria-busy={busy === 'publish'}
               >
-                {busy === 'publish' ? 'Checking & publishing…' : 'Publish order'}{' '}
-                {busy === 'publish' ? (
-                  <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                ) : (
-                  <Icon name="arrow" size={16} />
-                )}
+                Publish order <Icon name="arrow" size={16} />
               </Button>
             </div>
           </Panel>

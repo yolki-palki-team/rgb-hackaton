@@ -1,3 +1,6 @@
+import type { QvacHealth } from './qvac.ts';
+import { QvacUnavailableError, QvacInvalidOutputError } from './qvac.ts';
+import { IntentValidationError } from './intent-grounding.ts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -29,7 +32,7 @@ import { LocalStore } from './store.ts';
 import { defaultPolicy, draftFromIntent } from './intent.ts';
 
 export interface Interpreter {
-  health(): Promise<{ available: boolean; model: string; reason?: string }>;
+  health(): Promise<QvacHealth>;
   interpret(
     goal: string,
     assets: Array<{ key: string; symbol: string; precision: number }>,
@@ -105,29 +108,7 @@ export class LocalService {
         blockedReason: configured ? error.message : 'Wallet adapter unavailable. Check sidecar B.',
       };
     }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    // Model download must not prevent pairing or the manual order form.
-    const loading = new Promise<{ available: boolean; model: string; reason: string }>(
-      (resolve) => {
-        timer = setTimeout(
-          () =>
-            resolve({
-              available: false,
-              model: 'QVAC',
-              reason:
-                'The model is loading locally. You can fill in the order manually and reconnect later.',
-            }),
-          1500,
-        );
-      },
-    );
-    let qvac: { available: boolean; model: string; reason?: string };
-    try {
-      qvac = await Promise.race([this.qvac.health(), loading]);
-    } catch {
-      qvac = { available: false, model: 'QVAC', reason: 'The local model is unavailable' };
-    }
-    clearTimeout(timer);
+    const qvac = await this.qvacHealth();
     return {
       ownerId: this.ownerId,
       network: wallet.network,
@@ -137,25 +118,67 @@ export class LocalService {
       market: { connected: this.market.connected, sequence: this.market.sequence },
     };
   }
+  async qvacHealth(): Promise<QvacHealth> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Checking AI readiness must not call the wallet or delay trade recovery.
+    const loading = new Promise<QvacHealth>((resolve) => {
+      timer = setTimeout(
+        () =>
+          resolve({
+            available: false,
+            state: 'loading',
+            model: 'QVAC',
+            reason:
+              'The model is loading locally. You can retry the goal or fill in the terms manually.',
+          }),
+        1500,
+      );
+    });
+    try {
+      return await Promise.race([this.qvac.health(), loading]);
+    } catch {
+      return {
+        available: false,
+        state: 'unavailable',
+        model: 'QVAC',
+        reason: 'The local model is unavailable. Retry the goal.',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   async interpret(body: unknown) {
     const { goal } = z
       .object({ goal: z.string().trim().min(1).max(1200) })
       .strict()
       .parse(body);
     const state = await this.state();
-    const result = await this.qvac.interpret(
-      goal,
-      state.balances.map((b) => ({
-        key: assetKey(b.asset),
-        symbol: b.asset.symbol,
-        precision: b.asset.precision,
-      })),
-    );
-    return {
-      ...draftFromIntent(result.output, state, await this.policy()),
-      diagnostics: result.diagnostics,
-    };
+    try {
+      const result = await this.qvac.interpret(
+        goal,
+        state.balances.map((b) => ({
+          key: assetKey(b.asset),
+          symbol: b.asset.symbol,
+          precision: b.asset.precision,
+        })),
+      );
+      return {
+        ...draftFromIntent(result.output, state, await this.policy()),
+        diagnostics: result.diagnostics,
+      };
+    } catch (error) {
+      if (error instanceof QvacUnavailableError)
+        throw new LocalError(error.message, 503, 'QVAC_UNAVAILABLE');
+      if (error instanceof QvacInvalidOutputError || error instanceof IntentValidationError)
+        throw new LocalError(error.message, 422, 'INTENT_INVALID');
+      throw new LocalError(
+        `The goal could not become a valid order: ${error instanceof Error ? error.message : 'check the terms'}`,
+        422,
+        'INTENT_INVALID',
+      );
+    }
   }
+
   async validateDraft(body: unknown) {
     const input = z
       .object({ draft: OrderDraftSchema, policy: PrivatePolicySchema })

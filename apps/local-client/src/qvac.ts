@@ -1,8 +1,14 @@
 import { cancel, completion, loadModel, QWEN3_1_7B_INST_Q4, unloadModel } from '@qvac/sdk';
+import { fixedGoalSides, groundIntentAmounts, literalAmounts } from './intent-grounding.ts';
 import { AiIntentSchema, type AiIntent } from '../../../packages/contracts/src/index.js';
 
 export type QvacAsset = { key: string; symbol: string; precision: number };
-export type QvacHealth = { available: boolean; model: string; reason?: string };
+export type QvacHealth = {
+  available: boolean;
+  state?: 'loading' | 'ready' | 'unavailable';
+  model: string;
+  reason?: string;
+};
 export type QvacResult = {
   output: AiIntent;
   diagnostics: { provider: 'qvac'; model: string; durationMs: number; stopReason?: string };
@@ -14,7 +20,7 @@ const LOAD_TIMEOUT_MS = 180_000;
 const INFERENCE_TIMEOUT_MS = 45_000;
 const MAX_GOAL_LENGTH = 1_200;
 
-// The model returns human units. The local client converts and checks them with BigInt.
+// The model copies literal amounts; source grounding converts units with BigInt.
 const INTENT_JSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -52,12 +58,21 @@ const INTENT_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-function intentSchemaFor(assets: QvacAsset[]): Record<string, unknown> {
+function intentSchemaFor(assets: QvacAsset[], goal: string): Record<string, unknown> {
+  const sides = fixedGoalSides(goal);
+  const giveAmounts = literalAmounts(sides?.give ?? goal);
+  const receiveAmounts = literalAmounts(sides?.receive ?? goal);
   const keys = assets.map((asset) => asset.key);
   return {
     ...INTENT_JSON_SCHEMA,
     properties: {
       ...INTENT_JSON_SCHEMA.properties,
+      giveAmount: { type: ['string', 'null'], enum: [...giveAmounts, null] },
+      minReceiveAmount: { type: ['string', 'null'], enum: [...receiveAmounts, null] },
+      allowBtcSale: {
+        type: ['boolean', 'null'],
+        enum: /\b(?:do not|don't|never) sell BTC\b/i.test(goal) ? [false] : [null],
+      },
       giveAssetKey: { type: ['string', 'null'], enum: [...keys, null] },
       receiveAssetKey: { type: ['string', 'null'], enum: [...keys, null] },
       protectedBalances: {
@@ -157,7 +172,8 @@ function localPrompt(goal: string, assets: QvacAsset[]): string {
     '/no_think',
     'Extract fields for one RGB/BTC order. Return exactly one JSON object matching the schema, with no explanation.',
     'giveAssetKey is the asset the user SELLS/GIVES. receiveAssetKey is the asset the user BUYS/RECEIVES. Use exact keys from the asset list.',
-    'giveAmount and minReceiveAmount are explicit amounts in human units as decimal strings. Do not calculate rates or guess missing amounts.',
+    'Copy giveAmount and minReceiveAmount exactly from the goal as decimal strings, without adding decimal places. Keep a sats amount as its written number: deterministic code will convert units. Do not calculate rates or guess missing amounts.',
+    'Example: Sell 10 X for 10000 sats of BTC means giveAmount="10", minReceiveAmount="10000", with X as give asset and BTC as receive asset. X with precision 0 cannot have fractional units.',
     "If both amounts are explicit, do not ask about market price or equivalent value; these are the user's fixed terms.",
     'maxFeeSats is an explicit maximum fee in integer sats as a string. "Do not sell BTC" means allowBtcSale=false.',
     '"Keep at least N% of X" means protectedBalances=[{assetKey:key of X,minAmount:null,minPercent:N}]. A reserve percentage is not minReceiveAmount.',
@@ -180,9 +196,14 @@ export class QvacInterpreter {
       return { available: false, model: MODEL_NAME, reason: 'Node.js 22.17 or newer is required' };
     try {
       await this.ensureModel();
-      return { available: true, model: MODEL_NAME };
+      return { available: true, state: 'ready', model: MODEL_NAME };
     } catch {
-      return { available: false, model: MODEL_NAME, reason: 'Could not load the local QVAC model' };
+      return {
+        available: false,
+        state: 'unavailable',
+        model: MODEL_NAME,
+        reason: 'Could not load the local QVAC model. Retry the goal.',
+      };
     }
   }
 
@@ -190,7 +211,12 @@ export class QvacInterpreter {
     validateInput(goal, assets);
     if (!supportsNode()) throw new QvacUnavailableError('Node.js 22.17 or newer is required');
     const started = Date.now();
-    const modelId = await this.ensureModel();
+    let modelId: string;
+    try {
+      modelId = await this.ensureModel();
+    } catch {
+      throw new QvacUnavailableError('The local QVAC model could not load. Retry the goal.');
+    }
     // Long RGB IDs are hard for a small model to associate with symbols. Keep
     // identity resolution deterministic and give inference only short local aliases.
     const modelAssets = assets.map((asset, index) => ({ ...asset, key: `asset${index}` }));
@@ -199,7 +225,7 @@ export class QvacInterpreter {
       history: [{ role: 'user', content: localPrompt(goal, modelAssets) }],
       responseFormat: {
         type: 'json_schema',
-        json_schema: { name: 'rgb_trade_intent', schema: intentSchemaFor(modelAssets) },
+        json_schema: { name: 'rgb_trade_intent', schema: intentSchemaFor(modelAssets, goal) },
       },
       generationParams: { temp: 0, predict: 512 },
       captureThinking: true,
@@ -207,13 +233,16 @@ export class QvacInterpreter {
     });
     const final = await withTimeout(run.final, INFERENCE_TIMEOUT_MS, () =>
       cancel({ requestId: run.requestId }),
-    );
+    ).catch(() => {
+      throw new QvacUnavailableError('Local QVAC inference failed or timed out. Retry the goal.');
+    });
     if (final.stopReason === 'length' || final.stopReason === 'cancelled')
       throw new QvacInvalidOutputError();
-    const output = discardEchoedClarification(
+    const extracted = discardEchoedClarification(
       resolveQvacAssetKeys(parseQvacOutput(final.contentText), assets),
       goal,
     );
+    const output = groundIntentAmounts(extracted, goal, assets);
     if (/%/.test(goal) && !output.protectedBalances.some((balance) => balance.minPercent !== null))
       throw new QvacInvalidOutputError();
     return {

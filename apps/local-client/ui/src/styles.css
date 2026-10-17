@@ -905,6 +905,72 @@ textarea {
   max-width: 760px;
   margin-bottom: 0;
 }
+.loading-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ui-button[aria-busy='true'] {
+  cursor: progress;
+  opacity: 0.85;
+}
+.skeleton {
+  background: linear-gradient(100deg, #202020 20%, #303030 45%, #202020 70%);
+  background-size: 250% 100%;
+  border-radius: 8px;
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
+}
+.wallet-skeleton .panel {
+  padding: 24px;
+}
+.skeleton-title {
+  width: min(430px, 80%);
+  height: 36px;
+  margin: 32px 0 24px;
+}
+.skeleton-composer {
+  height: 150px;
+  margin-bottom: 48px;
+  border-radius: 16px;
+}
+.skeleton-heading {
+  height: 24px;
+  width: 140px;
+  margin-bottom: 28px;
+}
+.skeleton-offer {
+  height: 100px;
+  margin-bottom: 16px;
+}
+.skeleton-asset {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0;
+}
+.skeleton-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  flex: none;
+}
+.skeleton-asset-name {
+  width: 30%;
+  height: 28px;
+}
+.skeleton-amount {
+  width: 25%;
+  height: 24px;
+  margin-left: auto;
+}
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
 .progress-steps {
   list-style: none;
   padding: 0;
@@ -949,6 +1015,9 @@ textarea {
 .trade-notification strong {
   font-size: 14px;
   font-weight: 500;
+}
+.trade-notification > span {
+  flex: 1;
 }
 .trade-notification small {
   display: block;

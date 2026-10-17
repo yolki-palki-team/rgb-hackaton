@@ -111,6 +111,14 @@ model-cache volumes. Keep the same environment/mode settings used at startup.
 The browser profile remains separate from the desktop wallet; matching appearance
 does not connect it to the desktop's keys or balances.
 
+The desktop opens with a skeleton while local services start and the first wallet
+snapshot loads. Connection, order, signing and funding actions show a spinner in
+the active button; swap and funding panels explain pending confirmation. Loading
+animations respect reduced-motion settings. Rebuild the desktop UI/shell (or the
+packaged app) and restart to pick up these changes; browser Docker profiles need
+the runtime rebuild above. Live settlement through these loading states has not
+been reverified.
+
 Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. The real-default path does not preload QVAC; first actual AI use downloads about 1.06 GB of public model weights, then loads them locally. Docker runs Linux CPU inference. Model readiness is shown in the local UI. Allow enough disk space and memory for the model; inference speed depends on the machine.
 
 To run the explicit synthetic three-profile demonstration instead:
@@ -141,7 +149,7 @@ Open **http://127.0.0.1:5173/** for the landing page or **http://127.0.0.1:5173/
 
 `mock` applies to the wallet: its labeled balances are synthetic. The market, SQLite persistence, HTTP/WebSocket authorization and QVAC inference are real. Preparing a mock trade returns `UNSUPPORTED`, without a fake transaction ID. Three profiles on this machine are a demonstration, not three independent devices.
 
-QVAC uses **@qvac/sdk 0.21.1**, **QWEN3_1_7B_INST_Q4**, and a local Node 22.17 runtime installed with the workspace. First use downloads about 1.06 GB of public model weights; subsequent inference is local. No model API key or cloud fallback is used. A failed/ambiguous extraction leaves a manual form. Percentage constraints need particular care: the model can misread them, so invalid interpretations are rejected and all drafts require review.
+QVAC uses **@qvac/sdk 0.21.1**, **QWEN3_1_7B_INST_Q4**, and a local Node 22.17 runtime installed with the workspace. First use downloads about 1.06 GB of public model weights; subsequent inference is local. No model API key or cloud fallback is used. A failed or ambiguous extraction keeps the goal visible and leaves the review closed. Manual entry is a separate action with empty amount fields. Explicit English fixed orders such as `Sell 10 X for at least 10000 sats of BTC. Maximum fee 1000 sats.` are grounded against the original quantities and units; unsupported phrasing requires clarification. Percentage constraints need particular care: the model can misread them, so invalid interpretations are rejected and all drafts require review.
 
 Example goal: `Sell 100 X for at least 100 DUSD. Fee up to 1000 sats. Do not sell BTC.` The local order form displays **atomic units** (BTC in sats); X and test DUSD have precision 0 in the mock. DUSD is not USDT or a backed dollar.
 

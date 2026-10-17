@@ -9,13 +9,56 @@ import type {
 } from 'react';
 import type { AssetCode, Balance } from '../../model';
 import { cn } from '../../lib/utils';
+import { MorphingSquare } from './morphing-square';
 
 export function Button({
   className,
   type = 'button',
+  loading = false,
+  loadingText,
+  disabled,
+  children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button type={type} className={cn('ui-button', className)} {...props} />;
+}: ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean; loadingText?: string }) {
+  return (
+    <button
+      type={type}
+      className={cn('ui-button', className)}
+      {...props}
+      disabled={disabled || loading}
+      aria-busy={loading ? true : props['aria-busy']}
+    >
+      {loading && <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />}
+      {loading && loadingText ? loadingText : children}
+    </button>
+  );
+}
+
+export function WalletSkeleton() {
+  return (
+    <div className="wallet-skeleton" aria-hidden="true">
+      <div className="skeleton skeleton-title" />
+      <div className="skeleton skeleton-composer" />
+      <div className="overview-layout">
+        <Panel className="panel">
+          <div className="skeleton skeleton-heading" />
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="skeleton skeleton-offer" />
+          ))}
+        </Panel>
+        <Panel className="panel">
+          <div className="skeleton skeleton-heading" />
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="skeleton-asset">
+              <div className="skeleton skeleton-avatar" />
+              <div className="skeleton skeleton-asset-name" />
+              <div className="skeleton skeleton-amount" />
+            </div>
+          ))}
+        </Panel>
+      </div>
+    </div>
+  );
 }
 
 export function Panel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

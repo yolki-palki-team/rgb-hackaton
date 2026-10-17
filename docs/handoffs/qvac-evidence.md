@@ -58,3 +58,22 @@ Focused tests passed 7/7 with `node --import tsx --test apps/local-client/test/{
 ## Runtime mode after the default change — 17 October 2026
 
 The normal palka local-client startup selects `WALLET_MODE=real`. With no valid local wallet RPC token, an explicit unavailable adapter denies every wallet operation; the local API can still serve its UI and report the safe configuration reason. The Docker supervisor starts the market plus one real profile A by default. `PALKA_DEMO_MODE=true` explicitly starts three mock profiles A/B/C and preloads the shared QVAC cache. The real profile uses a separate state directory; existing mock databases are not interpreted as real wallet state. Pairing credentials are retained when legacy `mode: "mock"` metadata is removed from the pairing file. This mode change does not provide a real RGB sidecar or settlement capability by itself.
+
+
+## Desktop amount and readiness regression — 17 October 2026
+
+The reported prompt was reproduced using the actual local Node 22.17 / QVAC 0.21.1 / QWEN3_1_7B_INST_Q4 runtime with a synthetic asset catalog:
+
+`Sell exactly 10 X for at least 10000 sats of BTC. Maximum transaction fee: 1000 sats.`
+
+Before the fix, Qwen returned `10.00000000` X and `10000.00000000` BTC. The precision-0 X conversion threw `Too many decimal places`; the UI mislabeled every interpretation error as QVAC unavailable and opened its unchanged 100/100 draft. A separate startup issue cached loading as unavailable and prevented retry while wallet health polling was paused for an active trade.
+
+The corrected path constrains each model amount to literal numbers from its corresponding trade clause. Deterministic code then validates the selected asset, direction, source unit and precision. Sats convert to BTC human units exactly once before the existing atomic-unit draft conversion; insignificant trailing zeros are removed without rounding. A further live case showed Qwen miscalculating `0.0001 BTC` as `1000000`; field-specific schema constraints prevent that output and prevent a fee from supplying a missing receive amount. Absent BTC-sale policy instructions produce null instead of an invented prohibition. Existing saved private policies remain enforced.
+
+The expanded `rtk proxy node_modules/node/bin/node --import tsx apps/local-client/scripts/qvac-smoke.ts` passed six real local inference cases: X/DUSD, the original X/BTC request, its decimal-BTC equivalent, both BTC/X variants, and missing receive quantity requiring clarification. The original request produced atomic amounts **10 X / 10000 sats**, maximum fee **1000 sats**. Cached inference took 921–959 ms per complete case on this machine. BTC-sale smoke cases explicitly use a synthetic policy permitting BTC sale. No order was published, signed, broadcast or settled.
+
+The UI clears a previous review before inference, opens a review only for a new validated draft, and preserves semantic errors or clarification separately from runtime unavailability. Manual amount fields are blank. Loading has its own status, interpretation can retry regardless of cached readiness, and authenticated `/api/qvac/health` updates readiness independently of wallet capabilities and trade recovery. Browser and desktop interpretation deadlines allow the existing 180-second model-load plus 45-second inference budgets.
+
+Regression coverage includes precision-0 fractions, redundant zeros, exact large integers, BTC/sats in both directions, reversed assets, guessed amounts, fee substitution, ambiguous quantities, stale-review prevention, and model readiness recovery without wallet calls. The UI transport and review controller are tested; this change does not claim a visual Electron check. The user's running wallet was not stopped or altered. Arbitrary languages, number words, separators and complex multi-order phrasing are not supported by the fixed-order grounding grammar; they fail closed and require clarification/manual entry. These are local inference checks with synthetic balances, not new settlement evidence.
+
+Validation on the combined workspace: 106 JavaScript tests passed, TypeScript passed, scoped ESLint and Prettier passed, and both the local UI and desktop shell built. An existing UI assertion was updated from the removed network badge to the current disconnected-wallet label. Concurrent market/web changes were left with their owner. Native Rust/Python checks and a visual Electron session were not run for this TypeScript-only change.

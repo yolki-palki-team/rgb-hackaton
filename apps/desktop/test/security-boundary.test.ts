@@ -31,6 +31,7 @@ test('offer deep links carry one published order ID and no credentials or action
 test('generic renderer bridge allows only named local operations, with signing isolated', () => {
   for (const path of [
     '/api/health',
+    '/api/qvac/health',
     '/api/state',
     '/api/policy',
     '/api/snapshot',

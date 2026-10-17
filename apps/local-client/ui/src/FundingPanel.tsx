@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ClientStatus, FundingStatus, LocalClient } from './api';
 import { ArrowDown, ArrowRight, Bitcoin } from 'lucide-react';
 import { Button, Input, Panel, StatusBadge } from './components/ui/wallet-kit';
@@ -18,6 +18,8 @@ export function FundingPanel({
   const [funding, setFunding] = useState<FundingStatus | null>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState<'create' | 'preview' | 'approve' | 'sync' | null>(null);
+  const foregroundBusy = useRef(busy);
+  foregroundBusy.current = busy;
   const [error, setError] = useState<string | null>(null);
   const [approvalAttempted, setApprovalAttempted] = useState(false);
   const eligible = Boolean(client && wallet?.mode === 'real' && wallet.network === 'regtest');
@@ -52,15 +54,15 @@ export function FundingPanel({
     let active = true;
     let pending = false;
     const refresh = async () => {
-      if (pending) return;
+      if (pending || foregroundBusy.current) return;
       pending = true;
       try {
         const next = await client.fundingStatus();
-        if (!active) return;
+        if (!active || foregroundBusy.current) return;
         setFunding(next);
         setError(null);
       } catch (caught) {
-        if (active)
+        if (active && !foregroundBusy.current)
           setError(caught instanceof Error ? caught.message : 'Funding status is unavailable.');
       } finally {
         pending = false;
@@ -158,10 +160,14 @@ export function FundingPanel({
             {funding.reason ?? 'The local funding service is not ready.'}
           </p>
         ) : !funding && visible ? (
-          <MorphingSquare
-            message="Loading your WDK account…"
-            wrapperClassName="funding-message py-8"
-          />
+          <div role="status">
+            <MorphingSquare
+              message="Loading your WDK account…"
+              wrapperClassName="funding-message py-8"
+              role="presentation"
+            />
+            <div className="skeleton skeleton-offer" aria-hidden="true" />
+          </div>
         ) : null}
 
         {eligible && funding?.available && !funding.address && (
@@ -170,13 +176,11 @@ export function FundingPanel({
             <Button
               className="primary-button full"
               onClick={() => void create()}
-              disabled={Boolean(busy) || Boolean(error)}
-              aria-busy={busy === 'create'}
+              disabled={busy !== null || Boolean(error)}
+              loading={busy === 'create'}
+              loadingText="Creating account…"
             >
-              {busy === 'create' && (
-                <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-              )}
-              {busy === 'create' ? 'Creating…' : 'Create WDK account'}
+              Create WDK account
             </Button>
           </div>
         )}
@@ -209,40 +213,44 @@ export function FundingPanel({
                   value={amount}
                   onChange={(event) => setAmount(event.target.value)}
                   placeholder="0"
-                  disabled={Boolean(busy)}
+                  disabled={busy !== null}
                 />
                 <Button
                   className="primary-button full"
                   onClick={() => void preview()}
                   disabled={!canPreview || !/^[1-9]\d*$/.test(amount)}
-                  aria-busy={busy === 'preview'}
+                  loading={busy === 'preview'}
+                  loadingText="Preparing top up…"
                 >
-                  {busy === 'preview' ? (
-                    <>
-                      <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                      Please wait…
-                    </>
-                  ) : (
-                    <>
-                      Review top up <ArrowRight aria-hidden="true" size={16} />
-                    </>
-                  )}
+                  Review top up <ArrowRight aria-hidden="true" size={16} />
                 </Button>
               </div>
             )}
           </>
         )}
 
-        {eligible && expired && (
+        {eligible && expired && busy !== 'approve' && (
           <p className="funding-message">Preview expired. Review a new amount.</p>
         )}
 
-        {eligible && operation && !expired && (
+        {eligible && operation && (!expired || busy === 'approve') && (
           <div className="funding-review">
             <div className="funding-review-heading">
               <h2>{operation.status === 'PREVIEW' ? 'Review top up' : 'Transfer'}</h2>
               <StatusBadge>{operation.status}</StatusBadge>
             </div>
+            {operation.status !== 'PREVIEW' && operation.status !== 'CONFIRMED' && (
+              <div className="funding-message loading-message" role="status">
+                {busy && <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />}
+                {operation.status === 'BROADCAST'
+                  ? 'Waiting for Bitcoin confirmation. Use Check status to refresh.'
+                  : operation.status === 'RECONCILING'
+                    ? 'The transfer result is uncertain. Use Check status before taking another action.'
+                    : operation.status === 'SIGNING'
+                      ? 'Waiting for the signing result. Use Check status to refresh.'
+                      : 'Waiting for the signed transfer to be broadcast. Use Check status to continue.'}
+              </div>
+            )}
             <dl>
               <div>
                 <dt>Network</dt>
@@ -283,29 +291,25 @@ export function FundingPanel({
               </p>
             )}
             <div className="funding-actions">
-              {operation.status === 'PREVIEW' && (
+              {(operation.status === 'PREVIEW' || busy === 'approve') && (
                 <Button
                   className="primary-button"
                   onClick={() => void approve()}
                   disabled={!canApprove}
-                  aria-busy={busy === 'approve'}
+                  loading={busy === 'approve'}
+                  loadingText="Approving & sending…"
                 >
-                  {busy === 'approve' && (
-                    <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                  )}
-                  {busy === 'approve' ? 'Waiting for approval…' : 'Approve & send BTC'}
+                  Approve & send BTC
                 </Button>
               )}
               <Button
                 className="outline-button"
                 onClick={() => void sync()}
-                disabled={Boolean(busy)}
-                aria-busy={busy === 'sync'}
+                disabled={busy !== null}
+                loading={busy === 'sync'}
+                loadingText="Checking status…"
               >
-                {busy === 'sync' && (
-                  <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-                )}
-                {busy === 'sync' ? 'Checking status…' : 'Check status'}
+                Check status
               </Button>
             </div>
           </div>

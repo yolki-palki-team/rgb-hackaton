@@ -1,3 +1,4 @@
+import { canonicalDecimal } from './intent-grounding.ts';
 import {
   AiIntentSchema,
   OrderDraftSchema,
@@ -37,7 +38,7 @@ export function draftFromIntent(
       throw new Error('Specify a protected balance as an amount or a percentage');
     const proposed =
       reserve.minAmount !== null
-        ? toAtomic(reserve.minAmount, balance.asset.precision)
+        ? toAtomic(canonicalDecimal(reserve.minAmount), balance.asset.precision)
         : ((BigInt(balance.amount) * BigInt(reserve.minPercent!) + 99n) / 100n).toString();
     if (BigInt(proposed) > BigInt(policy.protectedBalances[reserve.assetKey] ?? '0'))
       policy.protectedBalances[reserve.assetKey] = proposed;
@@ -63,9 +64,9 @@ export function draftFromIntent(
     };
   const draft = OrderDraftSchema.parse({
     giveAsset: give.asset,
-    giveAmount: toAtomic(intent.giveAmount, give.asset.precision),
+    giveAmount: toAtomic(canonicalDecimal(intent.giveAmount), give.asset.precision),
     receiveAsset: receive.asset,
-    minReceiveAmount: toAtomic(intent.minReceiveAmount, receive.asset.precision),
+    minReceiveAmount: toAtomic(canonicalDecimal(intent.minReceiveAmount), receive.asset.precision),
     maxFeeSats: policy.maxFeeSats,
     expiresAt: now + 30 * 60_000,
   });

@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ChangeEventHandler, ComponentProps, ReactNode } from 'react';
 import { ArrowUp } from 'lucide-react';
-import { MorphingSquare } from './morphing-square';
 import { Button, Textarea } from './wallet-kit';
 import { cn } from '../../lib/utils';
 import { useTextareaResize } from '../../hooks/use-textarea-resize';
@@ -106,13 +105,10 @@ export function ChatInputSubmit({ className, disabled, ...props }: ComponentProp
       className={cn('chat-input-submit', className)}
       disabled={disabled || context.disabled || context.loading || !context.value.trim()}
       aria-label={context.loading ? 'Preparing order' : 'Prepare order'}
+      loading={context.loading}
       onClick={() => context.onSubmit?.()}
     >
-      {context.loading ? (
-        <MorphingSquare className="h-4 w-4 bg-current" aria-hidden="true" />
-      ) : (
-        <ArrowUp aria-hidden="true" size={20} />
-      )}
+      {!context.loading && <ArrowUp aria-hidden="true" size={20} />}
     </Button>
   );
 }

@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MorphingSquare } from '../ui/src/components/ui/morphing-square.tsx';
 import { MorphingSquare as PublicLoader } from '../../web/src/components/ui/morphing-square.tsx';
 import { FundingPanel } from '../ui/src/FundingPanel.tsx';
+import { Button } from '../ui/src/components/ui/wallet-kit.tsx';
 import { LocalClient, type ClientStatus } from '../ui/src/api.ts';
 
 test('both apps share accessible loader messages, placement, and compact sizing', () => {
@@ -74,4 +75,27 @@ test('funding shows a loader only while an eligible visible account is loading',
       /data-slot="morphing-square"/,
     );
   }
+});
+
+test('wallet buttons preserve caller busy state and use exactly one shared loading indicator', () => {
+  for (const busy of [true, false]) {
+    const html = renderToStaticMarkup(
+      createElement(Button, { 'aria-busy': busy, children: 'Refresh history' }),
+    );
+    assert.match(html, new RegExp(`aria-busy="${busy}"`));
+    assert.doesNotMatch(html, /data-slot="morphing-square"|disabled/);
+  }
+  const loading = renderToStaticMarkup(
+    createElement(Button, {
+      loading: true,
+      loadingText: 'Checking status…',
+      'aria-busy': false,
+      children: 'Check status',
+    }),
+  );
+  assert.match(loading, /disabled=""/);
+  assert.match(loading, /aria-busy="true"/);
+  assert.equal(loading.match(/data-slot="morphing-square"/g)?.length, 1);
+  assert.match(loading, /Checking status…/);
+  assert.doesNotMatch(loading, /loading-spinner|Check status</);
 });
