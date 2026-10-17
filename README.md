@@ -107,6 +107,14 @@ model-cache volumes. Keep the same environment/mode settings used at startup.
 The browser profile remains separate from the desktop wallet; matching appearance
 does not connect it to the desktop's keys or balances.
 
+The desktop opens with a skeleton while local services start and the first wallet
+snapshot loads. Connection, order, signing and funding actions show a spinner in
+the active button; swap and funding panels explain pending confirmation. Loading
+animations respect reduced-motion settings. Rebuild the desktop UI/shell (or the
+packaged app) and restart to pick up these changes; browser Docker profiles need
+the runtime rebuild above. Live settlement through these loading states has not
+been reverified.
+
 Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. The real-default path does not preload QVAC; first actual AI use downloads about 1.06 GB of public model weights, then loads them locally. Docker runs Linux CPU inference. Model readiness is shown in the local UI. Allow enough disk space and memory for the model; inference speed depends on the machine.
 
 To run the explicit synthetic three-profile demonstration instead:
