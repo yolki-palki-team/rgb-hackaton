@@ -120,6 +120,13 @@ test('wallet balance failure keeps the matched trade available for explicit reco
         return wallet.state();
       }
       if (path === '/api/snapshot') return snapshot;
+      if (path.endsWith('/progress'))
+        return {
+          tradeId: snapshot.trades[0].plan.tradeId,
+          signingAuthorized: false,
+          recoveryRequired: false,
+          receipt: null,
+        };
       if (path === '/api/policy')
         return {
           allowedAssetKeys: ['btc', 'dusd'],

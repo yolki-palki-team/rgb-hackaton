@@ -1,21 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AssetCard,
-  AssetIcon,
   Button,
-  DataTable,
   Icon,
   Input,
   Panel,
   Select,
   Textarea,
   SectionTitle,
-  Sidebar,
   StatusBadge,
 } from './components/ui/wallet-kit';
 import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './model';
 import type { AssetCode, Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
+import { TradeWorkflow, tradeProgress } from './workflow';
 import type { PrivatePolicy } from '@rgb-exchange/contracts';
 
 const sampleAssetCodes: AssetCode[] = ['BTC', 'X', 'DUSD'];
@@ -45,12 +43,16 @@ function App() {
   const [goal, setGoal] = useState('');
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [draftOpen, setDraftOpen] = useState(false);
-  const [draftChecked, setDraftChecked] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'error' | 'success' | 'info'; text: string } | null>(
     null,
   );
   const [busy, setBusy] = useState<string | null>(null);
-  const [approvalAttemptedTradeId, setApprovalAttemptedTradeId] = useState<string | null>(null);
+  const workflow = useRef(new TradeWorkflow());
+  const foregroundBusy = useRef(busy);
+  foregroundBusy.current = busy;
+  const [workflowRunning, setWorkflowRunning] = useState(false);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [workflowPaused, setWorkflowPaused] = useState(false);
   const connected = Boolean(client && status);
   const desktop = Boolean(window.palkaWallet);
   const isMock = status?.mode === 'mock';
@@ -62,6 +64,12 @@ function App() {
     : samplePreview
       ? sampleAssetCodes
       : [];
+
+  useEffect(() => {
+    if (!notice || notice.tone === 'error') return;
+    const timer = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const connect = useCallback(async () => {
     setBusy('connect');
@@ -80,11 +88,11 @@ function App() {
       setTrade(null);
       setPolicy(null);
       setPolicyAssets([]);
-      setApprovalAttemptedTradeId(null);
+      workflow.current = new TradeWorkflow();
       setPairToken('');
       setNotice({
         tone: 'success',
-        text: `Local wallet connected · ${health.network} · ${health.mode.toUpperCase()}`,
+        text: `Welcome back. Your ${health.network} wallet is connected.`,
       });
     } catch (error) {
       setNotice({ tone: 'error', text: `Could not connect: ${messageOf(error)}` });
@@ -96,10 +104,13 @@ function App() {
   useEffect(() => {
     if (!client) return;
     let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    let healthChecked = 0;
     const refresh = async () => {
       try {
+        if (foregroundBusy.current) return;
         const data = await client.snapshot();
-        if (!active) return;
+        if (!active || foregroundBusy.current) return;
         setBalances(data.balances);
         setOrders(data.orders);
         setMyOrder(data.myOrder);
@@ -114,30 +125,41 @@ function App() {
               ? current
               : { ...current, giveAsset: codes[0], receiveAsset: codes[1] },
           );
-        // Model download can continue after pairing; reflect QVAC readiness without reconnecting.
-        void client
-          .connect()
-          .then((health) => {
-            if (active) setStatus(health);
-          })
-          .catch(() => {});
+        if (Date.now() - healthChecked > 30_000) {
+          const health = await client.connect();
+          if (!active) return;
+          setStatus(health);
+          healthChecked = Date.now();
+        }
+        if (data.trade && !foregroundBusy.current && client.supportsTrade(data.trade)) {
+          // Recovery must continue even while the RGB balance index is catching up.
+          setWorkflowRunning(true);
+          const checked = await workflow.current.advance(client, data.trade);
+          if (!active) return;
+          if (checked)
+            setTrade((current) =>
+              current && current.id === data.trade?.id
+                ? { ...current, validatedPreview: checked }
+                : current,
+            );
+          setWorkflowError(workflow.current.error);
+          setWorkflowPaused(workflow.current.paused);
+        }
       } catch (error) {
+        // Retain the last view but disable actions until fresh wallet data arrives.
+        if (active) setSyncError(messageOf(error));
+      } finally {
         if (active) {
-          setBalances([]);
-          setOrders([]);
-          setMyOrder(null);
-          setTrade(null);
-          setPolicy(null);
-          setPolicyAssets([]);
-          setSyncError(messageOf(error));
+          setWorkflowRunning(false);
+          // Schedule from completion: native wallet calls must never overlap.
+          timer = setTimeout(() => void refresh(), 3000);
         }
       }
     };
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 5000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [client]);
 
@@ -179,7 +201,7 @@ function App() {
     setTrade(null);
     setPolicy(null);
     setPolicyAssets([]);
-    setApprovalAttemptedTradeId(null);
+    workflow.current = new TradeWorkflow();
     setSyncError(null);
     setNotice({ tone: 'info', text: 'Local wallet disconnected.' });
   };
@@ -194,7 +216,7 @@ function App() {
     }
     if (!status?.qvacAvailable) {
       setDraftOpen(true);
-      setDraftChecked(false);
+
       setNotice({
         tone: 'info',
         text: `QVAC unavailable: ${status?.qvacReason ?? 'The local model is not ready.'} Use the manual form.`,
@@ -208,7 +230,7 @@ function App() {
       if (result.draft) setDraft(result.draft);
       setPolicy(result.policy);
       setDraftOpen(true);
-      setDraftChecked(false);
+
       setNotice(
         result.draft
           ? {
@@ -232,40 +254,20 @@ function App() {
     }
   };
 
-  const checkDraft = async () => {
-    setBusy('check');
-    setNotice(null);
-    try {
-      validateDraftShape(draft, policy);
-      if (!client || !ready)
-        throw new Error('Connect the local wallet and load its balances before validation.');
-      if (!policy) throw new Error('Local policy has not loaded yet.');
-      await client.checkDraft(draft, policy);
-      setDraftChecked(true);
-      setNotice({
-        tone: 'success',
-        text: 'Local policy validated. Publishing requires a separate action.',
-      });
-    } catch (error) {
-      setDraftChecked(false);
-      setNotice({ tone: 'error', text: messageOf(error) });
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const publish = async () => {
-    if (!client || !ready || !draftChecked || !policy) return;
+    if (!client || !ready || !policy) return;
     setBusy('publish');
     setNotice(null);
     try {
+      validateDraftShape(draft, policy);
+      await client.checkDraft(draft, policy);
       const order = await client.publishDraft(draft, policy);
       setMyOrder(order);
       setDraftOpen(false);
       setView('market');
       setNotice({
         tone: 'success',
-        text: 'Order published. This does not authorize transaction signing.',
+        text: 'Order published. We’ll let you know when a match is ready.',
       });
     } catch (error) {
       setNotice({ tone: 'error', text: messageOf(error) });
@@ -294,7 +296,7 @@ function App() {
     setNotice(null);
     const digest = trade.validatedPreview.digest;
     const tradeId = trade.id;
-    setApprovalAttemptedTradeId(tradeId);
+    foregroundBusy.current = 'approve';
     setTrade((current) =>
       current?.id === tradeId ? { ...current, validatedPreview: undefined } : current,
     );
@@ -302,47 +304,15 @@ function App() {
       await client.approve(tradeId, digest);
       setNotice({
         tone: 'info',
-        text: 'Local approval sent to the wallet. Check the status; RGB acceptance is still required.',
+        text: 'Approval saved. We’ll follow the swap through to completion for you.',
       });
     } catch (error) {
       setNotice({
-        tone: 'error',
-        text: `${messageOf(error)}. The signing outcome may be uncertain; check wallet state before another attempt.`,
+        tone: 'info',
+        text: messageOf(error).includes('Signing was not approved')
+          ? 'Signing cancelled. You can review the swap again when you’re ready.'
+          : 'Checking your signing result automatically. Your wallet will only continue with a saved approval.',
       });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const prepare = async () => {
-    if (!client || !trade) return;
-    setBusy('prepare');
-    setNotice(null);
-    try {
-      const result = await client.prepare(trade.id);
-      setNotice({ tone: 'info', text: `Preparation: ${result}.` });
-    } catch (error) {
-      setNotice({ tone: 'error', text: messageOf(error) });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const preview = async () => {
-    if (!client || !trade) return;
-    setBusy('preview');
-    setNotice(null);
-    try {
-      const checked = await client.preview(trade.id);
-      setTrade((current) =>
-        current?.id === trade.id ? { ...current, validatedPreview: checked } : current,
-      );
-      setNotice({
-        tone: 'success',
-        text: 'The final package was validated by the local wallet. Review amounts before signing.',
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', text: messageOf(error) });
     } finally {
       setBusy(null);
     }
@@ -351,6 +321,7 @@ function App() {
   const reject = async () => {
     if (!client || !trade) return;
     setBusy('reject');
+    foregroundBusy.current = 'reject';
     setNotice(null);
     try {
       await client.reject(trade.id);
@@ -362,35 +333,27 @@ function App() {
     }
   };
 
-  const sync = async () => {
-    if (!client || !trade) return;
-    setBusy('sync');
-    setNotice(null);
-    try {
-      const receipt = await client.sync(trade.id);
-      setNotice({
-        tone: receipt.state === 'confirmed' ? 'success' : 'info',
-        text: `Reconciliation: ${receipt.state}; Bitcoin ${receipt.chainConfirmed ? 'confirmed' : 'unconfirmed'}, RGB ${receipt.rgbAccepted ? 'accepted' : 'not accepted'}. ${receipt.reason ?? ''}`,
-      });
-    } catch (error) {
-      setNotice({ tone: 'error', text: messageOf(error) });
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const shownTrade = trade ?? (!connected && samplePreview ? sampleTrades[sampleTradeKind] : null);
 
   return (
     <div className="app-shell">
-      <Sidebar active={view} items={navItems} onNavigate={setView} />
-
       <div className="main-area">
         <header className="topbar">
-          <div className="breadcrumb">
-            Local wallet <Icon name="chevron" size={14} />{' '}
-            <strong>{navItems.find((item) => item.key === view)?.label}</strong>
-          </div>
+          <button className="site-brand" onClick={() => setView('home')} aria-label="palka home">
+            palka
+          </button>
+          <nav className="site-nav" aria-label="Wallet navigation">
+            {navItems.map((item) => (
+              <button
+                key={item.key}
+                aria-current={view === item.key ? 'page' : undefined}
+                onClick={() => setView(item.key)}
+              >
+                {item.label}
+                {item.key === 'trade' && trade?.validatedPreview && <span className="nav-dot" />}
+              </button>
+            ))}
+          </nav>
           <div className="top-actions">
             {desktop ? (
               <Button
@@ -438,7 +401,7 @@ function App() {
                     ? 'Sample preview · disconnected'
                     : 'Local wallet unavailable'
                   : syncError
-                    ? 'Wallet data unavailable'
+                    ? 'Reconnecting to your wallet'
                     : isMock
                       ? 'Mock wallet connected'
                       : 'Real local wallet connected'}
@@ -449,11 +412,17 @@ function App() {
                     ? 'Synthetic balances and plans are shown for UI preview only. Trading and signing are unavailable.'
                     : 'Pair the local wallet to load balances, network, orders, and QVAC status.'
                   : syncError
-                    ? syncError
+                    ? 'We’re refreshing your wallet data. New orders and signatures will be available once the connection is restored.'
                     : isMock
                       ? 'Demo wallet: matching works, BTC/RGB signing and broadcast are unsupported.'
-                      : `Network ${status?.network}. Final settlement requires separate wallet validation and approval.`}
+                      : 'Your keys stay on this device. You decide when to sign.'}
               </span>
+              {syncError && (
+                <details className="technical-details">
+                  <summary>Connection details</summary>
+                  <p>{syncError}</p>
+                </details>
+              )}
             </div>
             {!connected && (
               <Button
@@ -474,6 +443,19 @@ function App() {
             </div>
           )}
 
+          {trade &&
+            view !== 'trade' &&
+            !['CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(trade.status) && (
+              <button className="trade-notification" onClick={() => setView('trade')}>
+                <span>
+                  <strong>{tradeProgress(trade).title}</strong>
+                  <small>
+                    {trade.kind === 'ring' ? 'Three-party ring' : 'Direct swap'} · View your swap
+                  </small>
+                </span>
+                <Icon name="arrow" size={20} />
+              </button>
+            )}
           {view === 'home' && (
             <>
               <div className="page-heading">
@@ -511,7 +493,7 @@ function App() {
                     {connected
                       ? syncError
                         ? 'Wallet balances are unavailable. Check the local backend.'
-                        : 'No assets reported by this wallet.'
+                        : 'Loading your assets…'
                       : 'No wallet connected. Pair the local backend to load balances.'}
                   </p>
                 )}
@@ -573,7 +555,6 @@ function App() {
                         onClick={() => {
                           if (connected || samplePreview) {
                             setDraftOpen(true);
-                            setDraftChecked(false);
                           } else
                             setNotice({
                               tone: 'info',
@@ -664,66 +645,46 @@ function App() {
                     </div>
                     <StatusBadge className="count-pill">{visibleOrders.length}</StatusBadge>
                   </div>
-                  <div className="table-wrap">
-                    <DataTable>
-                      <thead>
-                        <tr>
-                          <th>Participant</th>
-                          <th>Gives</th>
-                          <th>Receives at least</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleOrders.length ? (
-                          visibleOrders.map((order) => (
-                            <tr
-                              className={selectedOfferId === order.id ? 'selected-order' : ''}
-                              key={order.id}
-                            >
-                              <td>
-                                <strong>{order.owner}</strong>
-                                <small>{order.id}</small>
-                              </td>
-                              <td>
-                                <span className="table-amount">
-                                  <AssetIcon code={order.giveAsset} />
-                                  {order.giveAmount}{' '}
-                                  {order.giveAsset !== 'BTC' ? order.giveAsset : ''}
-                                </span>
-                              </td>
-                              <td>
-                                <span className="table-amount">
-                                  <AssetIcon code={order.receiveAsset} />
-                                  {order.minReceiveAmount}{' '}
-                                  {order.receiveAsset !== 'BTC' &&
-                                  !order.minReceiveAmount.includes(order.receiveAsset)
-                                    ? order.receiveAsset
-                                    : ''}
-                                </span>
-                              </td>
-                              <td>
-                                <StatusBadge className="status-pill open">
-                                  {order.status}
-                                </StatusBadge>
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={4} className="empty-cell">
-                              {connected
-                                ? syncError
-                                  ? 'Order book unavailable.'
-                                  : 'No open orders yet.'
-                                : samplePreview
-                                  ? 'No sample orders.'
-                                  : 'Pair a local wallet to load orders.'}
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </DataTable>
+                  <div className="order-list">
+                    {visibleOrders.length ? (
+                      visibleOrders.map((order) => (
+                        <article
+                          key={order.id}
+                          className={`offer-card ${selectedOfferId === order.id ? 'selected-order' : ''}`}
+                        >
+                          <div className="offer-meta">
+                            <span>{order.owner}</span>
+                            <StatusBadge className="status-pill">{order.status}</StatusBadge>
+                          </div>
+                          <div className="offer-amounts">
+                            <div>
+                              <small>Gives</small>
+                              <strong>
+                                {order.giveAmount}{' '}
+                                {order.giveAsset !== 'BTC' ? order.giveAsset : ''}
+                              </strong>
+                            </div>
+                            <Icon name="arrow" size={20} />
+                            <div>
+                              <small>Receives at least</small>
+                              <strong>
+                                {order.minReceiveAmount}{' '}
+                                {order.receiveAsset !== 'BTC' &&
+                                !order.minReceiveAmount.includes(order.receiveAsset)
+                                  ? order.receiveAsset
+                                  : ''}
+                              </strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <p className="empty-state">
+                        {connected
+                          ? 'No open orders yet. Your next swap starts with an order.'
+                          : 'Connect your wallet to see open orders.'}
+                      </p>
+                    )}
                   </div>
                   <div className="panel-footer">
                     {connected
@@ -803,11 +764,11 @@ function App() {
             <>
               <div className="page-heading compact">
                 <div>
-                  <div className="eyebrow">A2A / REVIEW</div>
+                  <div className="eyebrow">YOUR SWAP</div>
                   <h1>
-                    Trade details<span className="accent-stop">.</span>
+                    Your swap<span className="accent-stop">.</span>
                   </h1>
-                  <p>One plan, exact transfer directions, and separate wallet approval.</p>
+                  <p>We handle the preparation. You review the amounts and decide when to sign.</p>
                 </div>
               </div>
               {!connected && samplePreview && (
@@ -849,6 +810,68 @@ function App() {
                     : 'No wallet connected. Pair the local backend to view trades.'}
                 </div>
               )}
+              {trade && client?.supportsTrade(trade) && (
+                <section className="swap-progress" aria-label="Swap progress" aria-live="polite">
+                  <div className="progress-heading">
+                    {tradeProgress(trade).waiting && !workflowPaused ? (
+                      <span className="spinner" aria-hidden="true" />
+                    ) : (
+                      <Icon name="shield" size={24} />
+                    )}
+                    <div>
+                      <h2>
+                        {workflowPaused ? 'Your swap needs attention' : tradeProgress(trade).title}
+                      </h2>
+                      <p>
+                        {workflowPaused
+                          ? 'We couldn’t finish this step. Your approval and transaction history are saved. Check the details, then try again.'
+                          : tradeProgress(trade).detail}
+                      </p>
+                    </div>
+                  </div>
+                  <ol className="progress-steps">
+                    {['Prepare', 'Your approval', 'All wallets', 'Confirmation'].map(
+                      (label, index) => (
+                        <li
+                          key={label}
+                          className={
+                            tradeProgress(trade).step > index
+                              ? 'done'
+                              : tradeProgress(trade).step === index
+                                ? 'current'
+                                : ''
+                          }
+                          aria-current={tradeProgress(trade).step === index ? 'step' : undefined}
+                        >
+                          <span>{tradeProgress(trade).step > index ? '✓' : index + 1}</span>
+                          {label}
+                        </li>
+                      ),
+                    )}
+                  </ol>
+                  {workflowError && (
+                    <details className="technical-details">
+                      <summary>
+                        {workflowPaused ? 'What happened?' : 'Reconnecting automatically…'}
+                      </summary>
+                      <p>{workflowError}</p>
+                    </details>
+                  )}
+                  {workflowPaused && (
+                    <Button
+                      className="outline-button"
+                      disabled={workflowRunning || busy !== null}
+                      onClick={() => {
+                        workflow.current.retry();
+                        setWorkflowPaused(false);
+                        setWorkflowError(null);
+                      }}
+                    >
+                      Try again
+                    </Button>
+                  )}
+                </section>
+              )}
               {shownTrade && (
                 <div className="trade-layout">
                   <Panel className="panel trade-panel">
@@ -860,15 +883,18 @@ function App() {
                             : 'THREE PARTICIPANTS · RING'}
                         </span>
                         <h2>{shownTrade.kind === 'direct' ? 'Direct swap' : 'Ring swap'}</h2>
-                        <small>Plan {shownTrade.id}</small>
-                        {shownTrade.txid && (
-                          <p className="reason">
-                            Bitcoin transaction: {shownTrade.txid}
-                            <br />
-                            Bitcoin {shownTrade.chainConfirmed ? 'confirmed' : 'unconfirmed'} · RGB{' '}
-                            {shownTrade.rgbAccepted ? 'accepted' : 'not accepted'}
-                          </p>
-                        )}
+                        <details className="technical-details">
+                          <summary>Transaction details</summary>
+                          <p>Plan {shownTrade.id}</p>
+                          {shownTrade.txid && (
+                            <p className="reason">
+                              Bitcoin transaction: {shownTrade.txid}
+                              <br />
+                              Bitcoin {shownTrade.chainConfirmed ? 'confirmed' : 'unconfirmed'} ·
+                              RGB {shownTrade.rgbAccepted ? 'accepted' : 'not accepted'}
+                            </p>
+                          )}
+                        </details>
                       </div>
                       <StatusBadge className={`status-pill ${trade ? 'open' : 'sample'}`}>
                         {trade ? statusLabel(shownTrade.status) : shownTrade.status}
@@ -931,8 +957,14 @@ function App() {
                   </Panel>
                   <aside className="market-side">
                     <Panel className="panel approval-panel">
-                      <span className="eyebrow">SEPARATE APPROVAL</span>
-                      <h3>Before signing</h3>
+                      <span className="eyebrow">YOUR DECISION</span>
+                      <h3>
+                        {trade?.status === 'CONFIRMED'
+                          ? 'All done'
+                          : trade?.signingAuthorized
+                            ? 'You’ve approved'
+                            : 'Review your swap'}
+                      </h3>
                       {trade?.validatedPreview ? (
                         <>
                           <p>The local wallet validated the final package. Review exact changes:</p>
@@ -958,9 +990,10 @@ function App() {
                             className="primary-button full"
                             type="button"
                             onClick={() => void approve()}
-                            disabled={busy !== null || !ready || isMock}
+                            disabled={busy !== null || workflowRunning || !ready || isMock}
                           >
-                            Authorize signing <Icon name="arrow" size={16} />
+                            {busy === 'approve' ? 'Waiting for approval…' : 'Review & sign'}{' '}
+                            <Icon name="arrow" size={16} />
                           </Button>
                         </>
                       ) : (
@@ -970,92 +1003,30 @@ function App() {
                           </div>
                           <p>
                             {trade
-                              ? 'Waiting for final package and local wallet validation. A trade plan alone cannot be signed.'
-                              : 'This is a sample plan. There is no final package or wallet validation.'}
+                              ? tradeProgress(trade).detail
+                              : 'This is a sample plan. Connect your wallet to start a real swap.'}
                           </p>
-                          {trade &&
-                            ['RESERVED', 'PREPARING'].includes(trade.status) &&
-                            approvalAttemptedTradeId !== trade.id && (
-                              <Button
-                                className="outline-button full"
-                                type="button"
-                                onClick={() => void prepare()}
-                                disabled={busy !== null || !ready}
-                              >
-                                Check trade readiness
-                              </Button>
-                            )}
-                          {trade &&
-                            !isMock &&
-                            ['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING'].includes(
-                              trade.status,
-                            ) &&
-                            approvalAttemptedTradeId !== trade.id && (
-                              <Button
-                                className="outline-button full"
-                                type="button"
-                                onClick={() => void preview()}
-                                disabled={busy !== null || !ready}
-                              >
-                                Validate final package
-                              </Button>
-                            )}
                           {(isMock || !trade || trade.status === 'UNSUPPORTED') && (
-                            <Button className="primary-button full" type="button" disabled>
-                              Signing unavailable <Icon name="arrow" size={16} />
+                            <Button className="primary-button full" disabled>
+                              Signing unavailable
                             </Button>
                           )}
                         </>
                       )}
                       {trade &&
-                        [
-                          'SIGNING',
-                          'READY_TO_BROADCAST',
-                          'BROADCAST',
-                          'RECONCILING',
-                          'CONFIRMED',
-                        ].includes(trade.status) && (
-                          <Button
-                            className="outline-button full"
-                            type="button"
-                            onClick={() => void sync()}
-                            disabled={busy !== null}
-                          >
-                            Reconcile Bitcoin and RGB
-                          </Button>
-                        )}
-                      {trade &&
-                        approvalAttemptedTradeId === trade.id &&
-                        ![
-                          'SIGNING',
-                          'READY_TO_BROADCAST',
-                          'BROADCAST',
-                          'RECONCILING',
-                          'CONFIRMED',
-                        ].includes(trade.status) && (
-                          <Button
-                            className="outline-button full"
-                            type="button"
-                            onClick={() => void sync()}
-                            disabled={busy !== null}
-                          >
-                            Check signing outcome
-                          </Button>
-                        )}
-                      {trade &&
-                        approvalAttemptedTradeId !== trade.id &&
+                        !trade.recoveryRequired &&
                         ['RESERVED', 'PREPARING', 'AWAITING_APPROVAL'].includes(trade.status) && (
                           <Button
                             className="text-button danger reject-button"
                             type="button"
                             onClick={() => void reject()}
-                            disabled={busy !== null}
+                            disabled={busy !== null || workflowRunning}
                           >
-                            Reject trade
+                            Cancel swap
                           </Button>
                         )}
                       <div className="approval-foot">
-                        Order confirmation does not authorize transaction signing.
+                        Your wallet checks the exact amounts again before signing.
                       </div>
                     </Panel>
                   </aside>
@@ -1308,20 +1279,12 @@ function App() {
             </div>
             <div className="modal-actions">
               <Button
-                className="outline-button"
-                type="button"
-                onClick={() => void checkDraft()}
-                disabled={busy !== null || !ready}
-              >
-                {busy === 'check' ? 'Validating…' : 'Validate terms'}
-              </Button>
-              <Button
                 className="primary-button"
                 type="button"
                 onClick={() => void publish()}
-                disabled={!ready || !draftChecked || busy !== null}
+                disabled={!ready || busy !== null}
               >
-                {busy === 'publish' ? 'Publishing…' : 'Confirm and publish'}{' '}
+                {busy === 'publish' ? 'Checking & publishing…' : 'Publish order'}{' '}
                 <Icon name="arrow" size={16} />
               </Button>
             </div>
@@ -1333,11 +1296,9 @@ function App() {
 
   function updateDraft(change: Partial<Draft>) {
     setDraft((current) => ({ ...current, ...change }));
-    setDraftChecked(false);
   }
   function updatePolicy(change: Partial<PrivatePolicy>) {
     setPolicy((current) => (current ? { ...current, ...change } : current));
-    setDraftChecked(false);
   }
 }
 

@@ -241,7 +241,9 @@ async function requestLocal(
     },
     body: payload,
     redirect: 'error',
-    signal: AbortSignal.timeout(path === '/api/interpret' ? 60_000 : 15_000),
+    signal: AbortSignal.timeout(
+      path === '/api/interpret' || /\/(prepare|preview|sync|approve)$/.test(path) ? 90_000 : 15_000,
+    ),
   }).catch(() => {
     throw new Error('Local wallet service is unavailable');
   });

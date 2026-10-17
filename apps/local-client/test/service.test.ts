@@ -257,6 +257,32 @@ async function fixture(store: LocalStore, wallet = new FakeWallet(), market = ne
   return { service, wallet, market, tradePlan, published };
 }
 
+test('local progress exposes only durable recovery state and validates participant ownership', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, market, wallet } = await fixture(store);
+    assert.deepEqual(await service.progress('trade-1'), {
+      tradeId: 'trade-1',
+      signingAuthorized: false,
+      recoveryRequired: false,
+      receipt: null,
+    });
+    await service.preview('trade-1');
+    assert.equal((await service.progress('trade-1')).signingAuthorized, false);
+    assert.equal(wallet.releaseCount, 0);
+    const outsider = new LocalService(
+      'other',
+      wallet,
+      market as unknown as MarketClient,
+      store,
+      qvac,
+    );
+    await assert.rejects(outsider.progress('trade-1'), /Invalid participant/);
+  } finally {
+    store.close();
+  }
+});
+
 test('local preview rejects a changed RGB contract and fee above user limit', async () => {
   const store = new LocalStore(':memory:');
   try {
@@ -685,6 +711,7 @@ test('lost sign response recovers original durable authorization after restart',
     store = new LocalStore(path);
     const restarted = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
     market.trade!.status = 'RECONCILING';
+    assert.equal((await restarted.progress('trade-1')).signingAuthorized, true);
     await restarted.sync('trade-1');
     await restarted.sync('trade-1');
     assert.equal(calls, 2); // Wallet replay once, then local cached signature only.

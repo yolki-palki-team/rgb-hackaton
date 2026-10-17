@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   MarketSnapshotSchema,
   OrderDraftSchema,
@@ -133,6 +134,14 @@ export class LocalClient {
     return this.status;
   }
 
+  supportsTrade(trade: Trade) {
+    return (
+      this.status?.mode === 'real' &&
+      this.status.wallet.signing &&
+      (trade.kind === 'ring' ? this.status.wallet.ringSwap : this.status.wallet.directSwap)
+    );
+  }
+
   async snapshot(): Promise<Snapshot> {
     if (!this.status) throw new Error('Pair the wallet first.');
     const [stateResult, rawSnapshot, rawPolicy] = await Promise.all([
@@ -162,6 +171,34 @@ export class LocalClient {
           this.receipts.get(market.trades[0].plan.tradeId),
         )
       : null;
+    if (trade) {
+      const progress = z
+        .object({
+          tradeId: z.string(),
+          signingAuthorized: z.boolean(),
+          recoveryRequired: z.boolean(),
+          receipt: ReceiptSchema.nullable(),
+        })
+        .parse(await this.request('GET', `/api/trades/${encodeURIComponent(trade.id)}/progress`));
+      if (progress.tradeId !== trade.id)
+        throw new Error('Local progress belongs to another trade.');
+      trade.signingAuthorized = progress.signingAuthorized;
+      trade.recoveryRequired = progress.recoveryRequired;
+      if (progress.recoveryRequired) trade.validatedPreview = undefined;
+      if (progress.receipt) {
+        this.checkReceipt(trade.id, progress.receipt);
+        this.receipts.set(trade.id, progress.receipt);
+        Object.assign(
+          trade,
+          mapTrade(
+            market.trades[0],
+            this.status.ownerId,
+            progress.recoveryRequired ? null : this.approval,
+            progress.receipt,
+          ),
+        );
+      }
+    }
     const activeOrder = market.myOrders.find(
       (order) => order.status === 'OPEN' || order.status === 'RESERVED',
     );
@@ -247,6 +284,18 @@ export class LocalClient {
       {},
     );
     const receipt = ReceiptSchema.parse(raw);
+    this.checkReceipt(tradeId, receipt);
+    this.receipts.set(tradeId, receipt);
+    return {
+      state: receipt.state,
+      chainConfirmed: receipt.chainConfirmed,
+      rgbAccepted: receipt.rgbAccepted,
+      reason: receipt.reason,
+    };
+  }
+
+  private checkReceipt(tradeId: string, receipt: Receipt) {
+    if (!this.status) throw new Error('Pair the wallet first.');
     if (
       receipt.tradeId !== tradeId ||
       receipt.network !== this.status.network ||
@@ -258,13 +307,6 @@ export class LocalClient {
       (receipt.mode !== 'real' || !receipt.txid || !receipt.chainConfirmed || !receipt.rgbAccepted)
     )
       throw new Error('Wallet did not confirm Bitcoin and RGB acceptance.');
-    this.receipts.set(tradeId, receipt);
-    return {
-      state: receipt.state,
-      chainConfirmed: receipt.chainConfirmed,
-      rgbAccepted: receipt.rgbAccepted,
-      reason: receipt.reason,
-    };
   }
 
   async preview(tradeId: string): Promise<Trade['validatedPreview']> {
@@ -359,7 +401,8 @@ export class LocalClient {
   ): Promise<T> {
     if (this.bridge) return (await this.bridge.request(method, path, body)) as T;
     const controller = new AbortController();
-    const timeoutMs = path === '/api/interpret' ? 55_000 : 15_000;
+    const timeoutMs =
+      path === '/api/interpret' || /\/(prepare|preview|sync|approve)$/.test(path) ? 90_000 : 15_000;
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
