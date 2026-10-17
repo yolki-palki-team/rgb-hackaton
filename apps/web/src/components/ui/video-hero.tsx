@@ -47,7 +47,7 @@ export default function VideoHero() {
   };
 
   return <section className="video-hero" ref={rootRef} aria-labelledby="hero-title">
-    <video ref={videoRef} className="video-hero-media" src="/hero/velorah.mp4" poster="/hero/velorah-poster.jpg" muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }} />
+    <video ref={videoRef} className="video-hero-media" src="/hero/prisma.mp4" poster="/hero/prisma-poster.jpg" muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }} />
     <div className="video-hero-shade" aria-hidden="true" />
     <nav className="video-hero-nav" aria-label="Primary">
       <a className="video-hero-brand" href="/" aria-label="palka home">palka</a>

@@ -13,3 +13,10 @@ ours and the licence below is the one it shipped with.
 
 If you are the author and want this listing changed or removed, write to
 support@21st.dev and it is done the same day.
+
+## Current background video
+
+The background video was selected from the Prisma component supplied by the user.
+Source: https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_170732_8a9ccda6-5cff-4628-b164-059c500a2b41.mp4
+
+The local `prisma.mp4` is compressed with its audio removed; `prisma-poster.jpg` is extracted from that video. The layout retains the Velorah adaptation described above.

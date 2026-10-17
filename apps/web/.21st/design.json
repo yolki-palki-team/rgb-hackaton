@@ -82,6 +82,10 @@
     {
       "decision": "Replace sculpture with the user-selected Velorah video hero, centered palka copy and glass CTAs; retain the black footer",
       "source": "Explicit user selection, 2026-10-17"
+    },
+    {
+      "decision": "Use the user-supplied Prisma background video within the existing palka hero layout",
+      "source": "Explicit user selection, 2026-10-17"
     }
   ],
   "evidence": [
