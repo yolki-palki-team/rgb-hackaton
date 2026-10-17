@@ -67,6 +67,8 @@ jobs:
         run: bash deploy/server.sh up
       - name: Check public web and coordinator
         run: bash deploy/server.sh check
+      - name: Verify enrollment in the deployment image
+        run: docker compose -f deploy/compose.yaml run --rm --no-deps runtime node --import tsx --test apps/market/test/registration.test.ts
       - name: Show startup logs on failure
         if: failure()
         run: bash deploy/server.sh logs
