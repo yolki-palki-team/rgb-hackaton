@@ -1,0 +1,14 @@
+node_modules/
+**/dist/
+.dist/
+.state/
+.qvac/
+.venv/
+**/state/
+**/target/
+**/vendor/
+**/__pycache__/
+tools/
+package-lock.json
+scripts/demo/evidence/
+apps/web/.21st/

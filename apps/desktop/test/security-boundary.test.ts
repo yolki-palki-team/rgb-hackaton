@@ -8,27 +8,55 @@ const tradeId = '123e4567-e89b-42d3-a456-426614174000';
 test('offer deep links carry one published order ID and no credentials or actions', () => {
   assert.equal(parseOfferLink(`palka://offer/${orderId}`), orderId);
   for (const link of [
-    `palka://offer/${orderId}?token=secret`, `palka://offer/${orderId}#secret`,
-    `palka://offer/${orderId}/prepare`, `palka://offer//${orderId}`,
-    `palka://other/${orderId}`, `foreign://offer/${orderId}`, `https://offer/${orderId}`,
-    `palka://offer/${orderId}%2Fprepare`, `palka://offer/${orderId}%3Ftoken=secret`,
-    'palka://offer/order-secret', 'palka://offer/order-123e4567-e89b-42d3-a456-426614174000@evil',
-  ]) assert.equal(parseOfferLink(link), null, link);
+    `palka://offer/${orderId}?token=secret`,
+    `palka://offer/${orderId}#secret`,
+    `palka://offer/${orderId}/prepare`,
+    `palka://offer//${orderId}`,
+    `palka://other/${orderId}`,
+    `foreign://offer/${orderId}`,
+    `https://offer/${orderId}`,
+    `palka://offer/${orderId}%2Fprepare`,
+    `palka://offer/${orderId}%3Ftoken=secret`,
+    'palka://offer/order-secret',
+    'palka://offer/order-123e4567-e89b-42d3-a456-426614174000@evil',
+  ])
+    assert.equal(parseOfferLink(link), null, link);
 });
 
 test('generic renderer bridge allows only named local operations, with signing isolated', () => {
-  for (const path of ['/api/health', '/api/state', '/api/policy', '/api/snapshot', `/api/trades/${tradeId}`]) {
+  for (const path of [
+    '/api/health',
+    '/api/state',
+    '/api/policy',
+    '/api/snapshot',
+    `/api/trades/${tradeId}`,
+  ]) {
     assert.equal(validateWalletRequest('GET', path), true, path);
   }
-  for (const path of ['/api/interpret', '/api/draft/validate', '/api/orders', `/api/orders/${orderId}/cancel`, `/api/trades/${tradeId}/prepare`, `/api/trades/${tradeId}/preview`, `/api/trades/${tradeId}/sync`, `/api/trades/${tradeId}/reject`]) {
+  for (const path of [
+    '/api/interpret',
+    '/api/draft/validate',
+    '/api/orders',
+    `/api/orders/${orderId}/cancel`,
+    `/api/trades/${tradeId}/prepare`,
+    `/api/trades/${tradeId}/preview`,
+    `/api/trades/${tradeId}/sync`,
+    `/api/trades/${tradeId}/reject`,
+  ]) {
     assert.equal(validateWalletRequest('POST', path), true, path);
   }
   for (const [method, path] of [
-    ['POST', `/api/trades/${tradeId}/approve`], ['GET', '/api/orders'], ['POST', '/api/state'],
-    ['POST', `/api/trades/${tradeId}/approve?approvalToken=secret`], ['GET', '/api/health#secret'],
-    ['GET', '/api/trades/%2e%2e'], ['GET', '/api/trades/../state'],
-    ['POST', '/api/admin/settings'], ['DELETE', '/api/orders'],
-  ]) assert.equal(validateWalletRequest(method, path), false, `${method} ${path}`);
+    ['POST', `/api/trades/${tradeId}/approve`],
+    ['GET', '/api/orders'],
+    ['POST', '/api/state'],
+    ['POST', `/api/trades/${tradeId}/approve?approvalToken=secret`],
+    ['GET', '/api/health#secret'],
+    ['GET', '/api/trades/%2e%2e'],
+    ['GET', '/api/trades/../state'],
+    ['POST', '/api/admin/settings'],
+    ['DELETE', '/api/orders'],
+  ])
+    assert.equal(validateWalletRequest(method, path), false, `${method} ${path}`);
   assert.equal(validateTradeId(tradeId), true);
   assert.equal(validateTradeId('../trade-1'), false);
   assert.equal(validateTradeId('trade-1?token=secret'), false);

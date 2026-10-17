@@ -9,3 +9,4 @@
 - Run checks relevant to the change and document remaining limitations.
 - Preserve Git history during the hackathon: no rebase, amend or force-push.
 - Prefix shell commands with `rtk`; use `rtk proxy <command>` when needed.
+- Follow the repository code style: `rtk proxy npm run format` applies Prettier, Ruff and rustfmt; `rtk proxy npm run lint` runs ESLint, Stylelint, Ruff and Clippy. Before handing off changes, run the relevant checks (or `rtk proxy npm run check` for the full suite). Use `uv run --locked` for Python tools, keep dependency lockfiles current, and exclude generated SDK code and private wallet state from formatting.

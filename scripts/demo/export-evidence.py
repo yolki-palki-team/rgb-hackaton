@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Export an allowlist of public test evidence; never copy wallet state or keys."""
+
 import json
+
 from regtest import ROOT, STATE, rpc
 
 
@@ -48,11 +50,17 @@ def main():
             "sdkAllocationIndexSynchronized": receipt["sdkAllocationIndexSynchronized"],
         }
     public = {
-        "network": "regtest", "scenario": scenario, "mode": "real-local-sdk-extension",
-        "txid": evidence["txid"], "blockHash": tx["blockhash"],
-        "confirmationsAtExport": tx["confirmations"], "transactionCount": 1,
-        "approvalDigest": report["approvalDigest"], "feeSats": report["feeSats"],
-        "contracts": contracts, "participants": participants,
+        "network": "regtest",
+        "scenario": scenario,
+        "mode": "real-local-sdk-extension",
+        "txid": evidence["txid"],
+        "blockHash": tx["blockhash"],
+        "confirmationsAtExport": tx["confirmations"],
+        "transactionCount": 1,
+        "approvalDigest": report["approvalDigest"],
+        "feeSats": report["feeSats"],
+        "contracts": contracts,
+        "participants": participants,
         "preSignatureRgbValidations": [
             {k: v[k] for k in ("receiver", "ticker", "contractId", "amount", "valid", "signed")}
             for v in report["validations"]

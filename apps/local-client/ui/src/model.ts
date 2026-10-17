@@ -38,7 +38,12 @@ export type Trade = {
 };
 
 export const initialDraft: Draft = {
-  giveAsset: 'X', giveAmount: '100', receiveAsset: 'DUSD', minReceiveAmount: '100', maxFeeSats: '1000', expiresMinutes: '30',
+  giveAsset: 'X',
+  giveAmount: '100',
+  receiveAsset: 'DUSD',
+  minReceiveAmount: '100',
+  maxFeeSats: '1000',
+  expiresMinutes: '30',
 };
 
 export const sampleBalances: Balance[] = [
@@ -48,14 +53,42 @@ export const sampleBalances: Balance[] = [
 ];
 
 export const sampleOrders: Order[] = [
-  { id: 'DEMO-A1', owner: 'Wallet B', giveAsset: 'DUSD', giveAmount: '100', receiveAsset: 'BTC', minReceiveAmount: '100 000 sats', status: 'Open' },
-  { id: 'DEMO-C1', owner: 'Wallet C', giveAsset: 'BTC', giveAmount: '100 000 sats', receiveAsset: 'X', minReceiveAmount: '100', status: 'Open' },
-  { id: 'DEMO-A2', owner: 'Wallet A', giveAsset: 'X', giveAmount: '100', receiveAsset: 'DUSD', minReceiveAmount: '100', status: 'Sample', mine: true },
+  {
+    id: 'DEMO-A1',
+    owner: 'Wallet B',
+    giveAsset: 'DUSD',
+    giveAmount: '100',
+    receiveAsset: 'BTC',
+    minReceiveAmount: '100 000 sats',
+    status: 'Open',
+  },
+  {
+    id: 'DEMO-C1',
+    owner: 'Wallet C',
+    giveAsset: 'BTC',
+    giveAmount: '100 000 sats',
+    receiveAsset: 'X',
+    minReceiveAmount: '100',
+    status: 'Open',
+  },
+  {
+    id: 'DEMO-A2',
+    owner: 'Wallet A',
+    giveAsset: 'X',
+    giveAmount: '100',
+    receiveAsset: 'DUSD',
+    minReceiveAmount: '100',
+    status: 'Sample',
+    mine: true,
+  },
 ];
 
 export const sampleTrades: Record<'direct' | 'ring', Trade> = {
   direct: {
-    id: 'DEMO-DIRECT', kind: 'direct', status: 'Sample plan', feeSats: '≤ 1 000',
+    id: 'DEMO-DIRECT',
+    kind: 'direct',
+    status: 'Sample plan',
+    feeSats: '≤ 1 000',
     participants: [
       { name: 'You · wallet A', give: '100 000 sats', receive: '100 DUSD', mine: true },
       { name: 'Wallet B', give: '100 DUSD', receive: '100 000 sats' },
@@ -66,7 +99,10 @@ export const sampleTrades: Record<'direct' | 'ring', Trade> = {
     ],
   },
   ring: {
-    id: 'DEMO-RING', kind: 'ring', status: 'Sample plan', feeSats: '≤ 1 000',
+    id: 'DEMO-RING',
+    kind: 'ring',
+    status: 'Sample plan',
+    feeSats: '≤ 1 000',
     participants: [
       { name: 'You · wallet A', give: '100 X', receive: '100 DUSD', mine: true },
       { name: 'Wallet B', give: '100 DUSD', receive: '100 000 sats' },

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Ordinary SDK/proxy transfer, not an atomic swap. Local regtest only."""
+
 import argparse
-from contextlib import ExitStack
 import fcntl
 import json
 import os
 import time
+from contextlib import ExitStack
+
 from regtest import ROOT, STATE, native, rpc
 
 
@@ -30,9 +32,21 @@ def run(command, approved):
         contracts = json.loads((STATE / "alice/issued-X.json").read_text())
         contract = contracts["asset_id"]
         invoice = native("smoke-receive", "carol", contractId=contract)
-        review = native("smoke-prepare", "bob", contractId=contract, recipientId=invoice["recipient_id"])
-        print(json.dumps({"review": str(review_path), **{k: review[k] for k in
-            ("txid", "approvalDigest", "amount", "feeSats", "recipientBtcSats")}}, indent=2))
+        review = native(
+            "smoke-prepare", "bob", contractId=contract, recipientId=invoice["recipient_id"]
+        )
+        print(
+            json.dumps(
+                {
+                    "review": str(review_path),
+                    **{
+                        k: review[k]
+                        for k in ("txid", "approvalDigest", "amount", "feeSats", "recipientBtcSats")
+                    },
+                },
+                indent=2,
+            )
+        )
         return
     review = json.loads(review_path.read_text())
     if approved != review["approvalDigest"]:
@@ -56,11 +70,12 @@ def run(command, approved):
     if tx.get("confirmations", 0) < 1:
         address = rpc("-rpcwallet=regtest-miner", "getnewaddress")
         rpc("generatetoaddress", 1, address)
-    for attempt in range(30):
+    for _attempt in range(30):
         for profile in ("bob", "carol"):
             native("smoke-refresh", profile)
-        history = {p: [t for t in native("history", p) if t["txid"] == txid]
-                   for p in ("bob", "carol")}
+        history = {
+            p: [t for t in native("history", p) if t["txid"] == txid] for p in ("bob", "carol")
+        }
         if all(rows and all(t["status"] == "Settled" for t in rows) for rows in history.values()):
             break
         time.sleep(1)
@@ -71,21 +86,40 @@ def run(command, approved):
     for profile, sign in (("bob", -1), ("carol", 1)):
         native("check-index", profile)
         ids = set(before[profile]["stockBalances"]) | set(after[profile]["stockBalances"])
-        expected[profile] = {"BTC": str(sign * 1000 - (int(review["feeSats"]) if sign < 0 else 0)),
-            **{asset: str(sign if asset == review["contractId"] else 0) for asset in sorted(ids)}}
-        actual[profile] = {"BTC": str(btc(after[profile]) - btc(before[profile])),
-            **{asset: str(int(after[profile]["stockBalances"].get(asset, 0)) -
-                         int(before[profile]["stockBalances"].get(asset, 0))) for asset in sorted(ids)}}
+        expected[profile] = {
+            "BTC": str(sign * 1000 - (int(review["feeSats"]) if sign < 0 else 0)),
+            **{asset: str(sign if asset == review["contractId"] else 0) for asset in sorted(ids)},
+        }
+        actual[profile] = {
+            "BTC": str(btc(after[profile]) - btc(before[profile])),
+            **{
+                asset: str(
+                    int(after[profile]["stockBalances"].get(asset, 0))
+                    - int(before[profile]["stockBalances"].get(asset, 0))
+                )
+                for asset in sorted(ids)
+            },
+        }
     if expected != actual:
         raise ValueError("actual SDK transfer deltas differ from prepared intent")
-    used_proxy = any(endpoint["used"] for transfer in history["carol"]
-                     for endpoint in transfer["transport_endpoints"])
+    used_proxy = any(
+        endpoint["used"]
+        for transfer in history["carol"]
+        for endpoint in transfer["transport_endpoints"]
+    )
     if not used_proxy:
         raise ValueError("recipient did not use SDK proxy transport")
-    evidence = {"network": "regtest", "kind": "ordinary-rgb-send-not-swap", "txid": txid,
-        "feeSats": review["feeSats"], "sdkProxyTransportUsed": True,
-        "bothSdkHistoriesSettled": True, "sdkAllocationIndexSynchronized": True,
-        "expectedDeltas": expected, "actualDeltas": actual}
+    evidence = {
+        "network": "regtest",
+        "kind": "ordinary-rgb-send-not-swap",
+        "txid": txid,
+        "feeSats": review["feeSats"],
+        "sdkProxyTransportUsed": True,
+        "bothSdkHistoriesSettled": True,
+        "sdkAllocationIndexSynchronized": True,
+        "expectedDeltas": expected,
+        "actualDeltas": actual,
+    }
     save(STATE / "smoke-after.json", after)
     save(ROOT / "scripts/demo/evidence/sdk-smoke.json", evidence)
     print(json.dumps(evidence, indent=2))
@@ -94,7 +128,9 @@ def run(command, approved):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["prepare", "execute"])
-    parser.add_argument("--approve", help="immutable prepared intent digest; development authorization is standing")
+    parser.add_argument(
+        "--approve", help="immutable prepared intent digest; development authorization is standing"
+    )
     args = parser.parse_args()
     os.umask(0o077)
     with ExitStack() as stack:

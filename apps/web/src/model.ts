@@ -19,7 +19,9 @@ export function formatAsset(asset: AssetRef, atomic: string): string {
 }
 
 export function assetIdentity(asset: AssetRef): string {
-  return asset.kind === 'btc' ? `${asset.network} · Bitcoin` : `${asset.network} · RGB ${asset.contractId}`;
+  return asset.kind === 'btc'
+    ? `${asset.network} · Bitcoin`
+    : `${asset.network} · RGB ${asset.contractId}`;
 }
 
 export function shortId(value: string): string {
@@ -27,5 +29,7 @@ export function shortId(value: string): string {
 }
 
 export function desktopOfferUrl(id: string): string | null {
-  return /^order-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ? `palka://offer/${id}` : null;
+  return /^order-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    ? `palka://offer/${id}`
+    : null;
 }

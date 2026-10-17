@@ -205,8 +205,10 @@ pub fn sign(
     }
     let package: Value = serde_json::from_slice(&fs::read(root.join("review-package.json"))?)?;
     let psbt = parse_psbt(&package["final"]["psbt"])?;
+    // The approved fee is a canonical decimal string, not a JSON number.
+    let fee_sats = psbt.fee()?.to_sat().to_string();
     if psbt.unsigned_tx.compute_txid().to_string() != intent["candidateTxid"]
-        || psbt.fee()?.to_sat().to_string() != intent["feeSats"]
+        || fee_sats != intent["feeSats"]
     {
         return Err("transaction changed after approval".into());
     }
