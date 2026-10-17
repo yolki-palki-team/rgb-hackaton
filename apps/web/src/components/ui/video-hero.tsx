@@ -3,6 +3,7 @@
 // Adapted from Velorah by MohammadShehadeh (MIT). See public/hero/ATTRIBUTION.md.
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Pause, Play } from 'lucide-react';
+import SiteHeader from './site-header';
 
 export default function VideoHero() {
   const rootRef = useRef<HTMLElement>(null);
@@ -49,11 +50,7 @@ export default function VideoHero() {
   return <section className="video-hero" ref={rootRef} aria-labelledby="hero-title">
     <video ref={videoRef} className="video-hero-media" src="/hero/prisma.mp4" poster="/hero/prisma-poster.jpg" muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }} />
     <div className="video-hero-shade" aria-hidden="true" />
-    <nav className="video-hero-nav" aria-label="Primary">
-      <a className="video-hero-brand" href="/" aria-label="palka home">palka</a>
-      <div className="video-hero-links"><a href="/" aria-current="page">Home</a><a href="/market">Market</a><a href="http://127.0.0.1:4101/" target="_blank" rel="noopener noreferrer">Local wallet</a></div>
-      <a className="video-hero-glass video-hero-nav-cta" href="/market">Explore market <ArrowUpRight size={16} aria-hidden="true" /></a>
-    </nav>
+    <SiteHeader active="home" />
     <div className="video-hero-copy">
       <p className="video-hero-eyebrow">A2A · RGB</p>
       <h1 id="hero-title">An exchange<br />that comes together.</h1>

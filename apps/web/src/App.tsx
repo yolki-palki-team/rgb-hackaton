@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { assetKey, type PublicOrder } from '@rgb-exchange/contracts';
 import VideoHero from '@/components/ui/video-hero';
+import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
 import { getPublicHealth, getPublicOrders } from './api';
 import { assetIdentity, desktopOfferUrl, formatAsset, shortId, type MarketState } from './model';
@@ -10,10 +11,6 @@ const marketPath = '/market';
 
 function WalletLink({ className = '', children = 'Open local wallet' }: { className?: string; children?: React.ReactNode }) {
   return <a className={className} href={walletUrl} target="_blank" rel="noopener noreferrer">{children}<span aria-hidden="true"> ↗</span></a>;
-}
-
-function SiteHeader({ active }: { active: 'home' | 'market' }) {
-  return <header className="site-header"><div className="site-header-inner"><a className="site-brand" href="/" aria-label="palka home"><span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span><span>palka</span></a><nav className="site-nav" aria-label="Navigation"><a href="/" aria-current={active === 'home' ? 'page' : undefined}>Home</a><a href={marketPath} aria-current={active === 'market' ? 'page' : undefined}>Market</a></nav><WalletLink className="site-wallet-link">Local wallet</WalletLink></div></header>;
 }
 
 function StatusPill({ live }: { live: boolean | null }) {
