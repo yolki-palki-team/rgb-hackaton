@@ -27,7 +27,6 @@ a { color: inherit; text-decoration: none; }
 .public-site .video-hero h1 { font: 400 clamp(62px, 7.8vw, 124px)/.99 Georgia, 'Times New Roman', serif; letter-spacing: -.055em; text-wrap: balance; margin: 0 auto 34px; }
 .video-hero-description { max-width: 720px; margin: 0 auto; font-size: clamp(16px, 1.5vw, 21px); line-height: 1.6; text-wrap: balance; text-shadow: 0 1px 12px rgba(0,0,0,.32); }
 .video-hero-primary { margin-top: 44px; min-height: 66px; padding: 18px 45px; font-size: 17px; }
-.video-hero-playback { position: absolute; right: 32px; bottom: 28px; padding: 12px 18px; font-size: 12px; min-height: 44px; }
 @media (max-width: 700px) {
   .video-hero { min-height: max(760px, 100svh); }
   .video-hero-nav { width: calc(100% - 36px); min-height: 80px; gap: 12px; flex-wrap: wrap; padding-top: 12px; }
@@ -36,7 +35,6 @@ a { color: inherit; text-decoration: none; }
   .video-hero-copy { margin-top: 46px; padding: 0 20px 200px; }
   .public-site .video-hero h1 { font-size: clamp(48px, 12vw, 76px); margin-bottom: 28px; }
   .video-hero-primary { margin-top: 32px; min-height: 56px; padding: 15px 32px; }
-  .video-hero-playback { right: 20px; bottom: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .video-hero-glass { transition: none; } }
 .text-link { display: inline-flex; align-items: center; gap: 14px; color: #eeeeee; font-weight: 800; font-size: 13px; white-space: nowrap; border-bottom: 1px solid currentColor; padding-bottom: 4px; }

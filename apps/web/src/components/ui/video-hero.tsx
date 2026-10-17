@@ -1,17 +1,13 @@
 "use client";
 
 // Adapted from Velorah by MohammadShehadeh (MIT). See public/hero/ATTRIBUTION.md.
-import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Pause, Play } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { ArrowUpRight } from 'lucide-react';
 import SiteHeader from './site-header';
 
 export default function VideoHero() {
   const rootRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const manualPause = useRef(false);
-  const manualPlay = useRef(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -20,10 +16,10 @@ export default function VideoHero() {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let visible = true;
     const sync = () => {
-      if (!visible || document.hidden || manualPause.current || (reduced.matches && !manualPlay.current)) video.pause();
-      else void video.play().catch(() => setPlaying(false));
+      if (!visible || document.hidden || reduced.matches) video.pause();
+      else void video.play().catch(() => { /* Keep the poster if autoplay is unavailable. */ });
     };
-    const onPreference = () => { manualPlay.current = false; sync(); };
+    const onPreference = sync;
     const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; sync(); });
     observer.observe(root);
     video.addEventListener('canplay', sync);
@@ -38,17 +34,8 @@ export default function VideoHero() {
     };
   }, []);
 
-  const togglePlayback = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      manualPause.current = false; manualPlay.current = true;
-      void video.play().catch(() => setPlaying(false));
-    } else { manualPause.current = true; video.pause(); }
-  };
-
   return <section className="video-hero" ref={rootRef} aria-labelledby="hero-title">
-    <video ref={videoRef} className="video-hero-media" src="/hero/prisma.mp4" poster="/hero/prisma-poster.jpg" muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }} />
+    <video ref={videoRef} className="video-hero-media" src="/hero/prisma.mp4" poster="/hero/prisma-poster.jpg" muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
     <div className="video-hero-shade" aria-hidden="true" />
     <SiteHeader active="home" />
     <div className="video-hero-copy">
@@ -57,6 +44,5 @@ export default function VideoHero() {
       <p className="video-hero-description">Publish an intent and find a direct match or a three-party ring. Your keys and final decision stay in your local wallet.</p>
       <a className="video-hero-glass video-hero-primary" href="/market">Explore orders <ArrowUpRight size={19} aria-hidden="true" /></a>
     </div>
-    {!failed && <button className="video-hero-playback video-hero-glass" type="button" onClick={togglePlayback} aria-label={playing ? 'Pause background video' : 'Play background video'}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}<span>{playing ? 'Pause motion' : 'Play motion'}</span></button>}
   </section>;
 }

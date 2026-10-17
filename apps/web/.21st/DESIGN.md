@@ -4,7 +4,7 @@ palka is a public BTC/RGB A2A marketplace. The public pages show orders; balance
 
 - Stack: React 19, TypeScript, Vite, Tailwind v4; shadcn aliases point to `src/components/ui`.
 - Palette: black `#080808`, charcoal surfaces `#101010`/`#171717`, text `#eeeeee`, muted `#aaaaaa`, borders `#333333`.
-- Landing contains the hero and footer; explanatory sections were removed. The local video loops silently, with pause/play and reduced-motion support.
+- Landing contains the hero and footer; explanatory sections were removed. The local video loops silently, with reduced-motion support.
 - User-selected components: Velorah hero layout with the Prisma background video and Halftone Wordmark Footer, both from supplied 21st source.
 - All product copy is English. Every navigation link has a real destination.
 - Hero video and poster are local. Video and canvas decoration have fallbacks and reduced-motion support.

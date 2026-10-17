@@ -6,7 +6,7 @@ Reviewed on 2026-10-17 for palka's black-and-charcoal public market.
 
 | Component | Placement | Integration |
 | --- | --- | --- |
-| [Velorah](https://hirael.com/templates/velorah) | Landing page | User-supplied template adapted to React/Vite, original video and poster served locally, centered English palka copy, glass CTAs and playback control. Replaces the sculpture hero. |
+| [Velorah](https://hirael.com/templates/velorah) | Landing page | User-supplied template adapted to React/Vite, Prisma background video and poster served locally, centered English palka copy, glass main CTA and shared navigation. Replaces the sculpture hero. |
 | [Halftone Wordmark Footer](https://21st.dev/@kedhareswer/components/halftone-wordmark-footer) | Landing and market footer | Supplied React/Canvas source, palka wordmark, black palette, real navigation links, reduced-motion support. |
 
 ## Recommended next components

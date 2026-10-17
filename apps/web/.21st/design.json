@@ -43,7 +43,7 @@
     "radius": {},
     "shadows": {},
     "motion": {
-      "hero": "Local muted looping MP4 with poster, playback control and reduced-motion support",
+      "hero": "Local muted looping MP4 with poster and reduced-motion support",
       "footer": "canvas halftone wordmark; honor reduced motion"
     },
     "density": "comfortable"
@@ -52,7 +52,8 @@
     "installed": [
       "demo",
       "halftone-wordmark-footer",
-      "video-hero"
+      "video-hero",
+      "site-header"
     ],
     "preferredPrimitives": [],
     "patterns": []
