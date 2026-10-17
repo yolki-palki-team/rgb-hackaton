@@ -1,0 +1,396 @@
+/* palka: the public site's typography and neutral palette, sized for wallet tasks. */
+:root {
+  --background: #080808;
+  --foreground: #eeeeee;
+  --card: #111111;
+  --muted: #191919;
+  --muted-foreground: #aaaaaa;
+  --border: #303030;
+  --primary: #eeeeee;
+  --primary-foreground: #080808;
+  --ring: #aaaaaa;
+  --radius: 14px;
+  --font-body: 'DM Sans', sans-serif;
+  --font-display: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-body);
+  color: var(--foreground);
+  background: var(--background);
+}
+body,
+.app-shell,
+.main-area {
+  background: var(--background);
+  color: var(--foreground);
+}
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+.sidebar {
+  width: 220px;
+  padding: 32px 18px 24px;
+  background: var(--background);
+  border-color: var(--border);
+}
+.brand {
+  padding: 0 14px;
+  font: 400 36px/1 var(--font-display);
+  letter-spacing: -0.07em;
+}
+.sidebar-caption {
+  margin: 16px 14px 36px;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  color: var(--muted-foreground);
+}
+.sidebar-nav {
+  gap: 6px;
+}
+.nav-item {
+  min-height: 58px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+.nav-item strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.nav-item small {
+  font-size: 11px;
+  margin-top: 5px;
+}
+.nav-item.active,
+.nav-item:hover {
+  background: var(--muted);
+  border-color: var(--border);
+}
+.sidebar-bottom {
+  padding: 22px 14px 0;
+  display: grid;
+  gap: 12px;
+  border-color: var(--border);
+}
+.sidebar-bottom strong {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0;
+}
+.sidebar-bottom p {
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0;
+  color: var(--muted-foreground);
+}
+.topbar {
+  min-height: 80px;
+  height: auto;
+  padding: 20px 36px;
+  gap: 18px;
+  background: var(--background);
+  border-color: var(--border);
+}
+.top-actions {
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.top-actions .text-button {
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 400;
+}
+.breadcrumb strong {
+  font-weight: 500;
+}
+.content {
+  max-width: 1240px;
+  padding: 28px 36px 56px;
+}
+.mode-banner {
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 32px;
+  line-height: 1.65;
+}
+.mode-banner strong {
+  font-weight: 500;
+}
+.mode-banner .sample-action {
+  font-weight: 400;
+  font-size: 11px;
+}
+.page-heading,
+.page-heading.compact {
+  min-height: 0;
+  margin: 0 0 36px;
+  padding: 8px 0;
+}
+.page-heading h1 {
+  font: 400 clamp(36px, 4vw, 58px)/1.06 var(--font-display);
+  letter-spacing: -0.055em;
+  margin: 12px 0 18px;
+  text-wrap: balance;
+}
+.page-heading p {
+  font-size: 14px;
+  line-height: 1.65;
+  max-width: 560px;
+}
+.eyebrow,
+.section-title .eyebrow {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  color: var(--muted-foreground);
+}
+.section-title {
+  margin: 0 0 18px;
+}
+.section-title h2,
+.panel-heading h2 {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.content > section {
+  margin-bottom: 32px;
+}
+.ui-panel {
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+.balance-grid {
+  gap: 14px;
+}
+.balance-card {
+  padding: 22px;
+  min-height: 154px;
+}
+.balance-value {
+  font-size: 29px;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.balance-code {
+  font-size: 10px;
+  font-weight: 400;
+}
+.asset-icon.btc,
+.asset-icon.x,
+.asset-icon.dusd {
+  color: var(--foreground);
+  background: #242424;
+}
+.goal-card {
+  padding: 24px;
+}
+.goal-card-head {
+  margin-bottom: 24px;
+}
+.goal-card-head strong {
+  font-weight: 500;
+}
+.goal-mark {
+  border: 1px solid var(--border);
+  background: transparent;
+}
+.goal-card textarea,
+.modal input,
+.modal select {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--foreground);
+  line-height: 1.6;
+}
+.goal-card textarea {
+  min-height: 112px;
+  padding: 16px;
+}
+.field-label {
+  font-size: 12px;
+  font-weight: 400;
+}
+.ui-button {
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.primary-button,
+.outline-button,
+.wallet-button {
+  border-radius: 999px;
+  min-height: 42px;
+  padding: 11px 18px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.primary-button {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+.outline-button,
+.wallet-button,
+.wallet-button.connected {
+  background: transparent;
+  border-color: #484848;
+  color: var(--foreground);
+}
+.primary-button:disabled {
+  background: #252525;
+  border-color: #333333;
+  color: #8d8d8d;
+}
+.text-button {
+  font-weight: 500;
+}
+.ui-status {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+.network-pill {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+.ai-status,
+.ai-status.available,
+.count-pill,
+.status-pill {
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+.ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.ui-table th {
+  padding: 13px 20px;
+  background: var(--background);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.ui-table td {
+  padding: 18px 20px;
+  border-color: var(--border);
+}
+.ui-table td strong {
+  font-weight: 500;
+}
+.ui-table tbody tr:hover {
+  background: var(--muted);
+}
+.empty-state,
+.selected-offer {
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  line-height: 1.7;
+}
+.how-section {
+  border-top: 1px solid var(--border);
+  padding-top: 28px;
+}
+.step-grid strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.step-grid p {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.modal {
+  border-radius: 20px;
+  padding: 28px;
+}
+.modal h2 {
+  font: 400 36px/1.1 var(--font-display);
+  letter-spacing: -0.045em;
+}
+.footer {
+  border-color: var(--border);
+  padding: 20px 36px;
+  font-size: 11px;
+}
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 190px;
+  }
+  .topbar,
+  .content {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .top-actions {
+    gap: 12px;
+  }
+}
+@media (max-width: 760px) {
+  .sidebar {
+    width: 100%;
+    padding: 24px 18px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {
+    padding: 0;
+    font-size: 30px;
+  }
+  .sidebar-caption,
+  .sidebar-bottom {
+    display: none;
+  }
+  .sidebar-nav {
+    margin-top: 20px;
+  }
+  .nav-item {
+    flex: 1;
+    min-height: 44px;
+    padding: 8px;
+  }
+  .topbar {
+    padding: 14px 18px;
+    min-height: 64px;
+  }
+  .content {
+    padding: 24px 18px 36px;
+  }
+  .page-heading h1 {
+    font-size: 40px;
+  }
+  .goal-card {
+    padding: 18px;
+  }
+  .balance-card {
+    padding: 18px;
+  }
+  .balance-value {
+    font-size: 24px;
+  }
+  .ui-table th,
+  .ui-table td {
+    padding: 14px;
+  }
+  .footer {
+    padding: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-button {
+    transition: none;
+  }
+}

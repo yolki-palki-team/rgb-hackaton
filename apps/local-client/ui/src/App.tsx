@@ -1,4 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AssetCard,
+  AssetIcon,
+  Button,
+  DataTable,
+  Icon,
+  Input,
+  Panel,
+  Select,
+  Textarea,
+  SectionTitle,
+  Sidebar,
+  StatusBadge,
+} from './components/ui/wallet-kit';
 import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './model';
 import type { AssetCode, Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
@@ -10,119 +24,6 @@ const navItems: { key: View; label: string; subtitle: string; icon: string }[] =
   { key: 'market', label: 'Market', subtitle: 'Orders', icon: 'arrows' },
   { key: 'trade', label: 'Trade', subtitle: 'Review and sign', icon: 'route' },
 ];
-
-function Icon({ name, size = 18 }: { name: string; size?: number }) {
-  const paths: Record<string, React.ReactNode> = {
-    grid: (
-      <>
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </>
-    ),
-    arrows: (
-      <>
-        <path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4" />
-      </>
-    ),
-    route: (
-      <>
-        <circle cx="5" cy="6" r="2" />
-        <circle cx="19" cy="6" r="2" />
-        <circle cx="12" cy="18" r="2" />
-        <path d="M7 6h10M5 8v6l5 3m9-9v6l-5 3" />
-      </>
-    ),
-    wallet: (
-      <>
-        <rect x="3" y="5" width="18" height="15" rx="3" />
-        <path d="M16 11h5M5 5V4a2 2 0 0 1 2-2h11" />
-        <circle cx="17" cy="14" r="1" />
-      </>
-    ),
-    spark: (
-      <>
-        <path d="m12 2 1.8 7.2L21 11l-7.2 1.8L12 20l-1.8-7.2L3 11l7.2-1.8L12 2Z" />
-        <path d="m19 18 .5 1.5L21 20l-1.5.5L19 22l-.5-1.5L17 20l1.5-.5L19 18Z" />
-      </>
-    ),
-    shield: (
-      <>
-        <path d="m12 2 9 4v6c0 5.2-3.6 8.7-9 10-5.4-1.3-9-4.8-9-10V6l9-4Z" />
-        <path d="m8 12 3 3 5-6" />
-      </>
-    ),
-    chevron: <path d="m9 18 6-6-6-6" />,
-    arrow: (
-      <>
-        <path d="M4 12h16m-6-6 6 6-6 6" />
-      </>
-    ),
-    refresh: (
-      <>
-        <path d="M20 7v5h-5M4 17v-5h5" />
-        <path d="M5.5 9A7 7 0 0 1 18 6l2 1M4 17l2 1a7 7 0 0 0 12.5-3" />
-      </>
-    ),
-    close: <path d="M5 5 19 19M19 5 5 19" />,
-    info: (
-      <>
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 11v6m0-10h.01" />
-      </>
-    ),
-  };
-  return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {paths[name]}
-    </svg>
-  );
-}
-
-function AssetIcon({ code, size = 'normal' }: { code: AssetCode; size?: 'normal' | 'large' }) {
-  const assetClass = code === 'BTC' ? 'btc' : code === 'DUSD' ? 'dusd' : 'x';
-  return (
-    <span
-      className={`asset-icon ${assetClass} ${size === 'large' ? 'large' : ''}`}
-      aria-hidden="true"
-    >
-      {code === 'BTC' ? '₿' : code.slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
-
-function SectionTitle({
-  kicker,
-  title,
-  action,
-  id,
-}: {
-  kicker: string;
-  title: string;
-  action?: React.ReactNode;
-  id?: string;
-}) {
-  return (
-    <div className="section-title">
-      <div>
-        <div className="eyebrow">{kicker}</div>
-        <h2 id={id}>{title}</h2>
-      </div>
-      {action}
-    </div>
-  );
-}
 
 function App() {
   const [view, setView] = useState<View>('home');
@@ -482,47 +383,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>
-            palka<span className="brand-dot">.</span>
-          </span>
-        </div>
-        <div className="sidebar-caption">LOCAL WALLET · RGB A2A</div>
-        <nav aria-label="Main navigation" className="sidebar-nav">
-          {navItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`nav-item ${view === item.key ? 'active' : ''}`}
-              onClick={() => setView(item.key)}
-              aria-current={view === item.key ? 'page' : undefined}
-            >
-              <span className="nav-icon">
-                <Icon name={item.icon} />
-              </span>
-              <span>
-                <strong>{item.label}</strong>
-                <small>{item.subtitle}</small>
-              </span>
-              {view === item.key && <span className="nav-marker" />}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-help-icon">
-            <Icon name="shield" size={19} />
-          </div>
-          <strong>Your keys stay with you</strong>
-          <p>The public market sees orders. Your wallet and AI run locally.</p>
-          <span className="sidebar-version">MVP · LOCAL</span>
-        </div>
-      </aside>
+      <Sidebar active={view} items={navItems} onNavigate={setView} />
 
       <div className="main-area">
         <header className="topbar">
@@ -532,13 +393,13 @@ function App() {
           </div>
           <div className="top-actions">
             {desktop ? (
-              <button
+              <Button
                 className="text-button"
                 type="button"
                 onClick={() => void window.palkaWallet?.openPublicMarket()}
               >
                 Public market
-              </button>
+              </Button>
             ) : (
               <a
                 className="text-button"
@@ -549,11 +410,11 @@ function App() {
                 Public market
               </a>
             )}
-            <span className="network-pill">
+            <StatusBadge className="network-pill">
               {connected && <span className="live-dot" />}
               {connected ? `BITCOIN ${status?.network.toUpperCase()}` : 'NETWORK UNAVAILABLE'}
-            </span>
-            <button
+            </StatusBadge>
+            <Button
               className={`wallet-button ${connected ? 'connected' : ''}`}
               type="button"
               onClick={() => setConnectionOpen(true)}
@@ -564,7 +425,7 @@ function App() {
                 : desktop
                   ? 'Backend unavailable'
                   : 'Pair local wallet'}
-            </button>
+            </Button>
           </div>
         </header>
         <main className="content">
@@ -595,21 +456,21 @@ function App() {
               </span>
             </div>
             {!connected && (
-              <button
+              <Button
                 className="text-button sample-action"
                 type="button"
                 onClick={() => setSamplePreview((current) => !current)}
               >
                 {samplePreview ? 'Exit sample preview' : 'Preview sample data'}
-              </button>
+              </Button>
             )}
           </div>
           {notice && (
             <div className={`notice ${notice.tone}`} role="alert">
               <span>{notice.text}</span>
-              <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
+              <Button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
                 <Icon name="close" size={15} />
-              </button>
+              </Button>
             </div>
           )}
 
@@ -622,13 +483,6 @@ function App() {
                     Swap on your terms<span className="accent-stop">.</span>
                   </h1>
                   <p>Describe your swap. The local assistant prepares an order for your review.</p>
-                </div>
-                <div className="heading-art" aria-hidden="true">
-                  <div className="swap-ring outer" />
-                  <div className="swap-ring inner" />
-                  <div className="swap-core">
-                    <Icon name="arrows" size={26} />
-                  </div>
                 </div>
               </div>
               <section aria-labelledby="balance-heading">
@@ -649,16 +503,7 @@ function App() {
                 {visibleBalances.length ? (
                   <div className="balance-grid">
                     {visibleBalances.map((balance) => (
-                      <article className="balance-card" key={balance.code}>
-                        <div className="balance-card-top">
-                          <AssetIcon code={balance.code} size="large" />
-                          <span className="balance-code">{balance.code}</span>
-                        </div>
-                        <div className="balance-value">
-                          {balance.amount} <small>{balance.unit}</small>
-                        </div>
-                        <p>{balance.label}</p>
-                      </article>
+                      <AssetCard key={balance.code} balance={balance} />
                     ))}
                   </div>
                 ) : (
@@ -682,7 +527,7 @@ function App() {
                   kicker="02 / NEW ORDER"
                   title="What would you like to swap?"
                 />
-                <div className="goal-card">
+                <Panel className="goal-card">
                   <div className="goal-card-head">
                     <div className="goal-mark">
                       <Icon name="spark" size={23} />
@@ -691,13 +536,15 @@ function App() {
                       <strong>QVAC assistant</strong>
                       <span>Interprets your goal on this device</span>
                     </div>
-                    <span className={`ai-status ${status?.qvacAvailable ? 'available' : ''}`}>
+                    <StatusBadge
+                      className={`ai-status ${status?.qvacAvailable ? 'available' : ''}`}
+                    >
                       {status?.qvacAvailable
                         ? 'AVAILABLE'
                         : connected
                           ? 'UNAVAILABLE'
                           : 'NOT CONNECTED'}
-                    </span>
+                    </StatusBadge>
                   </div>
                   {connected && !status?.qvacAvailable && (
                     <p className="qvac-reason" role="status">
@@ -708,7 +555,7 @@ function App() {
                   <label className="field-label" htmlFor="goal">
                     Describe your goal and limits in your own words
                   </label>
-                  <textarea
+                  <Textarea
                     id="goal"
                     value={goal}
                     onChange={(event) => setGoal(event.target.value)}
@@ -720,7 +567,7 @@ function App() {
                       QVAC suggests terms. Code checks amounts and limits before publication.
                     </span>
                     <div>
-                      <button
+                      <Button
                         className="text-button"
                         type="button"
                         onClick={() => {
@@ -735,8 +582,8 @@ function App() {
                         }}
                       >
                         Fill in manually
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         className="primary-button"
                         type="button"
                         onClick={() => void interpret()}
@@ -745,10 +592,10 @@ function App() {
                         <Icon name="spark" size={16} />
                         {busy === 'interpret' ? 'Interpreting…' : 'Prepare order'}
                         <Icon name="arrow" size={16} />
-                      </button>
+                      </Button>
                     </div>
                   </div>
-                </div>
+                </Panel>
               </section>
               <section className="how-section" aria-labelledby="how-heading">
                 <SectionTitle kicker="HOW IT WORKS" title="Three steps to a swap" />
@@ -785,7 +632,7 @@ function App() {
                   </h1>
                   <p>Fixed amounts and full fills. Direct pairs and three-party rings.</p>
                 </div>
-                <button
+                <Button
                   className="primary-button"
                   type="button"
                   onClick={() => {
@@ -795,7 +642,7 @@ function App() {
                   disabled={!ready}
                 >
                   New order <Icon name="arrow" size={16} />
-                </button>
+                </Button>
               </div>
               {selectedOfferId && (
                 <div className="selected-offer" role="status">
@@ -809,16 +656,16 @@ function App() {
                 </div>
               )}
               <div className="market-layout">
-                <div className="panel orderbook">
+                <Panel className="panel orderbook">
                   <div className="panel-heading">
                     <div>
                       <span className="eyebrow">OPEN OFFERS</span>
                       <h2>Order book</h2>
                     </div>
-                    <span className="count-pill">{visibleOrders.length}</span>
+                    <StatusBadge className="count-pill">{visibleOrders.length}</StatusBadge>
                   </div>
                   <div className="table-wrap">
-                    <table>
+                    <DataTable>
                       <thead>
                         <tr>
                           <th>Participant</th>
@@ -856,7 +703,9 @@ function App() {
                                 </span>
                               </td>
                               <td>
-                                <span className="status-pill open">{order.status}</span>
+                                <StatusBadge className="status-pill open">
+                                  {order.status}
+                                </StatusBadge>
                               </td>
                             </tr>
                           ))
@@ -874,7 +723,7 @@ function App() {
                           </tr>
                         )}
                       </tbody>
-                    </table>
+                    </DataTable>
                   </div>
                   <div className="panel-footer">
                     {connected
@@ -883,9 +732,9 @@ function App() {
                         ? 'Synthetic preview only. Pair the wallet for live orders.'
                         : 'Local backend unavailable. No orders loaded.'}
                   </div>
-                </div>
+                </Panel>
                 <aside className="market-side">
-                  <div className="panel my-order">
+                  <Panel className="panel my-order">
                     <span className="eyebrow">MY ORDER</span>
                     {myOrder ? (
                       <>
@@ -897,22 +746,22 @@ function App() {
                           Status: {myOrder.status}. Publishing an order does not authorize signing.
                         </p>
                         {myOrder.status === 'Open' ? (
-                          <button
+                          <Button
                             type="button"
                             className="outline-button"
                             onClick={() => void cancelOrder()}
                             disabled={busy !== null || !ready}
                           >
                             Cancel order
-                          </button>
+                          </Button>
                         ) : (
-                          <button
+                          <Button
                             type="button"
                             className="outline-button"
                             onClick={() => setView('trade')}
                           >
                             View trade <Icon name="arrow" size={15} />
-                          </button>
+                          </Button>
                         )}
                       </>
                     ) : (
@@ -923,7 +772,7 @@ function App() {
                             ? 'Create an order with QVAC or enter terms manually.'
                             : 'Pair the local backend to view or publish your orders.'}
                         </p>
-                        <button
+                        <Button
                           type="button"
                           className="outline-button"
                           onClick={() => {
@@ -933,10 +782,10 @@ function App() {
                           disabled={!ready}
                         >
                           Create order <Icon name="arrow" size={15} />
-                        </button>
+                        </Button>
                       </>
                     )}
-                  </div>
+                  </Panel>
                   <div className="market-tip">
                     <Icon name="shield" size={20} />
                     <strong>How does matching work?</strong>
@@ -964,20 +813,20 @@ function App() {
               {!connected && samplePreview && (
                 <div className="sample-switch" role="group" aria-label="Sample trade type">
                   <span>Sample plan:</span>
-                  <button
+                  <Button
                     className={sampleTradeKind === 'direct' ? 'selected' : ''}
                     type="button"
                     onClick={() => setSampleTradeKind('direct')}
                   >
                     Direct swap
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     className={sampleTradeKind === 'ring' ? 'selected' : ''}
                     type="button"
                     onClick={() => setSampleTradeKind('ring')}
                   >
                     Three-party ring
-                  </button>
+                  </Button>
                 </div>
               )}
               {trade &&
@@ -1002,7 +851,7 @@ function App() {
               )}
               {shownTrade && (
                 <div className="trade-layout">
-                  <div className="panel trade-panel">
+                  <Panel className="panel trade-panel">
                     <div className="panel-heading trade-head">
                       <div>
                         <span className="eyebrow">
@@ -1013,9 +862,9 @@ function App() {
                         <h2>{shownTrade.kind === 'direct' ? 'Direct swap' : 'Ring swap'}</h2>
                         <small>Plan {shownTrade.id}</small>
                       </div>
-                      <span className={`status-pill ${trade ? 'open' : 'sample'}`}>
+                      <StatusBadge className={`status-pill ${trade ? 'open' : 'sample'}`}>
                         {trade ? statusLabel(shownTrade.status) : shownTrade.status}
-                      </span>
+                      </StatusBadge>
                     </div>
                     <div className="flow-caption">TRADE PARTICIPANTS</div>
                     <div className={`trade-flow ${shownTrade.kind}`}>
@@ -1071,9 +920,9 @@ function App() {
                         {shownTrade.reason}
                       </div>
                     )}
-                  </div>
+                  </Panel>
                   <aside className="market-side">
-                    <div className="panel approval-panel">
+                    <Panel className="panel approval-panel">
                       <span className="eyebrow">SEPARATE APPROVAL</span>
                       <h3>Before signing</h3>
                       {trade?.validatedPreview ? (
@@ -1097,14 +946,14 @@ function App() {
                               <dd>{trade.validatedPreview.btcDeltaSats} sats</dd>
                             </div>
                           </dl>
-                          <button
+                          <Button
                             className="primary-button full"
                             type="button"
                             onClick={() => void approve()}
                             disabled={busy !== null || !ready || isMock}
                           >
                             Authorize signing <Icon name="arrow" size={16} />
-                          </button>
+                          </Button>
                         </>
                       ) : (
                         <>
@@ -1119,32 +968,32 @@ function App() {
                           {trade &&
                             trade.status === 'RESERVED' &&
                             approvalAttemptedTradeId !== trade.id && (
-                              <button
+                              <Button
                                 className="outline-button full"
                                 type="button"
                                 onClick={() => void prepare()}
                                 disabled={busy !== null || !ready}
                               >
                                 Check trade readiness
-                              </button>
+                              </Button>
                             )}
                           {trade &&
                             !isMock &&
                             trade.status === 'AWAITING_APPROVAL' &&
                             approvalAttemptedTradeId !== trade.id && (
-                              <button
+                              <Button
                                 className="outline-button full"
                                 type="button"
                                 onClick={() => void preview()}
                                 disabled={busy !== null || !ready}
                               >
                                 Validate final package
-                              </button>
+                              </Button>
                             )}
                           {(isMock || !trade || trade.status === 'UNSUPPORTED') && (
-                            <button className="primary-button full" type="button" disabled>
+                            <Button className="primary-button full" type="button" disabled>
                               Signing unavailable <Icon name="arrow" size={16} />
-                            </button>
+                            </Button>
                           )}
                         </>
                       )}
@@ -1156,14 +1005,14 @@ function App() {
                           'RECONCILING',
                           'CONFIRMED',
                         ].includes(trade.status) && (
-                          <button
+                          <Button
                             className="outline-button full"
                             type="button"
                             onClick={() => void sync()}
                             disabled={busy !== null}
                           >
                             Reconcile Bitcoin and RGB
-                          </button>
+                          </Button>
                         )}
                       {trade &&
                         approvalAttemptedTradeId === trade.id &&
@@ -1174,31 +1023,31 @@ function App() {
                           'RECONCILING',
                           'CONFIRMED',
                         ].includes(trade.status) && (
-                          <button
+                          <Button
                             className="outline-button full"
                             type="button"
                             onClick={() => void sync()}
                             disabled={busy !== null}
                           >
                             Check signing outcome
-                          </button>
+                          </Button>
                         )}
                       {trade &&
                         approvalAttemptedTradeId !== trade.id &&
                         ['RESERVED', 'PREPARING', 'AWAITING_APPROVAL'].includes(trade.status) && (
-                          <button
+                          <Button
                             className="text-button danger reject-button"
                             type="button"
                             onClick={() => void reject()}
                             disabled={busy !== null}
                           >
                             Reject trade
-                          </button>
+                          </Button>
                         )}
                       <div className="approval-foot">
                         Order confirmation does not authorize transaction signing.
                       </div>
-                    </div>
+                    </Panel>
                   </aside>
                 </div>
               )}
@@ -1222,14 +1071,19 @@ function App() {
             if (event.target === event.currentTarget) setConnectionOpen(false);
           }}
         >
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="connection-title">
+          <Panel
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connection-title"
+          >
             <div className="modal-head">
               <div className="modal-icon">
                 <Icon name="wallet" size={21} />
               </div>
-              <button type="button" onClick={() => setConnectionOpen(false)} aria-label="Close">
+              <Button type="button" onClick={() => setConnectionOpen(false)} aria-label="Close">
                 <Icon name="close" size={18} />
-              </button>
+              </Button>
             </div>
             <div className="eyebrow">LOCAL WALLET</div>
             <h2 id="connection-title">{desktop ? 'Local backend' : 'Pair this wallet'}</h2>
@@ -1247,7 +1101,7 @@ function App() {
                 <label className="field-label" htmlFor="pair-token">
                   Pairing token
                 </label>
-                <input
+                <Input
                   id="pair-token"
                   type="password"
                   value={pairToken}
@@ -1259,7 +1113,7 @@ function App() {
             )}
             <div className="modal-actions">
               {connected && (
-                <button
+                <Button
                   type="button"
                   className="text-button danger"
                   onClick={() => {
@@ -1268,9 +1122,9 @@ function App() {
                   }}
                 >
                   Disconnect
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
                 className="primary-button"
                 onClick={() => void connect()}
@@ -1278,9 +1132,9 @@ function App() {
               >
                 {busy === 'connect' ? 'Connecting…' : desktop ? 'Reconnect' : 'Pair wallet'}{' '}
                 <Icon name="arrow" size={16} />
-              </button>
+              </Button>
             </div>
-          </div>
+          </Panel>
         </div>
       )}
 
@@ -1291,7 +1145,7 @@ function App() {
             if (event.target === event.currentTarget) setDraftOpen(false);
           }}
         >
-          <div
+          <Panel
             className="modal draft-modal"
             role="dialog"
             aria-modal="true"
@@ -1301,9 +1155,9 @@ function App() {
               <div className="modal-icon">
                 <Icon name="arrows" size={21} />
               </div>
-              <button type="button" onClick={() => setDraftOpen(false)} aria-label="Close">
+              <Button type="button" onClick={() => setDraftOpen(false)} aria-label="Close">
                 <Icon name="close" size={18} />
-              </button>
+              </Button>
             </div>
             <div className="eyebrow">ORDER TERMS</div>
             <h2 id="draft-title">Review swap</h2>
@@ -1315,7 +1169,7 @@ function App() {
                 <label className="field-label" htmlFor="give-asset">
                   Give
                 </label>
-                <select
+                <Select
                   id="give-asset"
                   value={draft.giveAsset}
                   onChange={(event) => updateDraft({ giveAsset: event.target.value as AssetCode })}
@@ -1323,13 +1177,13 @@ function App() {
                   {assetCodes.map((code) => (
                     <option key={code}>{code}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="field-label" htmlFor="give-amount">
                   Amount {draft.giveAsset === 'BTC' ? 'in sats' : 'in atomic units'}
                 </label>
-                <input
+                <Input
                   id="give-amount"
                   value={draft.giveAmount}
                   onChange={(event) => updateDraft({ giveAmount: event.target.value })}
@@ -1340,7 +1194,7 @@ function App() {
                 <label className="field-label" htmlFor="receive-asset">
                   Receive
                 </label>
-                <select
+                <Select
                   id="receive-asset"
                   value={draft.receiveAsset}
                   onChange={(event) =>
@@ -1350,13 +1204,13 @@ function App() {
                   {assetCodes.map((code) => (
                     <option key={code}>{code}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="field-label" htmlFor="receive-amount">
                   At least {draft.receiveAsset === 'BTC' ? 'sats' : 'atomic units'}
                 </label>
-                <input
+                <Input
                   id="receive-amount"
                   value={draft.minReceiveAmount}
                   onChange={(event) => updateDraft({ minReceiveAmount: event.target.value })}
@@ -1367,7 +1221,7 @@ function App() {
                 <label className="field-label" htmlFor="max-fee">
                   Maximum order fee, sats
                 </label>
-                <input
+                <Input
                   id="max-fee"
                   value={draft.maxFeeSats}
                   onChange={(event) => updateDraft({ maxFeeSats: event.target.value })}
@@ -1378,7 +1232,7 @@ function App() {
                 <label className="field-label" htmlFor="expires">
                   Expires in, minutes
                 </label>
-                <input
+                <Input
                   id="expires"
                   value={draft.expiresMinutes}
                   onChange={(event) => updateDraft({ expiresMinutes: event.target.value })}
@@ -1398,7 +1252,7 @@ function App() {
                     <label className="field-label" htmlFor="policy-fee">
                       Policy fee limit, sats
                     </label>
-                    <input
+                    <Input
                       id="policy-fee"
                       value={policy.maxFeeSats}
                       onChange={(event) => updatePolicy({ maxFeeSats: event.target.value })}
@@ -1406,7 +1260,7 @@ function App() {
                     />
                   </div>
                   <label className="policy-toggle">
-                    <input
+                    <Input
                       type="checkbox"
                       checked={policy.allowBtcSale}
                       onChange={(event) => updatePolicy({ allowBtcSale: event.target.checked })}
@@ -1419,7 +1273,7 @@ function App() {
                   {policyAssets.map((asset) => (
                     <label key={asset.key}>
                       <span>{asset.label}</span>
-                      <input
+                      <Input
                         value={policy.protectedBalances[asset.key] ?? '0'}
                         onChange={(event) =>
                           updatePolicy({
@@ -1443,15 +1297,15 @@ function App() {
                 : 'Wallet balances and policy are unavailable. This form cannot publish an order.'}
             </div>
             <div className="modal-actions">
-              <button
+              <Button
                 className="outline-button"
                 type="button"
                 onClick={() => void checkDraft()}
                 disabled={busy !== null || !ready}
               >
                 {busy === 'check' ? 'Validating…' : 'Validate terms'}
-              </button>
-              <button
+              </Button>
+              <Button
                 className="primary-button"
                 type="button"
                 onClick={() => void publish()}
@@ -1459,9 +1313,9 @@ function App() {
               >
                 {busy === 'publish' ? 'Publishing…' : 'Confirm and publish'}{' '}
                 <Icon name="arrow" size={16} />
-              </button>
+              </Button>
             </div>
-          </div>
+          </Panel>
         </div>
       )}
     </div>
