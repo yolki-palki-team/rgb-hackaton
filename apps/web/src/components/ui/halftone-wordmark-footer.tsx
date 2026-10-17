@@ -162,8 +162,8 @@ const HWF_CSS = `
 `;
 
 export default function HalftoneWordmarkFooter({
-  wordmark = 'palka.',
-  label = 'palka. A2A Exchange',
+  wordmark = 'palka',
+  label = 'palka A2A Exchange',
   meta = 'Regtest demo · Matching only · No BTC/RGB settlement',
   columns = DEFAULT_COLUMNS,
   backToTop = true,
