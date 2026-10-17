@@ -10,6 +10,12 @@ git pull --ff-only
 bash deploy/desktop.sh
 ```
 
+The launcher finds Cargo on `PATH` or in `${CARGO_HOME:-$HOME/.cargo}/bin`.
+If Rust is installed in a custom location, export `CARGO_HOME` and
+`RUSTUP_HOME` pointing to that installation before launching. These variables
+are inherited by the desktop and its wallet helpers. If Rust is not installed,
+install it with rustup first; the launcher does not install system prerequisites.
+
 For a new checkout, clone the repository first. The script installs locked
 dependencies and builds the local wallet; subsequent launches can use
 `npm run dev:desktop`. No local Docker, invitation copy, manual init/fund/issue/sync,
