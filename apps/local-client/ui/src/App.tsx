@@ -699,15 +699,6 @@ function App() {
 
           {view === 'trade' && (
             <>
-              <div className="page-heading compact">
-                <div>
-                  <div className="eyebrow">YOUR SWAP</div>
-                  <h1>
-                    Your swap<span className="accent-stop">.</span>
-                  </h1>
-                  <p>We handle the preparation. You review the amounts and decide when to sign.</p>
-                </div>
-              </div>
               {!connected && samplePreview && (
                 <div className="sample-switch" role="group" aria-label="Sample trade type">
                   <span>Sample plan:</span>
