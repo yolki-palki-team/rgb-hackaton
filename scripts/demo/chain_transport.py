@@ -59,7 +59,12 @@ class Client:
             if len(raw) > LIMIT or response.getheader("X-Palka-Chain") != self.config["chainId"]:
                 raise ValueError("Remote chain checkpoint mismatch or oversized response")
             if response.status != 200:
-                raise ValueError(
+                # Match the local bitcoin-cli failure contract. Recovery probes
+                # for transactions that may not have been broadcast yet.
+                error_type = (
+                    RuntimeError if endpoint == "/rpc" and response.status == 400 else ValueError
+                )
+                raise error_type(
                     f"Shared network request failed ({response.status}): "
                     + raw.decode(errors="replace")[:250]
                 )

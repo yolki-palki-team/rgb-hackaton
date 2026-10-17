@@ -147,6 +147,22 @@ class ClientTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "checkpoint mismatch"):
                 Client(self.config()).request("/rpc", {"method": "getblockcount"})
 
+    def test_missing_remote_transaction_uses_local_rpc_error_contract(self):
+        with patch("chain_transport.http.client.HTTPSConnection") as connection:
+            response = connection.return_value.getresponse.return_value
+            response.status = 400
+            response.getheader.return_value = "a" * 64
+            response.read.return_value = b'{"error":"No such mempool or blockchain transaction"}'
+            with self.assertRaisesRegex(RuntimeError, "No such mempool"):
+                Client(self.config()).request(
+                    "/rpc", {"method": "getrawtransaction", "params": ["test-txid", True]}
+                )
+            response.getheader.return_value = "c" * 64
+            with self.assertRaisesRegex(ValueError, "checkpoint mismatch"):
+                Client(self.config()).request(
+                    "/rpc", {"method": "getrawtransaction", "params": ["test-txid", True]}
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
