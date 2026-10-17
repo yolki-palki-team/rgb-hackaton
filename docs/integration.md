@@ -93,16 +93,23 @@ published a manual direct order, and reported signing through desktop. The
 market received the genuine Alice signature. API-operated Bob independently
 validated and signed the same package. Transaction
 `948068ed4c7bd8f0182a2629098b4d0aac237c42af076236b0b302d136f7148e`
-was broadcast and mined; Bob reports Bitcoin confirmed + RGB accepted. Alice's
-final local Reconcile is still pending user observation at this checkpoint.
+was broadcast and mined. The user then confirmed Alice's final desktop result:
+confirmed, Bitcoin confirmed, RGB accepted. Both authenticated receipts and the
+market now report CONFIRMED. Independent checks against Core and both wallets
+verified one transaction, real witnesses, exact inputs, total fee 1000 sats and
+balances equal to the final previews. Alice gained 100 DUSD and spent 100500 sats;
+Bob spent 100 DUSD and gained 99500 sats. X and KEEP were unchanged. See
+[desktop direct evidence](../scripts/demo/evidence/integration-desktop-direct.json).
 This is user-observed desktop evidence, not an automated screenshot assertion.
 Computer Use could not access the native app due to macOS permissions; the user
 then explicitly asked to perform desktop actions manually, so automation stopped.
 
-Native approval, deep-link OS delivery and complete desktop settlement are not
-established by merely launching Electron. The packaged/notarized distribution,
-cloud TLS/WSS deployment and trading on independent computers have not been
-verified. The host launcher is a development tool; root Compose still does not
+This completes a manual-order direct swap with user-operated desktop Alice and
+API-operated Bob on one machine. It does not establish a three-desktop ring or
+a single AI-to-desktop settlement journey. Native dialog interaction is
+user-observed, not independently automated. Deep-link OS delivery, the
+packaged/notarized distribution, cloud TLS/WSS deployment and trading on
+independent computers have not been verified. The host launcher is a development tool; root Compose still does not
 launch a real wallet sidecar. See the guide for exact remote Bitcoin transport
 and single-profile onboarding work required before multi-host settlement.
 
