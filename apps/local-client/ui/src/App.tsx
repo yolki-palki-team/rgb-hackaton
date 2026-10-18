@@ -275,7 +275,7 @@ function App() {
         if (active) {
           setMarketLoading(false);
           setSnapshotLoading(false);
-          progressTimer = setTimeout(() => void refreshProgress(), 1000);
+          progressTimer = setTimeout(() => void refreshProgress(), 3000);
         }
       }
     };
