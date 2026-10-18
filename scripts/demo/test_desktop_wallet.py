@@ -1,5 +1,6 @@
 """Identity and recovery checks for independent desktop wallet setup."""
 
+import fcntl
 import hashlib
 import tempfile
 import unittest
@@ -131,6 +132,77 @@ class DesktopWalletTests(unittest.TestCase):
             (state / SLOT / "keys.json").unlink()
             with self.assertRaisesRegex(ValueError, "configuration mismatch"):
                 desktop_wallet.start(self.config_path)
+
+    def runtime_fixture(self):
+        state = self.initialize()
+        metadata = read_private(state / "desktop-wallet.json") | {"fingerprint": "1234abcd"}
+        save_private(state / "desktop-wallet.json", metadata)
+        wallet = state / SLOT
+        save_private(wallet / "keys.json", {"master_fingerprint": "1234abcd"})
+        runtime = wallet / "1234abcd"
+        runtime.mkdir()
+        (runtime / "wallet_manifest.json").write_text("synthetic-manifest")
+        (runtime / "rgb_runtime.lock").touch()
+        (runtime / "stock.dat").write_bytes(b"synthetic-stock")
+        (wallet / "journal.sqlite").write_bytes(b"synthetic-journal")
+        return state, metadata, runtime
+
+    def test_stale_marker_recovery_keeps_all_wallet_data_and_verifies_identity(self):
+        state, metadata, runtime = self.runtime_fixture()
+        before = {p: p.read_bytes() for p in state.rglob("*") if p.is_file()}
+        config = read_private(self.config_path)
+        with (
+            patch.object(desktop_wallet, "settings", return_value=(config, state, 4201)),
+            patch.object(
+                desktop_wallet,
+                "native",
+                return_value={"network": "regtest", "fingerprint": metadata["fingerprint"]},
+            ) as native,
+            patch.object(desktop_wallet, "run_service", return_value=0) as run,
+        ):
+            with self.assertRaises(SystemExit):
+                desktop_wallet.start(self.config_path)
+            native.assert_called_once_with(state, "identity")
+            run.assert_called_once()
+        marker = runtime / "rgb_runtime.lock"
+        self.assertFalse(marker.exists())
+        self.assertEqual(len(list(runtime.glob("rgb_runtime.lock.recovered-*"))), 1)
+        for p, contents in before.items():
+            if p != marker:
+                self.assertEqual(p.read_bytes(), contents)
+
+    def test_live_coordinator_or_native_process_blocks_recovery(self):
+        state, _metadata, runtime = self.runtime_fixture()
+        config = read_private(self.config_path)
+        for name in (".coordinator.lock", ".instance.lock"):
+            with (state / SLOT / name).open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with (
+                    patch.object(desktop_wallet, "settings", return_value=(config, state, 4201)),
+                    patch.object(desktop_wallet, "native") as native,
+                    self.assertRaises(BlockingIOError),
+                ):
+                    desktop_wallet.start(self.config_path)
+                native.assert_not_called()
+            self.assertTrue((runtime / "rgb_runtime.lock").exists())
+
+    def test_unknown_nonempty_or_symlinked_marker_is_never_recovered(self):
+        state, metadata, runtime = self.runtime_fixture()
+        marker = runtime / "rgb_runtime.lock"
+        for changed in ({}, {"fingerprint": "87654321"}):
+            with self.assertRaises(ValueError):
+                desktop_wallet.recover_runtime(state, changed)
+            self.assertTrue(marker.exists())
+        marker.write_text("owned by an unknown SDK")
+        with self.assertRaises(ValueError):
+            desktop_wallet.recover_runtime(state, metadata)
+        marker.unlink()
+        target = runtime / "another-lock"
+        target.touch()
+        marker.symlink_to(target)
+        with self.assertRaises(ValueError):
+            desktop_wallet.recover_runtime(state, metadata)
+        self.assertTrue(marker.is_symlink())
 
     def test_assigned_token_is_issued_locally_and_published_on_retry(self):
         state = self.initialize()

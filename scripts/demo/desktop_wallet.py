@@ -9,15 +9,16 @@ import json
 import os
 import re
 import secrets
-import signal
 import sqlite3
 import stat
-import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
+
+from wallet_lifecycle import run_native, run_service
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "packages/wallet/native/target/debug/rgb-settlement-spike"
@@ -79,7 +80,7 @@ def settings(config_path, root=ROOT):
 
 
 def native(state, operation, **kwargs):
-    result = subprocess.run(
+    result = run_native(
         [str(BIN)],
         input=json.dumps({"op": operation, "stateDir": str(state), "profile": SLOT, **kwargs}),
         text=True,
@@ -93,6 +94,34 @@ def native(state, operation, **kwargs):
             )
         raise RuntimeError("Native wallet operation failed; no replacement keys were requested")
     return json.loads(result.stdout)
+
+
+def recover_runtime(state, metadata):
+    """Caller holds .coordinator.lock in this exclusively managed desktop profile."""
+    wallet = state / SLOT
+    with (wallet / ".instance.lock").open("a") as instance:
+        fcntl.flock(instance, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        markers = list(wallet.glob("*/rgb_runtime.lock"))
+        if not markers:
+            return False
+        fingerprint = metadata.get("fingerprint")
+        if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{8}", fingerprint):
+            raise ValueError("Cannot recover a runtime marker without a known wallet identity")
+        expected = wallet / fingerprint / "rgb_runtime.lock"
+        keys = read_private(wallet / "keys.json")
+        if (
+            markers != [expected]
+            or keys.get("master_fingerprint") != fingerprint
+            or expected.parent.is_symlink()
+            or not (expected.parent / "wallet_manifest.json").is_file()
+            or not stat.S_ISREG(expected.lstat().st_mode)
+            or expected.lstat().st_size != 0
+        ):
+            raise ValueError("Unexpected RGB runtime marker; wallet inspection required")
+        # The coordinator and native locks prove no project process owns this marker.
+        # Archive only the SDK sentinel. Never alter stock, journals, keys or signatures.
+        expected.rename(expected.with_name("rgb_runtime.lock.recovered-" + uuid.uuid4().hex))
+        return True
 
 
 def initialize(config_path, root=ROOT, call_native=native):
@@ -130,6 +159,8 @@ def initialize(config_path, root=ROOT, call_native=native):
         wallet.mkdir(mode=0o700, exist_ok=True)
         with (wallet / ".coordinator.lock").open("a") as coordinator:
             fcntl.flock(coordinator, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if metadata["initialized"]:
+                recover_runtime(state, metadata)
             if not metadata["initialized"]:
                 call_native(state, "init")
             identity = call_native(state, "identity")
@@ -165,7 +196,10 @@ def start(config_path):
         or not (state / SLOT / "keys.json").is_file()
     ):
         raise ValueError("Wallet configuration mismatch; run init only for a new profile")
-    identity = native(state, "identity")
+    with (state / SLOT / ".coordinator.lock").open("a") as coordinator:
+        fcntl.flock(coordinator, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        recover_runtime(state, metadata)
+        identity = native(state, "identity")
     if (
         identity.get("network") != "regtest"
         or identity.get("fingerprint") != metadata["fingerprint"]
@@ -188,7 +222,7 @@ def start(config_path):
     ]
     shared = state / "shared-network.json"
     if not shared.exists():
-        os.execve(sys.executable, arguments, environment)
+        raise SystemExit(run_service(arguments, env=environment))
     from chain_transport import Adapters, Client
     from chain_transport import environment as chain_environment
 
@@ -202,15 +236,8 @@ def start(config_path):
                 raise
             time.sleep(2)
     adapters = Adapters(client)
-    child = None
     try:
-        child = subprocess.Popen(arguments, env={**environment, **chain_environment(shared)})
-        signal.signal(signal.SIGTERM, lambda *_: child.terminate())
-        raise SystemExit(child.wait())
-    except KeyboardInterrupt:
-        if child:
-            child.terminate()
-            child.wait(timeout=15)
+        raise SystemExit(run_service(arguments, env={**environment, **chain_environment(shared)}))
     finally:
         adapters.close()
 

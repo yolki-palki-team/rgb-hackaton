@@ -122,6 +122,8 @@ def create_server(backend, token, port=4201):
 
 
 def main():
+    from wallet_lifecycle import serve_until_stopped
+
     os.umask(0o077)
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", required=True, choices=["alice", "bob", "carol"])
@@ -143,7 +145,7 @@ def main():
         ),
         flush=True,
     )
-    server.serve_forever()
+    serve_until_stopped(server)
 
 
 if __name__ == "__main__":

@@ -58,6 +58,35 @@ first UI refresh reuses that recent capability check; each balance read performs
 one native online sync with the allocation-index check, instead of opening and
 syncing the wallet twice. Signing still validates current state and exact terms.
 
+Closing desktop or pressing Ctrl+C now drains the local backend before stopping
+the wallet sidecar. The sidecar finishes its current native operation and journal
+write before closing the shared-network adapters. Native operations run outside
+the terminal process group, so terminal interrupts do not strand the SDK runtime
+marker halfway through an operation. Wait for the launcher to exit before reopening.
+
+On restart, an initialized automatic desktop profile can archive an empty stale
+`rgb_runtime.lock` only while holding both the coordinator and native instance
+locks, with the saved fingerprint matching its original keys and wallet directory.
+The original marker is retained as `rgb_runtime.lock.recovered-*`; keys, RGB stock,
+trade journals and signatures are not reset. Active locks, unknown identities,
+nonempty markers and symlinks stop recovery. Normal identity, chain and allocation
+checks still run afterward; marker recovery does not repair corrupt wallet data.
+These dedicated desktop state directories must only be accessed through the
+project wrapper that honors its locks, never by a separate raw SDK client.
+
+Validation on 2026-10-18: synthetic subprocess tests cover terminal interrupts,
+SIGTERM, repeated shutdown signals, journal completion and ordered service exit.
+Recovery tests cover active locks and preservation of wallet data. The existing
+local profile was recovered and its identity verified without launching desktop;
+no new swap or live GUI shutdown test was performed for this change.
+
+Run the lifecycle regression tests without starting desktop:
+
+```sh
+rtk proxy uv run --locked python -m unittest discover -s scripts/demo -p 'test_*wallet*.py'
+rtk proxy node --import tsx --test apps/desktop/test/lifecycle.test.ts
+```
+
 Validation on 2026-10-17: dependency-cache invalidation, SDK corruption/refreshed
 bridge checks, desktop listener identity and wallet index-failure tests pass.
 The unchanged SDK cache check took 0.043 seconds locally. This measures only SDK
