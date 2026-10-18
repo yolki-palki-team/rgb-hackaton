@@ -259,7 +259,7 @@ class Network:
 
     def mine(self):
         while True:
-            time.sleep(5)
+            time.sleep(1)
             try:
                 with self.lock:
                     if core("getrawmempool"):
