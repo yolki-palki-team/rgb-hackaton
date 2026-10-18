@@ -1,13 +1,13 @@
 # 21st component selection
 
-Reviewed on 2026-10-17 for the palka. public market's black-and-charcoal design.
+Reviewed on 2026-10-17 for the pálka public market's black-and-charcoal design.
 
 ## Selected by the user
 
 | Component                                                                                     | Placement                 | Integration                                                                                                                                                                                       |
 | --------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Velorah](https://hirael.com/templates/velorah)                                               | Landing page              | User-supplied template adapted to React/Vite, Prisma background video and poster served locally, centered English palka. copy, glass main CTA and shared navigation. Replaces the sculpture hero. |
-| [Halftone Wordmark Footer](https://21st.dev/@kedhareswer/components/halftone-wordmark-footer) | Landing and market footer | Supplied React/Canvas source, palka. wordmark, black palette, real navigation links, reduced-motion support.                                                                                      |
+| [Velorah](https://hirael.com/templates/velorah)                                               | Landing page              | User-supplied template adapted to React/Vite, Prisma background video and poster served locally, centered English pálka copy, glass main CTA and shared navigation. Replaces the sculpture hero. |
+| [Halftone Wordmark Footer](https://21st.dev/@kedhareswer/components/halftone-wordmark-footer) | Landing and market footer | Supplied React/Canvas source, pálka wordmark, black palette, real navigation links, reduced-motion support.                                                                                      |
 
 ## Recommended next components
 

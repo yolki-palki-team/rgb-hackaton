@@ -4,7 +4,6 @@ import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
 import { getPublicActivity } from './api';
-import { PublicHistory } from './PublicHistory';
 import { MorphingSquare } from './components/ui/morphing-square';
 import {
   assetIdentity,
@@ -125,7 +124,6 @@ function OrderCard({ entry }: { entry: PublicMarketOrder }) {
 
 function Market() {
   const [state, setState] = useState<MarketState>({ kind: 'loading', orders: [] });
-  const [view, setView] = useState<'orders' | 'history'>('orders');
   const [assetFilter, setAssetFilter] = useState<string>('all');
   const [retry, setRetry] = useState(0);
   const [refreshing, setRefreshing] = useState(true);
@@ -216,26 +214,7 @@ function Market() {
               Refresh
             </button>
           </div>
-          <div className="market-views" role="group" aria-label="Market views">
-            <button
-              type="button"
-              aria-pressed={view === 'orders'}
-              onClick={() => setView('orders')}
-            >
-              Orders <span>{state.orders.length}</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === 'history'}
-              onClick={() => setView('history')}
-            >
-              History
-            </button>
-          </div>
-          <div hidden={view !== 'history'}>
-            <PublicHistory activity={state.orders} />
-          </div>
-          <div hidden={view === 'history'}>
+          <div>
             <div className="filter-row" role="group" aria-label="Filter by asset">
               <button
                 type="button"

@@ -1,8 +1,8 @@
-# palka. Protocol
+# pálka Protocol
 
 **Turn a circle of compatible orders into one atomic Bitcoin transaction.**
 
-palka is a non-custodial exchange protocol and marketplace for BTC and RGB assets. It connects traders who cannot find a direct counterparty, lets them describe orders with on-device AI, and settles compatible exchanges with keys and signing on their own computers.
+pálka is a non-custodial exchange protocol and marketplace for BTC and RGB assets. It connects traders who cannot find a direct counterparty, lets them describe orders with on-device AI, and settles compatible exchanges with keys and signing on their own computers.
 
 **[Live website](https://owlpeer.com/) · [Public market](https://owlpeer.com/market) · [First wallet setup](#first-wallet-setup) · [API health](https://api.owlpeer.com/health)**
 
@@ -10,7 +10,7 @@ palka is a non-custodial exchange protocol and marketplace for BTC and RGB asset
 
 ## Hackathon stack
 
-| Technology                           | How palka uses it                                                                                                                                                                    | Working result                                                                                                                |
+| Technology                           | How pálka uses it                                                                                                                                                                    | Working result                                                                                                                |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | **RGB on Bitcoin — required**        | Client-side asset validation through `rgb-lib`, a local Rust bridge and Python wallet service. Participants combine BTC inputs and RGB transitions into one cooperative transaction. | Real direct and three-party swaps on regtest; received RGB spent again after restart.                                         |
 | **QVAC — required**                  | Local Qwen3.5 4B inference converts natural-language goals into reviewable swap terms. No cloud inference or model API key.                                                          | Real inference checks, including BTC/sats conversion, Russian input and clarification of incomplete orders.                   |
@@ -19,9 +19,9 @@ palka is a non-custodial exchange protocol and marketplace for BTC and RGB asset
 
 Versions are pinned in [package.json](package.json) and the [native wallet manifest](packages/wallet/native/Cargo.toml). Original requirements: [materials.md](materials.md).
 
-**Navigate:** [Why palka](#why-palka) · [How it works](#how-it-works) · [What is proven](#what-is-proven) · [First wallet setup](#first-wallet-setup) · [Try a swap](#try-a-swap) · [Architecture](#architecture) · [Development](#development) · [MVP boundaries](#mvp-boundaries) · [Roadmap](#roadmap)
+**Navigate:** [Why pálka](#why-pálka) · [How it works](#how-it-works) · [What is proven](#what-is-proven) · [First wallet setup](#first-wallet-setup) · [Try a swap](#try-a-swap) · [Architecture](#architecture) · [Development](#development) · [MVP boundaries](#mvp-boundaries) · [Roadmap](#roadmap)
 
-## Why palka
+## Why pálka
 
 A direct exchange needs two people with opposite wants. In a fragmented asset market, compatible demand can exist across several people without any pair matching:
 
@@ -35,7 +35,7 @@ A direct exchange needs two people with opposite wants. In a fragmented asset ma
 
 The core contribution is to **find exchanges that pairwise matching misses, then execute the complete cycle atomically**. Participants use existing inventory without requiring an AMM pool or an intermediary holding every trading pair. More compatible orders can create more execution opportunities; measuring that improvement at scale is future work.
 
-The graph idea is inspired by [Cycles' introduction to MTCS](https://cycles.money/blog/an-introduction-to-mtcs). MTCS nets existing debts; palka exchanges owned assets under explicit orders. Our matcher finds feasible cycles and does not claim MTCS's global optimization or measured liquidity savings.
+The graph idea is inspired by [Cycles' introduction to MTCS](https://cycles.money/blog/an-introduction-to-mtcs). MTCS nets existing debts; pálka exchanges owned assets under explicit orders. Our matcher finds feasible cycles and does not claim MTCS's global optimization or measured liquidity savings.
 
 ## How it works
 
@@ -91,6 +91,8 @@ Use two independently funded wallets for a direct exchange, or three for the rin
 3. Keep each app open while it prepares and validates the shared package. Every participant separately approves signing.
 4. Check the transaction ID, Bitcoin confirmation and RGB acceptance. If interrupted, reopen the same wallet and reconcile the existing trade.
 
+**Desktop workspace:** Overview pairs the swap composer with a collapsible wallet sorted by asset quantity, followed by paged open offers and the current running order. Trade contains active orders and expandable past executions. Completed-swap notices can be dismissed permanently for that wallet on this device. Older executions retain market-reported terms and outcomes; local transaction receipts are available for the current trade.
+
 **Top up:** create the separate WDK account in **Top up**, receive its one-time test-BTC allowance, then review and approve a transfer into the RGB wallet. Onboarding already funds the main wallet directly, so WDK is currently an optional extra funding path. It transfers BTC; it does not mint RGB tokens. [Funding details](docs/handoffs/wdk-funding.md).
 
 X, DUSD and generated tokens are test assets. **DUSD is not USDT or a backed dollar.** Local isolated scenarios and recovery: [operations guide](docs/usage.md).
@@ -109,7 +111,7 @@ flowchart LR
 
 | Component                                                                 | Responsibility                                                                                            |
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [`apps/web`](apps/web)                                                    | React/Vite public marketplace, order status and history; no keys or signing.                              |
+| [`apps/web`](apps/web)                                                    | React/Vite public marketplace, order activity and status; no keys or signing.                              |
 | [`apps/market`](apps/market)                                              | Node/TypeScript coordinator, deterministic BigInt matching, HTTP/WebSocket events and SQLite persistence. |
 | [`apps/local-client`](apps/local-client) + [`apps/desktop`](apps/desktop) | Private wallet UI, local QVAC, approvals, WDK funding, recovery and Electron shell.                       |
 | [`packages/contracts`](packages/contracts)                                | Versioned schemas, exact integer quantities and shared validation.                                        |

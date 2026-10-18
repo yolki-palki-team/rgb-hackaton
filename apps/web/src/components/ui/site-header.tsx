@@ -1,8 +1,8 @@
 export default function SiteHeader({ active }: { active: 'home' | 'market' }) {
   return (
     <nav className="video-hero-nav" aria-label="Primary">
-      <a className="video-hero-brand" href="/" aria-label="pálka. home">
-        p<span className="brand-stress">a</span>lka.
+      <a className="video-hero-brand" href="/" aria-label="pálka home">
+        p<span className="brand-stress">a</span>lka
       </a>
       <div className="video-hero-links">
         <a href="/" aria-current={active === 'home' ? 'page' : undefined}>

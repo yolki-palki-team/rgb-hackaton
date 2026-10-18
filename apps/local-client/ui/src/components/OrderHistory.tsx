@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { MarketHistory, PublicOrder, TradeStatus } from '@rgb-exchange/contracts';
 import { formatAsset, orderFillSummary } from '../api';
-import { Button, Panel, SectionTitle, StatusBadge } from './ui/wallet-kit';
+import { Button, Panel, StatusBadge } from './ui/wallet-kit';
 import { MorphingSquare } from './ui/morphing-square';
+import type { Trade } from '../model';
+import { isFinishedTrade } from '../dashboard';
 
 export function mergeOrderHistory(
   current: MarketHistory,
@@ -49,58 +51,135 @@ const orderLabels: Record<PublicOrder['status'], string> = {
   EXPIRED: 'Expired',
 };
 
-export function OrderHistoryRows({ history }: { history: MarketHistory }) {
+type TradeSelection = { tradeId?: string; orderId?: string; finished?: boolean; version: number };
+
+type HistoryContent = {
+  liveTrade?: Trade | null;
+  liveContent?: ReactNode;
+  request?: TradeSelection;
+};
+
+export function OrderHistoryRows({
+  history,
+  liveTrade,
+  liveContent,
+  request,
+}: { history: MarketHistory } & HistoryContent) {
+  // Active orders stay above the archive even after loading older pages.
+  const active = (order: PublicOrder) =>
+    order.status === 'OPEN' ||
+    order.status === 'RESERVED' ||
+    history.trades.some(
+      (trade) =>
+        !isFinishedTrade(trade) && trade.plan.orderRefs.some((ref) => ref.orderId === order.id),
+    );
+  const orders = [...history.myOrders].sort(
+    (a, b) => Number(active(b)) - Number(active(a)) || b.createdAt - a.createdAt,
+  );
   return (
     <ol className="wallet-history-list" aria-label="Your saved orders">
-      {history.myOrders.map((order) => {
+      {orders.map((order) => {
         const trades = history.trades.filter((trade) =>
           trade.plan.orderRefs.some((ref) => ref.orderId === order.id),
         );
+        const current = trades.some((trade) => trade.plan.tradeId === liveTrade?.id);
+        const running = (current && liveTrade && !isFinishedTrade(liveTrade)) || active(order);
+        const selected =
+          (running || request?.finished !== false) &&
+          (request?.orderId === order.id ||
+            trades.some((trade) => trade.plan.tradeId === request?.tradeId));
         return (
-          <li className="wallet-history-row" key={order.id}>
-            <div className="wallet-history-terms">
-              <strong>{formatAsset(order.giveAsset, order.giveAmount)}</strong>
-              <span aria-label="for at least">→ ≥</span>
-              <strong>{formatAsset(order.receiveAsset, order.minReceiveAmount)}</strong>
-            </div>
-            <StatusBadge className="status-pill">
-              {order.status === 'OPEN' && BigInt(order.fillProgress?.filledGiveAmount ?? '0') > 0n
-                ? 'Partially filled'
-                : orderLabels[order.status]}
-            </StatusBadge>
-            {order.partialFill && (
-              <p className="wallet-history-progress">{orderFillSummary(order)}</p>
-            )}
-            <div className="wallet-history-meta">
-              <time dateTime={new Date(order.createdAt).toISOString()}>
-                {new Date(order.createdAt).toLocaleString()}
-              </time>
-              <span>{order.network}</span>
-              <span title={order.id}>
-                Order{' '}
-                {order.id.length > 20 ? `${order.id.slice(0, 10)}…${order.id.slice(-6)}` : order.id}
-              </span>
-            </div>
-            {trades.map((trade) => {
-              const give = trade.plan.legs.find((leg) => leg.fromOwnerId === order.ownerId);
-              const receive = trade.plan.legs.find((leg) => leg.toOwnerId === order.ownerId);
-              return (
-                <div className="wallet-history-outcome" key={trade.plan.tradeId}>
-                  <span>
-                    {trade.plan.participants.length === 3 ? '3-party ring' : 'Direct swap'} ·{' '}
-                    {tradeLabels[trade.status]}
-                  </span>
-                  {order.partialFill && give && receive && (
-                    <p title={trade.plan.tradeId}>
-                      Fill {trade.plan.tradeId.slice(0, 14)} ·{' '}
-                      {formatAsset(give.asset, give.amount)} →{' '}
-                      {formatAsset(receive.asset, receive.amount)}
-                    </p>
-                  )}
-                  {trade.reason && <p>{trade.reason}</p>}
+          <li key={order.id}>
+            <details
+              className="wallet-history-row"
+              key={`${order.id}:${Boolean(running)}:${selected ? request?.version : 0}`}
+              open={Boolean(running || selected)}
+            >
+              <summary className="wallet-history-summary">
+                <span className="history-disclosure" aria-hidden="true">
+                  ›
+                </span>
+                <span className="wallet-history-terms">
+                  <strong>{formatAsset(order.giveAsset, order.giveAmount)}</strong>
+                  <span aria-label="for at least">→ ≥</span>
+                  <strong>{formatAsset(order.receiveAsset, order.minReceiveAmount)}</strong>
+                </span>
+                <StatusBadge className="status-pill">
+                  {current && liveTrade && !isFinishedTrade(liveTrade)
+                    ? (tradeLabels[liveTrade.status as TradeStatus] ?? liveTrade.status)
+                    : order.status === 'OPEN' &&
+                        BigInt(order.fillProgress?.filledGiveAmount ?? '0') > 0n
+                      ? 'Partially filled'
+                      : orderLabels[order.status]}
+                </StatusBadge>
+                <time dateTime={new Date(order.createdAt).toISOString()}>
+                  {new Date(order.createdAt).toLocaleDateString()}
+                </time>
+              </summary>
+              <div className="wallet-history-detail">
+                {order.partialFill && (
+                  <p className="wallet-history-progress">{orderFillSummary(order)}</p>
+                )}
+                <div className="wallet-history-meta">
+                  <time dateTime={new Date(order.createdAt).toISOString()}>
+                    {new Date(order.createdAt).toLocaleString()}
+                  </time>
+                  <span>{order.network}</span>
+                  <span>Order {order.id}</span>
                 </div>
-              );
-            })}
+                {current && liveContent}
+                {trades
+                  .filter((trade) => !liveContent || trade.plan.tradeId !== liveTrade?.id)
+                  .map((trade) => {
+                    const give = trade.plan.legs.find((leg) => leg.fromOwnerId === order.ownerId);
+                    const receive = trade.plan.legs.find((leg) => leg.toOwnerId === order.ownerId);
+                    const fee = trade.plan.fees.find((entry) => entry.ownerId === order.ownerId);
+                    return (
+                      <div className="wallet-history-outcome" key={trade.plan.tradeId}>
+                        <span>
+                          {trade.plan.participants.length > 2
+                            ? `${trade.plan.participants.length}-party ring`
+                            : 'Direct swap'}{' '}
+                          · {tradeLabels[trade.status]}
+                        </span>
+                        {give && receive && (
+                          <p>
+                            {order.partialFill ? 'Fill' : 'Swap'} {trade.plan.tradeId} ·{' '}
+                            {formatAsset(give.asset, give.amount)} →{' '}
+                            {formatAsset(receive.asset, receive.amount)}
+                          </p>
+                        )}
+                        <p>
+                          My fee {fee?.feeSats ?? '0'} sats ·{' '}
+                          {trade.plan.feeState === 'final' ? 'Final package' : 'Estimated'}
+                        </p>
+                        <div className="history-transfers">
+                          {trade.plan.legs.map((leg, index) => (
+                            <p key={index}>
+                              {leg.fromOwnerId === order.ownerId
+                                ? 'You'
+                                : `Participant ${trade.plan.participants.indexOf(leg.fromOwnerId) + 1}`}{' '}
+                              →{' '}
+                              {leg.toOwnerId === order.ownerId
+                                ? 'You'
+                                : `Participant ${trade.plan.participants.indexOf(leg.toOwnerId) + 1}`}{' '}
+                              <strong>{formatAsset(leg.asset, leg.amount)}</strong>
+                            </p>
+                          ))}
+                        </div>
+                        {trade.reason && <p>{trade.reason}</p>}
+                      </div>
+                    );
+                  })}
+                {trades.length === 0 && (
+                  <p className="wallet-history-note">
+                    {order.status === 'OPEN'
+                      ? 'Waiting for a compatible order. A match will appear here automatically.'
+                      : 'This order ended without a swap.'}
+                  </p>
+                )}
+              </div>
+            </details>
           </li>
         );
       })}
@@ -110,7 +189,10 @@ export function OrderHistoryRows({ history }: { history: MarketHistory }) {
 
 export function OrderHistory({
   loadPage,
-}: {
+  liveTrade,
+  liveContent,
+  request: selection,
+}: HistoryContent & {
   loadPage: (cursor?: string) => Promise<MarketHistory & { stale?: boolean }>;
 }) {
   const [history, setHistory] = useState<MarketHistory>({
@@ -156,24 +238,48 @@ export function OrderHistory({
 
   return (
     <section className="wallet-history" aria-labelledby="wallet-history-heading">
-      <SectionTitle
-        kicker="SAVED ACTIVITY"
-        title="Your order history"
-        id="wallet-history-heading"
-        action={
-          <Button
-            className="refresh-button"
-            disabled={loading}
-            aria-busy={loading}
-            onClick={() => setRequest({})}
+      <div className="history-toolbar">
+        <h2 id="wallet-history-heading">Your orders</h2>
+        <Button
+          className="refresh-button"
+          disabled={loading}
+          aria-busy={loading}
+          onClick={() => setRequest({})}
+        >
+          {loaded && loading && (
+            <MorphingSquare className="h-3 w-3 bg-current" aria-hidden="true" />
+          )}
+          Refresh
+        </Button>
+      </div>
+      {liveTrade &&
+        !history.myOrders.some((order) =>
+          history.trades.some(
+            (trade) =>
+              trade.plan.tradeId === liveTrade.id &&
+              trade.plan.orderRefs.some((ref) => ref.orderId === order.id),
+          ),
+        ) && (
+          <details
+            className="wallet-history-row live-trade-fallback"
+            key={`${liveTrade.id}:${isFinishedTrade(liveTrade)}:${selection?.tradeId === liveTrade.id ? selection.version : 0}`}
+            open={
+              !isFinishedTrade(liveTrade) ||
+              (selection?.tradeId === liveTrade.id && selection.finished !== false)
+            }
           >
-            {loaded && loading && (
-              <MorphingSquare className="h-3 w-3 bg-current" aria-hidden="true" />
-            )}
-            Refresh history
-          </Button>
-        }
-      />
+            <summary className="wallet-history-summary">
+              <span className="history-disclosure" aria-hidden="true">
+                ›
+              </span>
+              <strong>{liveTrade.status === 'CONFIRMED' ? 'Swap complete' : 'Current swap'}</strong>
+              <StatusBadge>
+                {tradeLabels[liveTrade.status as TradeStatus] ?? liveTrade.status}
+              </StatusBadge>
+            </summary>
+            <div className="wallet-history-detail">{liveContent}</div>
+          </details>
+        )}
       <Panel className="panel wallet-history-panel">
         {error && (
           <p className="wallet-history-error" role="status">
@@ -187,7 +293,12 @@ export function OrderHistory({
         {loaded && history.myOrders.length === 0 && (
           <p className="wallet-history-note">No published orders yet.</p>
         )}
-        <OrderHistoryRows history={history} />
+        <OrderHistoryRows
+          history={history}
+          liveTrade={liveTrade}
+          liveContent={liveContent}
+          request={selection}
+        />
         {history.nextCursor && (
           <Button
             className="outline-button wallet-history-more"
