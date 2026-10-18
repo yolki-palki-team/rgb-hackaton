@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { participantId } from '@rgb-exchange/contracts/participant';
-import { loadDesktopConfig } from '../src/config.ts';
+import { desktopDataDirectory, loadDesktopConfig } from '../src/config.ts';
 
 test('fresh desktop saves a unique automatic identity before any connection and reuses it', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'palka-identity-'));
@@ -31,6 +31,44 @@ test('fresh desktop saves a unique automatic identity before any connection and 
   const another = loadDesktopConfig(join(dir, 'another'), env);
   assert.notEqual(another.ownerId, first.ownerId);
   assert.notEqual(another.marketToken, first.marketToken);
+});
+
+test('Mutinynet uses a separate desktop profile and cannot reuse regtest configuration', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'palka-network-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.equal(desktopDataDirectory(dir, {}), dir);
+  assert.equal(desktopDataDirectory(dir, { PALKA_NETWORK: 'mutinynet' }), `${dir}-mutinynet`);
+  assert.equal(
+    desktopDataDirectory(dir, { PALKA_NETWORK: 'signetcustom', PALKA_DESKTOP_DATA_DIR: dir }),
+    dir,
+  );
+  loadDesktopConfig(dir, {});
+  const path = join(dir, 'desktop-config.json');
+  const original = readFileSync(path, 'utf8');
+  assert.throws(() => loadDesktopConfig(dir, { PALKA_NETWORK: 'mutinynet' }), /another network/);
+  assert.equal(readFileSync(path, 'utf8'), original);
+  const profile = join(dir, 'mutinynet');
+  const config = loadDesktopConfig(profile, { PALKA_NETWORK: 'mutinynet' });
+  assert.equal(config.network, 'signetcustom');
+  assert.deepEqual(loadDesktopConfig(profile, {}), config);
+  assert.throws(() => loadDesktopConfig(profile, { PALKA_NETWORK: 'regtest' }), /another network/);
+  assert.throws(
+    () => loadDesktopConfig(profile, { PALKA_WALLET_MODE: 'mock' }),
+    /only available on regtest/,
+  );
+  assert.throws(() => loadDesktopConfig(join(dir, 'mainnet'), { PALKA_NETWORK: 'mainnet' }));
+});
+
+test('legacy desktop configuration remains regtest and cannot be relabeled as Mutinynet', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'palka-legacy-network-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(
+    join(dir, 'desktop-config.json'),
+    JSON.stringify({ ownerId: 'alice', marketToken: 'legacy-token' }),
+    { mode: 0o600 },
+  );
+  assert.equal(loadDesktopConfig(dir, {}).network, 'regtest');
+  assert.throws(() => loadDesktopConfig(dir, { PALKA_NETWORK: 'mutinynet' }), /another network/);
 });
 
 test('existing config and wallet identity are never rewritten or auto-enrolled', (t) => {

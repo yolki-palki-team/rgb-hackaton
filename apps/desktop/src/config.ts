@@ -9,8 +9,10 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { participantId } from '@rgb-exchange/contracts/participant';
+import { developmentNetwork, type DevelopmentNetwork } from '@rgb-exchange/contracts';
 
 export type DesktopConfig = {
+  network: DevelopmentNetwork;
   ownerId: string;
   marketUrl: string;
   marketToken: string;
@@ -43,6 +45,11 @@ function serviceUrl(raw: string, local: boolean, path = '/'): string {
 function resolveConfig(saved: Record<string, unknown>, env: NodeJS.ProcessEnv): DesktopConfig {
   const value = (key: string, variable: string, fallback = '') =>
     String(env[variable] ?? saved[key] ?? fallback);
+  const network = developmentNetwork(value('network', 'PALKA_NETWORK', 'regtest'));
+  if (Object.hasOwn(saved, 'network') && developmentNetwork(String(saved.network)) !== network)
+    throw new Error(
+      'Desktop configuration belongs to another network; use a separate desktop profile',
+    );
   const ownerId = value('ownerId', 'PALKA_OWNER_ID');
   const marketToken = value('marketToken', 'PALKA_MARKET_TOKEN');
   if (!/^[a-zA-Z0-9:._-]{1,200}$/.test(ownerId)) throw new Error('Invalid local owner ID');
@@ -53,6 +60,8 @@ function resolveConfig(saved: Record<string, unknown>, env: NodeJS.ProcessEnv): 
     throw new Error('Invalid local port');
   const walletMode = value('walletMode', 'PALKA_WALLET_MODE', 'real');
   if (walletMode !== 'real' && walletMode !== 'mock') throw new Error('Invalid wallet mode');
+  if (network !== 'regtest' && walletMode === 'mock')
+    throw new Error('Mock wallets are only available on regtest');
   const savedRegistration = saved.marketRegistration ?? 'manual';
   if (savedRegistration !== 'automatic' && savedRegistration !== 'manual')
     throw new Error('Invalid registration mode');
@@ -78,6 +87,7 @@ function resolveConfig(saved: Record<string, unknown>, env: NodeJS.ProcessEnv): 
       );
   }
   return {
+    network,
     ownerId,
     marketToken,
     marketUrl,
@@ -149,5 +159,16 @@ export function loadDesktopConfig(
   }
   if (!saved || typeof saved !== 'object' || Array.isArray(saved))
     throw new Error('Invalid private desktop configuration');
-  return resolveConfig(saved as Record<string, unknown>, env);
+  const record = saved as Record<string, unknown>;
+  return resolveConfig({ ...record, network: record.network ?? 'regtest' }, env);
+}
+
+export function desktopDataDirectory(
+  defaultDirectory: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (env.PALKA_DESKTOP_DATA_DIR) return env.PALKA_DESKTOP_DATA_DIR;
+  return developmentNetwork(env.PALKA_NETWORK) === 'signetcustom'
+    ? `${defaultDirectory}-mutinynet`
+    : defaultDirectory;
 }

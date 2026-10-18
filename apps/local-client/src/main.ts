@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { IdSchema } from '@rgb-exchange/contracts';
+import { developmentNetwork, IdSchema } from '@rgb-exchange/contracts';
 import { LocalStore } from './store.ts';
 import { MockWalletAdapter, HttpWalletAdapter, UnavailableWalletAdapter } from './wallet.ts';
 import { MarketClient } from './market-client.ts';
@@ -13,8 +13,14 @@ import { WdkFunding } from './wdk-funding.ts';
 
 const owner = IdSchema.parse(process.env.LOCAL_OWNER_ID ?? 'A');
 const mode = process.env.WALLET_MODE ?? 'real';
+const network = developmentNetwork(process.env.PALKA_NETWORK);
 if (!['mock', 'real'].includes(mode)) throw new Error('WALLET_MODE must be mock or real');
-const stateDir = resolve(process.env.LOCAL_STATE_DIR ?? `.state/local-${mode}-${owner}`);
+if (network !== 'regtest' && mode === 'mock')
+  throw new Error('Mock wallets are only available on regtest');
+const stateDir = resolve(
+  process.env.LOCAL_STATE_DIR ??
+    `.state/local-${mode}-${owner}${network === 'regtest' ? '' : '-mutinynet'}`,
+);
 mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 const tokenPath = resolve(stateDir, 'session-token');
 if (!process.env.LOCAL_SESSION_TOKEN && !existsSync(tokenPath))
@@ -26,6 +32,7 @@ const market = new MarketClient(
   process.env.MARKET_TOKEN,
   undefined,
   process.env.MARKET_AUTO_REGISTER === 'true' ? owner : undefined,
+  network,
 );
 const store = new LocalStore(resolve(stateDir, 'local.sqlite'));
 const wallet =
@@ -38,7 +45,7 @@ const wallet =
         )
       : new UnavailableWalletAdapter();
 const qvac = new QvacInterpreter();
-const service = new LocalService(owner, wallet, market, store, qvac);
+const service = new LocalService(owner, wallet, market, store, qvac, network);
 const port = Number(process.env.LOCAL_PORT ?? 4101);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid LOCAL_PORT');
 const origins = (
@@ -50,8 +57,9 @@ const host = process.env.LOCAL_HOST ?? '127.0.0.1';
 if (!['127.0.0.1', '0.0.0.0'].includes(host))
   throw new Error('LOCAL_HOST must be 127.0.0.1 or 0.0.0.0');
 const uiDirectory = fileURLToPath(new URL('../ui/dist/', import.meta.url));
+// shortcut: WDK Bitcoin beta.17 lacks custom Signet; enable funding only after verifying SDK chain support.
 const funding =
-  mode === 'real'
+  mode === 'real' && network === 'regtest'
     ? new WdkFunding({
         directory: resolve(stateDir, 'funding'),
         ownerId: owner,

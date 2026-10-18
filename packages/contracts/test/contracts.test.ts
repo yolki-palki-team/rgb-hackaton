@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   AtomicAmountSchema,
+  FundingTargetSchema,
+  developmentNetwork,
   PublicOrderSchema,
   OrderDraftSchema,
   isOrderFillValid,
@@ -19,6 +21,26 @@ import {
 } from '../src/index.ts';
 
 const btc: AssetRef = { network: 'regtest', kind: 'btc', symbol: 'BTC', precision: 8 };
+
+test('Mutinynet maps to custom Signet and funding addresses cannot cross networks', () => {
+  assert.equal(developmentNetwork(), 'regtest');
+  assert.equal(developmentNetwork('mutinynet'), 'signetcustom');
+  assert.equal(developmentNetwork('signetcustom'), 'signetcustom');
+  for (const network of ['mainnet', 'testnet', 'signet', 'unknown'])
+    assert.throws(() => developmentNetwork(network));
+  const target = {
+    walletId: 'wallet',
+    ownerId: 'owner',
+    network: 'signetcustom',
+    address: `tb1${'q'.repeat(39)}`,
+  };
+  assert.equal(FundingTargetSchema.parse(target).network, 'signetcustom');
+  assert.equal(FundingTargetSchema.safeParse({ ...target, network: 'regtest' }).success, false);
+  assert.equal(
+    FundingTargetSchema.safeParse({ ...target, address: `bcrt1${'q'.repeat(39)}` }).success,
+    false,
+  );
+});
 const x: AssetRef = {
   network: 'regtest',
   kind: 'rgb',

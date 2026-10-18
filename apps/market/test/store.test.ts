@@ -56,6 +56,70 @@ function withStore(run: (store: MarketStore, path: string) => void): void {
   }
 }
 
+test('Mutinynet market matches direct, ring and partial orders while rejecting other chains', () => {
+  const custom = (value: PublicOrder): PublicOrder => ({
+    ...value,
+    network: 'signetcustom',
+    giveAsset: { ...value.giveAsset, network: 'signetcustom' },
+    receiveAsset: { ...value.receiveAsset, network: 'signetcustom' },
+  });
+  for (const kind of ['direct', 'ring', 'partial']) {
+    const store = new MarketStore(':memory:', 'signetcustom');
+    try {
+      assert.throws(
+        () => store.createOrder('a', order('wrong-chain', 'a', btc, '100000', dusd, '100'), now),
+        /UNSUPPORTED_NETWORK/,
+      );
+      const first = custom(
+        order(
+          'a1',
+          'a',
+          kind === 'ring' ? x : btc,
+          kind === 'ring' ? '100' : '100000',
+          dusd,
+          '100',
+        ),
+      );
+      if (kind === 'partial') first.partialFill = { minGiveAmount: '50000' };
+      store.createOrder('a', first, now);
+      const second = custom(
+        order(
+          'b1',
+          'b',
+          dusd,
+          kind === 'partial' ? '50' : '100',
+          btc,
+          kind === 'partial' ? '50000' : '100000',
+        ),
+      );
+      let result = store.createOrder('b', second, now);
+      if (kind === 'ring') {
+        assert.equal(result.trade, null);
+        result = store.createOrder('c', custom(order('c1', 'c', btc, '100000', x, '100')), now);
+      }
+      assert.ok(result.trade);
+      assert.equal(result.trade.plan.network, 'signetcustom');
+      assert.equal(result.trade.plan.participants.length, kind === 'ring' ? 3 : 2);
+      assert.ok(result.trade.plan.legs.every((leg) => leg.asset.network === 'signetcustom'));
+      if (kind === 'partial')
+        assert.equal(
+          result.trade.plan.legs.find((leg) => leg.fromOwnerId === 'a')?.amount,
+          '50000',
+        );
+    } finally {
+      store.close();
+    }
+  }
+});
+
+test('a market database cannot be reopened under a different network', () => {
+  withStore((store, path) => {
+    store.createOrder('a', order('a1', 'a', btc, '100000', dusd, '100'), now);
+    assert.throws(() => new MarketStore(path, 'signetcustom'), /DATABASE_NETWORK_MISMATCH/);
+    assert.equal(store.listOpen(now).length, 1);
+  });
+});
+
 function signingTrade(store: MarketStore, trade: TradeSnapshot): void {
   const id = trade.plan.tradeId;
   const packageValue = {

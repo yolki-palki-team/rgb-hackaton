@@ -5,6 +5,7 @@ import {
   EventEnvelopeSchema,
   type MarketSnapshot,
   type EventEnvelope,
+  type DevelopmentNetwork,
 } from '@rgb-exchange/contracts';
 
 export class MarketHttpError extends Error {
@@ -26,12 +27,14 @@ export class MarketClient {
   private backoff = 250;
   private enrolled = false;
   private enrollment?: Promise<void>;
+  private networkCheck?: Promise<void>;
   private connecting = false;
   constructor(
     readonly url: string,
     private readonly token: string,
     private readonly onEvent: (event: EventEnvelope) => void = () => {},
     private readonly registrationOwnerId?: string,
+    private readonly network?: DevelopmentNetwork,
   ) {
     const parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password)
@@ -45,8 +48,8 @@ export class MarketClient {
       throw new Error('Registration identity does not match the saved token');
   }
   async request(path: string, method = 'GET', body?: unknown): Promise<unknown> {
-    await this.ensureEnrollment();
     try {
+      await this.ensureEnrollment();
       const result = await this.send(path, method, body);
       this.connected = true;
       return result;
@@ -70,6 +73,20 @@ export class MarketClient {
     }
   }
   private async ensureEnrollment(): Promise<void> {
+    if (this.network && !this.networkCheck) {
+      this.networkCheck = (async () => {
+        const health = (await this.send('/health')) as { network?: unknown };
+        if (
+          health.network !== this.network &&
+          !(health.network === undefined && this.network === 'regtest')
+        )
+          throw new Error('Market network does not match this local profile');
+      })().catch((error: unknown) => {
+        this.networkCheck = undefined;
+        throw error;
+      });
+    }
+    await this.networkCheck;
     if (!this.registrationOwnerId || this.enrolled) return;
     if (!this.enrollment) {
       this.enrollment = (async () => {
@@ -89,21 +106,27 @@ export class MarketClient {
     return this.enrollment;
   }
   private async send(path: string, method = 'GET', body?: unknown): Promise<unknown> {
-    const response = await fetch(new URL(path, this.url), {
-      method,
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(15_000),
-      redirect: 'error',
-    });
-    if (!response.ok) {
-      const error = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new MarketHttpError(error.error || `Market HTTP ${response.status}`, response.status);
+    try {
+      const response = await fetch(new URL(path, this.url), {
+        method,
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(15_000),
+        redirect: 'error',
+      });
+      if (!response.ok) {
+        const error = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new MarketHttpError(error.error || `Market HTTP ${response.status}`, response.status);
+      }
+      return await response.json();
+    } catch (error) {
+      this.networkCheck = undefined;
+      this.connected = false;
+      throw error;
     }
-    return response.json();
   }
   accept(event: EventEnvelope): boolean {
     EventEnvelopeSchema.parse(event);
@@ -180,9 +203,11 @@ export class MarketClient {
       }
     });
     this.ws.on('error', () => {
+      this.networkCheck = undefined;
       this.connected = false;
     });
     this.ws.on('close', (code, reason) => {
+      this.networkCheck = undefined;
       this.connected = false;
       if (code === 1008 && reason.toString() === 'INVALID_AUTH' && this.registrationOwnerId) {
         this.enrolled = false;
@@ -194,6 +219,7 @@ export class MarketClient {
   }
   close() {
     this.closed = true;
+    this.networkCheck = undefined;
     clearTimeout(this.timer);
     this.ws?.close();
   }

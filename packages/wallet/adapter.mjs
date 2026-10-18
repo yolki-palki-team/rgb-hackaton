@@ -15,10 +15,22 @@ export class UnsupportedSettlementError extends Error {
 // A owns the network API and contracts. This bridge is local subprocess IPC only.
 export function createWalletAdapter({
   profile,
-  stateDir = resolve(base, 'state'),
+  network = process.env.PALKA_NETWORK ?? 'regtest',
+  stateDir = resolve(base, 'state', network === 'regtest' ? '' : 'mutinynet'),
   binary = resolve(base, 'native/target/debug/rgb-settlement-spike'),
 }) {
   if (!['alice', 'bob', 'carol'].includes(profile)) throw new Error('Unknown local profile');
+  if (!['regtest', 'mutinynet', 'signetcustom'].includes(network)) {
+    throw new Error('Only regtest or Mutinynet is supported');
+  }
+  const networkContext =
+    network === 'regtest'
+      ? { network: 'regtest' }
+      : {
+          network: 'signetcustom',
+          signetChallenge:
+            '512102f7561d208dd9ae99bf497273e16f389bdbd6c4742ddb8e6b216e64fa2928ad8f51ae',
+        };
   const request = (op, data = {}) =>
     new Promise((accept, reject) => {
       const child = spawn(binary, [], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -47,13 +59,17 @@ export function createWalletAdapter({
         clearTimeout(timer);
         if (code !== 0) return reject(new Error(stderr.trim() || `Local RGB SDK exited ${code}`));
         try {
-          accept(JSON.parse(stdout));
+          const result = JSON.parse(stdout);
+          if (result.network !== networkContext.network) {
+            return reject(new Error('Native wallet network mismatch'));
+          }
+          accept(result);
         } catch {
           reject(new Error('Invalid SDK JSON response'));
         }
       });
       child.stdin.on('error', () => {});
-      child.stdin.end(JSON.stringify({ ...data, op, profile, stateDir }));
+      child.stdin.end(JSON.stringify({ ...data, op, profile, stateDir, ...networkContext }));
     });
   return Object.freeze({
     async capabilities() {
@@ -63,7 +79,7 @@ export function createWalletAdapter({
         return {
           protocolVersion: 'wallet-spike-v0',
           mode: 'unavailable',
-          network: 'regtest',
+          network: networkContext.network,
           directAtomic: false,
           ringAtomic: false,
           sign: false,

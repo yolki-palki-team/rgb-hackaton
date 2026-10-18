@@ -1,6 +1,6 @@
 use rgb_lib::{
     AssetSchema, BitcoinNetwork,
-    bitcoin::{Address, Network},
+    bitcoin::Address,
     keys::{WitnessVersion, generate_keys},
     wallet::{DatabaseType, OnlineOptions, RgbWalletOpsOffline, SinglesigKeys, Wallet, WalletData},
 };
@@ -13,6 +13,7 @@ use std::{
 };
 
 mod cooperative;
+mod network;
 mod smoke;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -61,14 +62,15 @@ fn private_write(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn open_wallet(root: &std::path::Path, init: bool) -> Result<Wallet> {
+fn open_wallet(root: &std::path::Path, init: bool, network: network::Profile) -> Result<Wallet> {
     if init {
         fs::create_dir_all(root)?;
         fs::set_permissions(root, fs::Permissions::from_mode(0o700))?;
     }
+    network.check_state(root, init)?;
     let path = root.join("keys.json");
     if init && !path.exists() {
-        let keys = generate_keys(BitcoinNetwork::Regtest, WitnessVersion::SegWitV0);
+        let keys = generate_keys(network.bitcoin_network(), WitnessVersion::SegWitV0);
         private_write(
             &path,
             &serde_json::to_vec(&SinglesigKeys::from_keys(&keys, None))?,
@@ -87,7 +89,7 @@ fn open_wallet(root: &std::path::Path, init: bool) -> Result<Wallet> {
     Ok(Wallet::new(
         WalletData {
             data_dir: root.to_string_lossy().into(),
-            bitcoin_network: BitcoinNetwork::Regtest,
+            bitcoin_network: network.bitcoin_network(),
             database_type: DatabaseType::Sqlite,
             max_allocations_per_utxo: 5,
             supported_schemas: vec![AssetSchema::Nia],
@@ -97,8 +99,11 @@ fn open_wallet(root: &std::path::Path, init: bool) -> Result<Wallet> {
 }
 
 fn online(wallet: &mut Wallet) -> Result<rgb_lib::wallet::Online> {
+    let network = network::Profile::from_wallet(wallet)?;
+    let indexer = network.indexer_url()?;
+    network.check_indexer(&indexer)?;
     Ok(wallet.go_online(OnlineOptions {
-        indexer_url: std::env::var("RGB_INDEXER_URL").unwrap_or_else(|_| "127.0.0.1:50001".into()),
+        indexer_url: indexer,
         skip_consistency_check: false,
         vanilla_sync_lookback: 20,
     })?)
@@ -119,27 +124,29 @@ fn run() -> Result<()> {
     }
     let req: Value = serde_json::from_str(&raw)?;
     let op = req["op"].as_str().ok_or("missing op")?;
+    let network = network::Profile::from_request(&req)?;
     if op == "health" {
-        let indexer = std::env::var("RGB_INDEXER_URL").unwrap_or_else(|_| "127.0.0.1:50001".into());
+        let indexer = network.indexer_url()?;
         let proxy = std::env::var("RGB_PROXY_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:3000/json-rpc".into());
-        rgb_lib::wallet::rust_only::check_indexer_url(&indexer, BitcoinNetwork::Regtest)?;
+        rgb_lib::wallet::rust_only::check_indexer_url(&indexer, network.bitcoin_network())?;
+        network.check_indexer(&indexer)?;
         rgb_lib::wallet::rust_only::check_proxy_url(&proxy)?;
         println!(
             "{}",
-            json!({"network":"regtest","indexer":true,"rgbProxyProtocolCompatible":true})
+            json!({"network":network.name(),"indexer":true,"rgbProxyProtocolCompatible":true})
         );
         return Ok(());
     }
     if op == "capabilities" {
         println!(
             "{}",
-            json!({"mode":"real","network":"regtest","sdk":"rgb-lib 0.3.0-beta.7",
+            json!({"mode":"real","network":network.name(),"sdk":"rgb-lib 0.3.0-beta.7",
             "sdkCommit":"1eaf0024c591e41843eb80cc8834082292668871",
             "directAtomic":false,"ringAtomic":false,"sign":false,
             "cooperativePrepare":true,"validateConsignment":true,"experimentalSigner":"explicit CLI approval only",
             "localSdkExtension":true,
-            "reason":"Low-level bridge is not a network signing API; use authenticated protocol-v1 HTTP sidecar for supported regtest settlement"})
+            "reason":"Low-level bridge is not a network signing API; use authenticated protocol-v1 HTTP sidecar for supported development-network settlement"})
         );
         return Ok(());
     }
@@ -166,7 +173,7 @@ fn run() -> Result<()> {
         .mode(0o600)
         .open(root.join(".instance.lock"))?;
     lock.try_lock()?;
-    let mut wallet = open_wallet(&root, op == "init")?;
+    let mut wallet = open_wallet(&root, op == "init", network)?;
     let trade_root = if let Some(key) = req["contextKey"].as_str() {
         if key.len() != 64
             || !key
@@ -181,6 +188,9 @@ fn run() -> Result<()> {
     };
     let mut result = match op {
         "smoke-receive" | "smoke-prepare" | "smoke-execute" | "smoke-refresh" => {
+            if network != network::Profile::Regtest {
+                return Err("legacy ordinary-transfer smoke helpers are regtest-only".into());
+            }
             smoke::run(&mut wallet, &root, &req)?
         }
         "color" => cooperative::color(&mut wallet, &req)?,
@@ -199,16 +209,23 @@ fn run() -> Result<()> {
             wallet.list_transfers(rgb_lib::wallet::AssetFilter::AnyOrNone, None)?,
         )?,
         "identity" => {
-            json!({"profile":profile,"network":"regtest","fingerprint":wallet.get_keys().master_fingerprint})
+            let mut identity = network.binding();
+            identity["profile"] = json!(profile);
+            identity["fingerprint"] = json!(wallet.get_keys().master_fingerprint);
+            identity
         }
         "init" => {
             let addresses = root.join("addresses.json");
             if addresses.exists() {
-                serde_json::from_slice(&fs::read(addresses)?)?
+                let saved: Value = serde_json::from_slice(&fs::read(addresses)?)?;
+                if saved["network"] != network.name() {
+                    return Err("saved addresses belong to a different network".into());
+                }
+                saved
             } else {
                 let btc = wallet.get_address()?;
                 let rgb = wallet.cooperative_colored_address()?;
-                let value = json!({"profile":profile,"network":"regtest","btcAddress":btc,"rgbAddress":rgb});
+                let value = json!({"profile":profile,"network":network.name(),"btcAddress":btc,"rgbAddress":rgb});
                 private_write(&addresses, &serde_json::to_vec(&value)?)?;
                 value
             }
@@ -234,7 +251,7 @@ fn run() -> Result<()> {
                 None
             };
             let unspents = wallet.list_unspents(on, false, op == "offline-state")?;
-            json!({"profile":profile,"network":"regtest","btc":wallet.get_btc_balance(on,op == "offline-state")?,
+            json!({"profile":profile,"network":network.name(),"btc":wallet.get_btc_balance(on,op == "offline-state")?,
                 "stockBalances":wallet.cooperative_stock_balances()?.iter().map(|(k,v)|(k.clone(),v.to_string())).collect::<std::collections::BTreeMap<_,_>>(),
                 "assets":wallet.list_assets(vec![])?,"unspents":unspents})
         }
@@ -280,7 +297,14 @@ fn run() -> Result<()> {
                 )?;
                 let asset = wallet.issue_asset_nia(
                     ticker.into(),
-                    format!("Regtest {ticker}"),
+                    format!(
+                        "{} {ticker}",
+                        if network == network::Profile::Regtest {
+                            "Regtest"
+                        } else {
+                            "Mutinynet"
+                        }
+                    ),
                     0,
                     vec![amount],
                 )?;

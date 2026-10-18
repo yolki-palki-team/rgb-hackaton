@@ -26,6 +26,8 @@ class DesktopLauncherTests(unittest.TestCase):
             "CARGO_HOME": str(self.cargo_bin.parent),
             "COMMAND_LOG": str(self.log),
             "TOOLCHAIN_BIN": str(self.toolchain),
+            "PALKA_NETWORK": "regtest",
+            "PALKA_MUTINYNET_CONFIG": "",
         }
         for command in ("git", "node", "npm", "uv"):
             self.executable(self.bin / command, f'echo "{command} $*" >> "$COMMAND_LOG"')
@@ -44,9 +46,9 @@ if [[ "$1" == which ]]; then echo "$TOOLCHAIN_BIN/cargo"; fi""",
         path.write_text("#!/bin/bash\n" + body + "\n")
         path.chmod(0o755)
 
-    def launch(self):
+    def launch(self, *args):
         return subprocess.run(
-            ["/bin/bash", str(self.root / "deploy/desktop.sh")],
+            ["/bin/bash", str(self.root / "deploy/desktop.sh"), *args],
             env=self.env,
             capture_output=True,
             text=True,
@@ -75,4 +77,26 @@ if [[ "$1" == which ]]; then echo "$TOOLCHAIN_BIN/cargo"; fi""",
         self.executable(self.cargo_bin / "rustup", "exit 42")
         result = self.launch()
         self.assertEqual(result.returncode, 42)
+        self.assertFalse(self.log.exists())
+
+    def test_mutinynet_requires_explicit_endpoints_before_downloads(self):
+        result = self.launch("--network", "mutinynet")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PALKA_MUTINYNET_CONFIG", result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_mutinynet_runs_sdk_preflight_before_desktop(self):
+        self.env["PALKA_MUTINYNET_CONFIG"] = "/private/synthetic-endpoints.json"
+        result = self.launch("--network", "mutinynet")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = self.log.read_text()
+        self.assertIn("python scripts/demo/chain_profile.py --allow-syncing", commands)
+        self.assertLess(
+            commands.index("python scripts/demo/chain_profile.py"),
+            commands.index("npm run dev:desktop"),
+        )
+
+    def test_unknown_network_does_not_start_dependency_installation(self):
+        result = self.launch("--network", "testnet3")
+        self.assertEqual(result.returncode, 2)
         self.assertFalse(self.log.exists())

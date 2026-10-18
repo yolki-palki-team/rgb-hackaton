@@ -123,7 +123,12 @@ test('health is read-only and amounts preserve asset precision', async () => {
     requested = String(input);
     assert.equal(init?.credentials, 'omit');
     return new Response(
-      JSON.stringify({ ok: true, protocolVersion: 1, mode: 'coordination-only' }),
+      JSON.stringify({
+        ok: true,
+        protocolVersion: 1,
+        mode: 'coordination-only',
+        network: 'signetcustom',
+      }),
       { status: 200 },
     );
   };

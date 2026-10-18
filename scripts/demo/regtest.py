@@ -8,8 +8,13 @@ import subprocess
 import time
 from pathlib import Path
 
+import chain_profile
+
 ROOT = Path(__file__).resolve().parents[2]
-STATE = Path(os.environ.get("RGB_DEMO_STATE", str(ROOT / "packages/wallet/state"))).resolve()
+DEFAULT_STATE = ROOT / "packages/wallet/state"
+if chain_profile.network() == "signetcustom":
+    DEFAULT_STATE /= "mutinynet"
+STATE = Path(os.environ.get("RGB_DEMO_STATE", str(DEFAULT_STATE))).resolve()
 if not STATE.is_relative_to(ROOT / "packages/wallet/state"):
     raise RuntimeError("demo state must remain in ignored packages/wallet/state")
 BIN = ROOT / "packages/wallet/native/target/debug/rgb-settlement-spike"
@@ -24,6 +29,8 @@ def call(args, **kwargs):
 
 
 def rpc(*args):
+    if chain_profile.network() == "signetcustom":
+        return chain_profile.rpc(*args)
     if os.environ.get("PALKA_CHAIN_CONFIG"):
         from chain_transport import Client
 
@@ -39,15 +46,33 @@ def rpc(*args):
 
 
 def native(op, profile=None, **kwargs):
+    environment = {}
+    if chain_profile.network() == "signetcustom" and op != "capabilities":
+        config = chain_profile.configuration()
+        # Receive setup is offline; health validates the pinned indexer and proxy itself.
+        if op not in ("init", "identity", "addresses", "health"):
+            chain_profile.check_chain(config)
+        environment = chain_profile.native_environment(config)
     return json.loads(
         call(
             [str(BIN)],
-            input=json.dumps({"op": op, "stateDir": str(STATE), "profile": profile, **kwargs}),
+            input=json.dumps(
+                {
+                    "op": op,
+                    "stateDir": str(STATE),
+                    "profile": profile,
+                    **kwargs,
+                    **chain_profile.native_context(),
+                }
+            ),
+            env={**os.environ, **environment},
         )
     )
 
 
 def setup():
+    if chain_profile.network() != "regtest":
+        raise ValueError("regtest setup cannot fund Mutinynet; see deploy/MUTINYNET.md")
     os.umask(0o077)
     STATE.mkdir(parents=True, exist_ok=True)
     chain = rpc("getblockchaininfo")

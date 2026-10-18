@@ -27,6 +27,14 @@ export const ContractIdSchema = z
 export const DigestSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const NetworkSchema = z.enum(['regtest', 'signet', 'signetcustom', 'testnet', 'mainnet']);
 export type Network = z.infer<typeof NetworkSchema>;
+export const DevelopmentNetworkSchema = z.enum(['regtest', 'signetcustom']);
+export type DevelopmentNetwork = z.infer<typeof DevelopmentNetworkSchema>;
+export function developmentNetwork(value = 'regtest'): DevelopmentNetwork {
+  return DevelopmentNetworkSchema.parse(value === 'mutinynet' ? 'signetcustom' : value);
+}
+export const networkLabel = (network: string): string =>
+  network === 'signetcustom' ? 'Mutinynet (custom Signet)' : network;
+export const MUTINYNET_FAUCET_URL = 'https://faucet.mutinynet.com/';
 const assetCommon = {
   network: NetworkSchema,
   symbol: z
@@ -184,15 +192,19 @@ export const WalletStateSchema = z
     'Invalid or duplicate wallet assets',
   );
 export type WalletState = z.infer<typeof WalletStateSchema>;
-/** A vanilla BTC receive address owned by the local RGB wallet on regtest. */
+/** A vanilla BTC receive address owned by the local RGB wallet. */
 export const FundingTargetSchema = z
   .object({
     walletId: IdSchema,
     ownerId: IdSchema,
-    network: z.literal('regtest'),
-    address: z.string().regex(/^bcrt1[ac-hj-np-z02-9]{8,87}$/),
+    network: DevelopmentNetworkSchema,
+    address: z.string().regex(/^(?:bcrt1|tb1)[ac-hj-np-z02-9]{8,87}$/),
   })
-  .strict();
+  .strict()
+  .refine(
+    (target) => target.address.startsWith(target.network === 'regtest' ? 'bcrt1' : 'tb1'),
+    'Funding address network mismatch',
+  );
 export type FundingTarget = z.infer<typeof FundingTargetSchema>;
 export const WalletCapabilitiesSchema = z
   .object({

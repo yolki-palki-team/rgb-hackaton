@@ -114,6 +114,25 @@ class JournalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.j.release("next")
 
+    def test_custom_signet_approval_keeps_reserved_network_and_challenge_immutable(self):
+        self.j.release("t")
+        plan = {"network": "signetcustom", "tradeId": "mutinynet"}
+        self.j.reserve_plan("mutinynet", plan, ["mutinynet:0"])
+        with self.assertRaisesRegex(ValueError, "approval network"):
+            self.j.bind_approval("mutinynet", plan, self.intent)
+        intent = {
+            **self.intent,
+            "network": "signetcustom",
+            "signetChallenge": "synthetic-challenge",
+        }
+        approval = self.j.bind_approval("mutinynet", plan, intent)
+        self.assertNotEqual(approval, digest({**intent, "signetChallenge": "other-challenge"}))
+        with self.assertRaises(ValueError):
+            self.j.bind_approval(
+                "mutinynet", plan, {**intent, "signetChallenge": "other-challenge"}
+            )
+        self.assertIsNone(self.j.begin_signing("mutinynet", approval, True))
+
     def test_preparing_can_cancel_but_not_reopen(self):
         self.j.release("t")
         plan = {"network": "regtest"}

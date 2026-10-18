@@ -137,6 +137,53 @@ test('desktop funding approval uses the privileged bridge instead of a generic r
   }
 });
 
+test('receive address is bound to the paired real profile even when indexer health is unavailable', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  let target = {
+    walletId: 'wallet-A',
+    ownerId: 'A',
+    network: 'signetcustom',
+    address: `tb1${'q'.repeat(39)}`,
+  };
+  const bridge: DesktopBridge = {
+    connect: async () => ({
+      ownerId: 'A',
+      network: 'signetcustom',
+      mode: 'real',
+      wallet: null,
+      qvac: { available: false },
+    }),
+    request: async (method, path) => {
+      assert.equal(method, 'GET');
+      assert.equal(path, '/api/funding/target');
+      return target;
+    },
+    approveTrade: async () => {
+      throw new Error('Receive must not sign');
+    },
+    getPendingOffer: async () => null,
+    onOfferSelected: () => () => {},
+    openPublicMarket: async () => {},
+  };
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { palkaWallet: bridge },
+  });
+  try {
+    const client = new LocalClient();
+    await assert.rejects(client.fundingTarget(), /Connect a real wallet/);
+    await client.connect();
+    assert.deepEqual(await client.fundingTarget(), target);
+    target = { ...target, ownerId: 'B' };
+    await assert.rejects(client.fundingTarget(), /paired wallet profile/);
+    target = { ...target, ownerId: 'A', network: 'regtest', address: `bcrt1${'q'.repeat(39)}` };
+    await assert.rejects(client.fundingTarget(), /paired wallet profile/);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
 test('desktop transport connects without a renderer pairing token or loopback fetch', async () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const previousFetch = Object.getOwnPropertyDescriptor(globalThis, 'fetch');

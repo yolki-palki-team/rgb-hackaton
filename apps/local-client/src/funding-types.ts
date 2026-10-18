@@ -1,3 +1,5 @@
+import type { DevelopmentNetwork } from '@rgb-exchange/contracts';
+
 export type FundingOperation = {
   id: string;
   status: 'PREVIEW' | 'SIGNING' | 'SIGNED' | 'BROADCAST' | 'CONFIRMED' | 'RECONCILING';
@@ -14,7 +16,7 @@ export type FundingOperation = {
 export type FundingStatus = {
   available: boolean;
   reason?: string;
-  network: 'regtest';
+  network: DevelopmentNetwork;
   address?: string;
   balanceSats?: string;
   operation: FundingOperation | null;

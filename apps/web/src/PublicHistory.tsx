@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { PublicMarketHistory, PublicMarketOrder } from '@rgb-exchange/contracts';
+import {
+  networkLabel,
+  type PublicMarketHistory,
+  type PublicMarketOrder,
+} from '@rgb-exchange/contracts';
 import { getPublicHistory } from './api';
 import { MorphingSquare } from './components/ui/morphing-square';
 import {
@@ -120,7 +124,7 @@ export function PublicHistory({ activity }: { activity: PublicMarketOrder[] }) {
               <time dateTime={new Date(entry.order.createdAt).toISOString()}>
                 {new Date(entry.order.createdAt).toLocaleString()}
               </time>
-              <span>{entry.order.network}</span>
+              <span>{networkLabel(entry.order.network)}</span>
               <span title={entry.order.id}>Order {shortId(entry.order.id)}</span>
               {entry.execution && (
                 <span>

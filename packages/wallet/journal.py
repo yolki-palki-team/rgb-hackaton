@@ -47,7 +47,7 @@ class Journal:
 
     def reserve(self, trade_id, intent, outpoints):
         if (
-            intent.get("network") != "regtest"
+            intent.get("network") not in ("regtest", "signetcustom")
             or not outpoints
             or len(set(outpoints)) != len(outpoints)
         ):
@@ -105,7 +105,11 @@ class Journal:
     def reserve_plan(self, trade_id, plan, outpoints):
         """Pin inputs before contributions exist; one active plan per local profile."""
         h = digest(plan)
-        if not outpoints or len(set(outpoints)) != len(outpoints):
+        if (
+            plan.get("network") not in ("regtest", "signetcustom")
+            or not outpoints
+            or len(set(outpoints)) != len(outpoints)
+        ):
             raise ValueError("invalid inputs")
 
         def op():
@@ -138,6 +142,8 @@ class Journal:
         self.transaction(op)
 
     def bind_approval(self, trade_id, plan, intent):
+        if plan.get("network") != intent.get("network"):
+            raise ValueError("approval network differs from reserved plan")
         h = digest(intent)
 
         def op():

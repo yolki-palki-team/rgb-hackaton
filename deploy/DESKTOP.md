@@ -1,5 +1,8 @@
 # Independent desktop wallet for owlpeer
 
+For the separate opt-in public custom-Signet profile, follow
+[Mutinynet setup](MUTINYNET.md). The instructions below retain shared regtest.
+
 ## Automatic shared-network startup (recommended)
 
 The operator runs `bash deploy/server.sh network` after updating the server.

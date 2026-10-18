@@ -3,8 +3,64 @@ import type { ClientStatus, FundingStatus, LocalClient } from './api';
 import { ArrowDown, ArrowRight, Bitcoin } from 'lucide-react';
 import { Button, Input, Panel, StatusBadge } from './components/ui/wallet-kit';
 import { MorphingSquare } from './components/ui/morphing-square';
+import { MUTINYNET_FAUCET_URL, networkLabel, type FundingTarget } from '@rgb-exchange/contracts';
 
 const sats = (value: string) => `${BigInt(value).toLocaleString()} sats`;
+
+function MutinynetReceive({ client, visible }: { client: LocalClient; visible: boolean }) {
+  const [target, setTarget] = useState<FundingTarget | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    setTarget(null);
+    setError(null);
+    void client
+      .fundingTarget()
+      .then((value) => {
+        if (active) setTarget(value);
+      })
+      .catch((caught: unknown) => {
+        if (active)
+          setError(caught instanceof Error ? caught.message : 'Receive address is unavailable.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, visible, retry]);
+  return (
+    <div className="funding-step">
+      <h2>Receive Mutinynet BTC</h2>
+      {error ? (
+        <p className="funding-message" role="alert">
+          {error}
+        </p>
+      ) : target ? (
+        <>
+          <p>Send only Mutinynet BTC to this native wallet address.</p>
+          <code className="funding-address">{target.address}</code>
+          <a className="text-button" href={MUTINYNET_FAUCET_URL} target="_blank" rel="noreferrer">
+            Open Mutinynet faucet
+          </a>
+          <p className="funding-message">
+            Copy this address into the faucet and review the amount there. BTC funding alone does
+            not create RGB assets or fund their separate collateral address.
+          </p>
+        </>
+      ) : visible ? (
+        <p className="funding-message" role="status">
+          Loading your native wallet receive address…
+        </p>
+      ) : null}
+      {error && (
+        <Button className="outline-button" onClick={() => setRetry((value) => value + 1)}>
+          Retry receive address
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export function FundingPanel({
   client,
@@ -138,18 +194,24 @@ export function FundingPanel({
     <section className="funding-section" aria-labelledby="funding-heading">
       <div className="funding-heading">
         <h1 id="funding-heading">Top up</h1>
-        <p>Test BTC from WDK to your exchange wallet.</p>
+        <p>
+          {wallet?.network === 'signetcustom'
+            ? 'Receive test BTC in your native Mutinynet wallet.'
+            : 'Test BTC from WDK to your exchange wallet.'}
+        </p>
       </div>
       <Panel className="funding-panel">
         <div className="funding-topline">
           <span className="funding-token">
             <Bitcoin aria-hidden="true" size={22} /> Bitcoin
           </span>
-          <StatusBadge>REGTEST ONLY</StatusBadge>
+          <StatusBadge>{wallet ? networkLabel(wallet.network) : 'REGTEST ONLY'}</StatusBadge>
         </div>
         {!eligible ? (
           <p className="funding-message" role="status">
-            Connect a real regtest wallet to top up.
+            {wallet?.network === 'signetcustom'
+              ? 'WDK funding is unavailable on Mutinynet. Fund the native RGB wallet directly with Mutinynet BTC.'
+              : 'Connect a real regtest wallet to top up.'}
           </p>
         ) : error ? (
           <p className="funding-message" role="alert">
@@ -169,6 +231,10 @@ export function FundingPanel({
             <div className="skeleton skeleton-offer" aria-hidden="true" />
           </div>
         ) : null}
+
+        {client && wallet?.mode === 'real' && wallet.network === 'signetcustom' && (
+          <MutinynetReceive key={wallet.ownerId} client={client} visible={visible} />
+        )}
 
         {eligible && funding?.available && !funding.address && (
           <div className="funding-step">

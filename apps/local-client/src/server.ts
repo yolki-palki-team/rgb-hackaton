@@ -125,13 +125,18 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
           service.store.set(cacheKey, history);
           return json(response, 200, history);
         }
+        if (path === '/api/funding/target')
+          return json(response, 200, await service.exclusive(() => service.fundingTarget()));
         if (path === '/api/funding') {
-          if (!options.funding)
+          if (!options.funding || service.network !== 'regtest')
             return json(response, 200, {
               available: false,
-              network: 'regtest',
+              network: service.network,
               operation: null,
-              reason: 'WDK funding requires a real local wallet.',
+              reason:
+                service.network === 'regtest'
+                  ? 'WDK funding requires a real local wallet.'
+                  : 'WDK funding is unavailable on Mutinynet: the installed WDK Bitcoin module does not support custom Signet.',
             });
           return json(
             response,
@@ -154,7 +159,11 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
         const result = await service.exclusive(async () => {
           if (path.startsWith('/api/funding/')) {
             const funding = options.funding;
-            if (!funding) throw new LocalError('WDK funding requires a real local wallet.', 409);
+            if (!funding || service.network !== 'regtest')
+              throw new LocalError(
+                'WDK funding requires a real regtest wallet; custom Signet is unsupported.',
+                409,
+              );
             return funding
               .exclusive(async () => {
                 if (path === '/api/funding/create') return funding.create(input);

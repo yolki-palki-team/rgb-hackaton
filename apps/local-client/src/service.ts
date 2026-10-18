@@ -10,6 +10,7 @@ import {
   TradeSnapshotSchema,
   WalletStateSchema,
   WalletCapabilitiesSchema,
+  FundingTargetSchema,
   WalletPreviewSchema,
   ApprovalSchema,
   SettlementPackageSchema,
@@ -27,6 +28,8 @@ import {
   type SettlementPackage,
   type WalletPreview,
   type Approval,
+  type DevelopmentNetwork,
+  DevelopmentNetworkSchema,
 } from '@rgb-exchange/contracts';
 import { digestValue, planDigest } from '@rgb-exchange/contracts/digest';
 import { MarketClient } from './market-client.ts';
@@ -80,7 +83,17 @@ export class LocalService {
     readonly market: MarketClient,
     readonly store: LocalStore,
     readonly qvac: Interpreter,
-  ) {}
+    readonly network: DevelopmentNetwork = 'regtest',
+  ) {
+    DevelopmentNetworkSchema.parse(network);
+    const savedNetwork = store.get<DevelopmentNetwork>('profile:network');
+    if (
+      (savedNetwork && savedNetwork !== network) ||
+      (!savedNetwork && network !== 'regtest' && store.entries('').length)
+    )
+      throw new LocalError('Local state belongs to another network; use a separate profile', 409);
+    store.set('profile:network', network);
+  }
   exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.chain.then(operation, operation);
     this.chain = result.catch(() => undefined);
@@ -88,24 +101,38 @@ export class LocalService {
   }
   async state() {
     const state = WalletStateSchema.parse(await this.wallet.state());
-    if (state.ownerId !== this.ownerId || state.network !== 'regtest')
+    if (
+      state.ownerId !== this.ownerId ||
+      state.network !== this.network ||
+      (this.network !== 'regtest' && state.mode !== 'real')
+    )
       throw new LocalError('Wallet identity/network mismatch', 409);
     return state;
   }
   async policy(): Promise<PrivatePolicy> {
     return defaultPolicy(await this.state());
   }
+  async fundingTarget() {
+    if (!this.wallet.fundingTarget)
+      throw new LocalError('Native wallet receive address is unavailable.', 409);
+    const target = FundingTargetSchema.parse(await this.wallet.fundingTarget());
+    if (target.ownerId !== this.ownerId || target.network !== this.network)
+      throw new LocalError('Receive address belongs to another wallet profile or network.', 409);
+    return target;
+  }
   async health() {
     let wallet: WalletCapabilities;
     try {
       wallet = WalletCapabilitiesSchema.parse(await this.wallet.capabilities());
+      if (wallet.network !== this.network || (this.network !== 'regtest' && wallet.mode !== 'real'))
+        throw new LocalError('Wallet network does not match this profile', 409);
     } catch (error) {
       const configured =
         error instanceof Error &&
         error.message === 'Real wallet unavailable: configure WALLET_RPC_URL and WALLET_RPC_TOKEN.';
       return {
         ownerId: this.ownerId,
-        network: 'regtest',
+        network: this.network,
         mode: 'real',
         wallet: null,
         qvac: {
@@ -114,7 +141,10 @@ export class LocalService {
           reason: 'Configure the real wallet before using local AI.',
         },
         market: { connected: this.market.connected, sequence: this.market.sequence },
-        blockedReason: configured ? error.message : 'Wallet adapter unavailable. Check sidecar B.',
+        blockedReason:
+          configured || error instanceof LocalError
+            ? error.message
+            : 'Wallet adapter unavailable. Check sidecar B.',
       };
     }
     const qvac = await this.qvacHealth();
@@ -248,7 +278,7 @@ export class LocalService {
     if (
       trade.plan.tradeId !== id ||
       !trade.plan.participants.includes(this.ownerId) ||
-      trade.plan.network !== 'regtest' ||
+      trade.plan.network !== this.network ||
       trade.plan.digest !== planDigest(trade.plan)
     )
       throw new LocalError('Invalid participant, network, or plan digest', 409);
@@ -398,6 +428,8 @@ export class LocalService {
     const trade = await this.trade(id);
     this.ownPublication(trade);
     const cap = WalletCapabilitiesSchema.parse(await this.wallet.capabilities());
+    if (cap.network !== this.network)
+      throw new LocalError('Wallet network does not match this profile', 409);
     if (
       cap.mode !== 'real' ||
       !cap.signing ||
@@ -709,7 +741,7 @@ export class LocalService {
     return receipt;
   }
   private checkReceipt(id: string, receipt: ReturnType<typeof ReceiptSchema.parse>) {
-    if (receipt.tradeId !== id || receipt.network !== 'regtest')
+    if (receipt.tradeId !== id || receipt.network !== this.network)
       throw new LocalError('Receipt belongs to another trade or network', 409);
     if (
       receipt.state === 'confirmed' &&
@@ -773,7 +805,7 @@ export class LocalService {
       return {
         mode: 'real',
         tradeId: id,
-        network: 'regtest',
+        network: this.network,
         state: 'pending',
         chainConfirmed: false,
         rgbAccepted: false,

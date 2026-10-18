@@ -14,12 +14,16 @@ from journal import Journal, canonical
 from journal import digest as approval_digest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts/demo"))
+from chain_profile import native_context, network
+
 from regtest import STATE, native, rpc
 
 ROOT = Path(__file__).resolve().parents[2]
 
 MAX = 2**64 - 1
-BTC = {"kind": "btc", "network": "regtest", "symbol": "BTC", "precision": 8}
+NETWORK = network()
+NETWORK_CONTEXT = native_context()
+BTC = {"kind": "btc", "network": NETWORK, "symbol": "BTC", "precision": 8}
 FORMAT = "rgb-cooperative-v1"
 
 
@@ -47,19 +51,19 @@ def units(value):
 
 
 def asset_key(asset):
-    if asset.get("network") != "regtest" or asset.get("kind") not in ("btc", "rgb"):
+    if asset.get("network") != NETWORK or asset.get("kind") not in ("btc", "rgb"):
         raise ValueError("unsupported asset/network")
     if asset["kind"] == "btc":
         if asset.get("precision") != 8:
             raise ValueError("BTC precision")
-        return "regtest:btc:btc"
+        return NETWORK + ":btc:btc"
     if (
         asset.get("precision") != 0
         or not isinstance(asset.get("contractId"), str)
         or not asset["contractId"].startswith("rgb:")
     ):
         raise ValueError("only verified precision-0 NIA is supported")
-    return "regtest:rgb:" + asset["contractId"]
+    return NETWORK + ":rgb:" + asset["contractId"]
 
 
 def save(path, value):
@@ -86,7 +90,7 @@ def read(path):
 def plan_check(plan, owner):
     if (
         plan.get("protocolVersion") != 1
-        or plan.get("network") != "regtest"
+        or plan.get("network") != NETWORK
         or plan.get("digest") != digest({k: v for k, v in plan.items() if k != "digest"})
     ):
         raise ValueError("invalid plan digest/network")
@@ -150,7 +154,11 @@ class Backend:
         self.owner = owner or profile
         self.root = STATE / profile
         self.identity = native("identity", profile)
+        if any(self.identity.get(k) != v for k, v in NETWORK_CONTEXT.items()):
+            raise ValueError("native wallet network identity mismatch")
         self.wallet_id = "rgb-" + self.identity["fingerprint"]
+        if NETWORK != "regtest":
+            self.wallet_id += "-" + NETWORK
         self.catalog_checked = 0
 
     def sync_shared_catalog(self):
@@ -187,6 +195,8 @@ class Backend:
         return self._state_from_raw(self.call_native("state"))
 
     def _state_from_raw(self, raw):
+        if raw.get("network") != NETWORK:
+            raise ValueError("native state network mismatch")
         balances = [
             {
                 "asset": BTC,
@@ -198,7 +208,7 @@ class Backend:
                 {
                     "asset": {
                         "kind": "rgb",
-                        "network": "regtest",
+                        "network": NETWORK,
                         "symbol": a["ticker"],
                         "precision": a["precision"],
                         "contractId": a["asset_id"],
@@ -209,7 +219,7 @@ class Backend:
         return {
             "walletId": self.wallet_id,
             "ownerId": self.owner,
-            "network": "regtest",
+            "network": NETWORK,
             "mode": "real",
             "balances": balances,
             "observedAt": int(time.time() * 1000),
@@ -217,10 +227,11 @@ class Backend:
 
     def capabilities(self):
         try:
-            native("health")
+            if native("health").get("network") != NETWORK:
+                raise ValueError("native health network mismatch")
             self.call_native("check-index")
             ready = True
-            reason = "Regtest NIA; SegWit v0; one active trade per profile; fixed deterministic fee allocation"
+            reason = f"{NETWORK} NIA; SegWit v0; one active trade per profile; fixed deterministic fee allocation"
         except Exception:
             ready = False
             reason = (
@@ -229,7 +240,7 @@ class Backend:
         return {
             "protocolVersion": 1,
             "mode": "real",
-            "network": "regtest",
+            "network": NETWORK,
             "directSwap": ready,
             "ringSwap": ready,
             "signing": ready,
@@ -239,7 +250,7 @@ class Backend:
         }
 
     def fundingTarget(self):
-        """Return only this wallet's vanilla regtest BTC receive address."""
+        """Return only this wallet's vanilla BTC receive address on the configured network."""
         journal_path = self.root / "journal.sqlite"
         if journal_path.exists():
             db = sqlite3.connect(f"file:{journal_path}?mode=ro", uri=True)
@@ -256,21 +267,24 @@ class Backend:
         target_path = self.root / "funding-target.json"
         if target_path.exists():
             target = read(target_path)
-            if target.get("walletId") != self.wallet_id:
+            if (
+                target.get("walletId") != self.wallet_id
+                or target.get("network", "regtest") != NETWORK
+            ):
                 raise ValueError("funding target wallet identity changed")
             address = target["address"]
         else:
             address = self.call_native("addresses")["btcAddress"]
         if not isinstance(address, str) or not re.fullmatch(
-            r"bcrt1[ac-hj-np-z02-9]{8,87}", address
+            rf"{'bcrt' if NETWORK == 'regtest' else 'tb'}1[ac-hj-np-z02-9]{{8,87}}", address
         ):
-            raise ValueError("native wallet did not return a regtest BTC address")
+            raise ValueError(f"native wallet did not return a {NETWORK} BTC address")
         if not target_path.exists():
-            save(target_path, {"walletId": self.wallet_id, "address": address})
+            save(target_path, {"walletId": self.wallet_id, "network": NETWORK, "address": address})
         return {
             "walletId": self.wallet_id,
             "ownerId": self.owner,
-            "network": "regtest",
+            "network": NETWORK,
             "address": address,
         }
 
@@ -577,7 +591,7 @@ class Backend:
             "tradeId": plan["tradeId"],
             "planRevision": plan["revision"],
             "planDigest": plan["digest"],
-            "network": "regtest",
+            "network": NETWORK,
             "unsignedTxDigest": sha(bytes.fromhex(final["unsignedTxHex"])),
             "commitmentDigest": digest(
                 {
@@ -606,7 +620,7 @@ class Backend:
             "tradeId": trade,
             "planRevision": plan["revision"],
             "planDigest": plan["digest"],
-            "network": "regtest",
+            "network": NETWORK,
             "format": FORMAT,
         }.items():
             if package.get(k) != v:
@@ -659,7 +673,7 @@ class Backend:
         give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == self.owner)
         receive = next(leg for leg in plan["legs"] if leg["toOwnerId"] == self.owner)
         intent = {
-            "network": "regtest",
+            **NETWORK_CONTEXT,
             "profile": self.profile,
             "fingerprint": self.identity["fingerprint"],
             "tradeId": trade,
@@ -719,7 +733,7 @@ class Backend:
             "walletId": self.wallet_id,
             "ownerId": self.owner,
             "mode": "real",
-            "network": "regtest",
+            "network": NETWORK,
             **intent["protocolBinding"],
             "validated": True,
             "reasons": [],
@@ -743,7 +757,7 @@ class Backend:
             "protocolVersion": 1,
             "walletId": self.wallet_id,
             "ownerId": self.owner,
-            "network": "regtest",
+            "network": NETWORK,
             "tradeId": trade,
             "planRevision": package["planRevision"],
             **{
@@ -795,7 +809,7 @@ class Backend:
         expected = {
             "walletId": self.wallet_id,
             "ownerId": self.owner,
-            "network": "regtest",
+            "network": NETWORK,
             "tradeId": trade,
             "planRevision": package["planRevision"],
             **{
@@ -891,7 +905,7 @@ class Backend:
         return {
             "mode": "real",
             "tradeId": trade,
-            "network": "regtest",
+            "network": NETWORK,
             "state": state,
             "chainConfirmed": chain,
             "rgbAccepted": rgb,

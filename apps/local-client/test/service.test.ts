@@ -306,6 +306,295 @@ test('local record enumeration binds literal prefixes without SQL or wildcard in
   }
 });
 
+test('Mutinynet state, capability and receipt checks are bound to the isolated local profile', async () => {
+  const store = new LocalStore(':memory:');
+  const wallet = new FakeWallet();
+  const market = new FakeMarket();
+  const service = new LocalService(
+    'a',
+    wallet,
+    market as unknown as MarketClient,
+    store,
+    qvac,
+    'signetcustom',
+  );
+  try {
+    assert.equal((await service.health()).network, 'signetcustom');
+    assert.equal((await service.health()).wallet, null);
+    await assert.rejects(service.state(), /identity\/network mismatch/);
+    wallet.stateValue = {
+      ...wallet.stateValue,
+      network: 'signetcustom',
+      balances: wallet.stateValue.balances.map((balance) => ({
+        ...balance,
+        asset: { ...balance.asset, network: 'signetcustom' },
+      })),
+    };
+    const cap = await wallet.capabilities();
+    Object.assign(wallet, { capabilities: async () => ({ ...cap, network: 'signetcustom' }) });
+    assert.equal((await service.health()).wallet?.network, 'signetcustom');
+    assert.equal((await service.state()).network, 'signetcustom');
+    const policy = await service.policy();
+    const published = await service.publish({
+      draft: {
+        giveAsset: wallet.stateValue.balances[0].asset,
+        giveAmount: '100000',
+        receiveAsset: wallet.stateValue.balances[1].asset,
+        minReceiveAmount: '100',
+        expiresAt: Date.now() + 60000,
+        maxFeeSats: '1000',
+      },
+      policy,
+      confirmed: true,
+      requestId: randomUUID(),
+    });
+    assert.equal(published.network, 'signetcustom');
+    const customPlan = {
+      ...plan(published.id),
+      network: 'signetcustom' as const,
+      legs: plan(published.id).legs.map((leg) => ({
+        ...leg,
+        asset: { ...leg.asset, network: 'signetcustom' as const },
+      })),
+    };
+    customPlan.digest = planDigest(customPlan);
+    market.trade = { plan: customPlan, status: 'BROADCAST', messages: [] };
+    assert.equal((await service.trade('trade-1')).plan.network, 'signetcustom');
+    await assert.rejects(service.sync('trade-1'), /Receipt belongs to another trade or network/);
+    Object.assign(wallet, {
+      sync: async (tradeId: string) => ({
+        tradeId,
+        network: 'signetcustom',
+        mode: 'real',
+        state: 'pending',
+        chainConfirmed: false,
+        rgbAccepted: false,
+      }),
+    });
+    assert.equal((await service.sync('trade-1')).network, 'signetcustom');
+    assert.throws(
+      () => new LocalService('a', wallet, market as unknown as MarketClient, store, qvac),
+      /separate profile/,
+    );
+  } finally {
+    store.close();
+  }
+});
+
+test('Mutinynet funding API explicitly rejects WDK operations without creating an account', async () => {
+  const store = new LocalStore(':memory:');
+  const service = new LocalService(
+    'a',
+    new FakeWallet(),
+    new FakeMarket() as unknown as MarketClient,
+    store,
+    qvac,
+    'signetcustom',
+  );
+  const token = 'network-test-token-12345678901234567890';
+  const server = createLocalServer(service, { token });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const base = `http://127.0.0.1:${address.port}`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Origin: base,
+    'Content-Type': 'application/json',
+  };
+  try {
+    const response = await fetch(`${base}/api/funding`, { headers });
+    const funding = (await response.json()) as {
+      available: boolean;
+      network: string;
+      reason: string;
+    };
+    assert.equal(funding.available, false);
+    assert.equal(funding.network, 'signetcustom');
+    assert.match(funding.reason, /does not support custom Signet/);
+    const create = await fetch(`${base}/api/funding/create`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ confirmed: true }),
+    });
+    assert.equal(create.status, 409);
+    assert.match(await create.text(), /custom Signet is unsupported/);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.close();
+  }
+});
+
+test('native receive address remains available without indexer state and rejects another owner or network', async () => {
+  const store = new LocalStore(':memory:');
+  const wallet = new FakeWallet();
+  let target = {
+    walletId: 'wallet-a',
+    ownerId: 'a',
+    network: 'signetcustom',
+    address: `tb1${'q'.repeat(39)}`,
+  };
+  Object.assign(wallet, {
+    fundingTarget: async () => target,
+    state: async () => {
+      throw new Error('Indexer is offline');
+    },
+    capabilities: async () => {
+      throw new Error('Indexer is offline');
+    },
+  });
+  const service = new LocalService(
+    'a',
+    wallet,
+    new FakeMarket() as unknown as MarketClient,
+    store,
+    qvac,
+    'signetcustom',
+  );
+  const token = 'native-receive-test-token-12345678901234567890';
+  const server = createLocalServer(service, { token });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const base = `http://127.0.0.1:${address.port}`;
+  try {
+    assert.equal((await fetch(`${base}/api/funding/target`)).status, 401);
+    const response = await fetch(`${base}/api/funding/target`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), target);
+    target = { ...target, ownerId: 'another-owner' };
+    await assert.rejects(service.fundingTarget(), /another wallet profile/);
+    target = { ...target, ownerId: 'a', network: 'regtest', address: `bcrt1${'q'.repeat(39)}` };
+    await assert.rejects(service.fundingTarget(), /another wallet profile or network/);
+    assert.equal(wallet.signCount, 0);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.close();
+  }
+});
+
+test('legacy local records cannot be reopened as a Mutinynet profile', () => {
+  const store = new LocalStore(':memory:');
+  try {
+    store.set('operation:legacy', { state: 'SIGNED' });
+    assert.throws(
+      () =>
+        new LocalService(
+          'a',
+          new FakeWallet(),
+          new FakeMarket() as unknown as MarketClient,
+          store,
+          qvac,
+          'signetcustom',
+        ),
+      /separate profile/,
+    );
+    assert.deepEqual(store.get('operation:legacy'), { state: 'SIGNED' });
+    assert.equal(store.get('profile:network'), null);
+  } finally {
+    store.close();
+  }
+});
+
+test('market clients verify configured chain before requests and report mismatch as disconnected', async () => {
+  const store = new MarketStore(':memory:', 'signetcustom');
+  const server = createMarketServer(store, new Map([['token-a', 'a']]));
+  let healthRequests = 0;
+  server.on('request', (request) => {
+    if (request.url === '/health') healthRequests++;
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const base = `http://127.0.0.1:${address.port}`;
+  const correct = new MarketClient(base, 'token-a', undefined, undefined, 'signetcustom');
+  const wrong = new MarketClient(base, 'token-a', undefined, undefined, 'regtest');
+  try {
+    assert.deepEqual(await Promise.all([correct.request('/orders'), correct.request('/orders')]), [
+      { orders: [] },
+      { orders: [] },
+    ]);
+    assert.deepEqual(await correct.request('/orders'), { orders: [] });
+    assert.equal(
+      healthRequests,
+      1,
+      'concurrent and subsequent requests share the session network check',
+    );
+    assert.equal(correct.connected, true);
+    wrong.connected = true;
+    await assert.rejects(wrong.request('/orders', 'POST', {}), /Market network does not match/);
+    assert.equal(wrong.connected, false);
+    assert.equal(healthRequests, 2);
+    await assert.rejects(correct.request('/missing'), /NOT_FOUND/);
+    assert.equal(correct.connected, false);
+    Object.assign(store, { network: 'regtest' });
+    await assert.rejects(correct.request('/orders'), /Market network does not match/);
+    assert.equal(healthRequests, 3, 'HTTP failures invalidate the session network check');
+    assert.equal(store.listOpen().length, 0);
+  } finally {
+    correct.close();
+    wrong.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.close();
+  }
+});
+
+test('market reconnect rechecks the network before opening another WebSocket', async () => {
+  const store = new MarketStore(':memory:', 'signetcustom');
+  const server = createMarketServer(store, new Map([['token-a', 'a']]));
+  let healthRequests = 0;
+  let upgrades = 0;
+  let disconnect = () => {};
+  server.on('request', (request) => {
+    if (request.url === '/health') healthRequests++;
+  });
+  server.on('upgrade', (_request, socket) => {
+    upgrades++;
+    disconnect = () => socket.destroy();
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const client = new MarketClient(
+    `http://127.0.0.1:${address.port}`,
+    'token-a',
+    undefined,
+    undefined,
+    'signetcustom',
+  );
+  const until = async (condition: () => boolean) => {
+    const deadline = Date.now() + 3000;
+    while (!condition() && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(condition(), 'market connection reached the expected state');
+  };
+  try {
+    client.connect();
+    await until(() => client.connected);
+    await client.snapshot();
+    assert.equal(healthRequests, 1);
+    Object.assign(store, { network: 'regtest' });
+    disconnect();
+    await until(() => healthRequests >= 2);
+    assert.equal(client.connected, false);
+    assert.equal(upgrades, 1, 'wrong-chain reconnect must not open another socket');
+    Object.assign(store, { network: 'signetcustom' });
+    await until(() => client.connected && upgrades === 2);
+    assert.ok(healthRequests >= 3);
+  } finally {
+    client.close();
+    disconnect();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.close();
+  }
+});
+
 test('automatic recovery survives restart and unavailable capabilities without signing or finalizing', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'rgb-committed-recovery-'));
   const path = join(directory, 'local.sqlite');

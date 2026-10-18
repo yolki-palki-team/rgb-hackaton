@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { assetKey, type PublicMarketOrder } from '@rgb-exchange/contracts';
+import { assetKey, networkLabel, type PublicMarketOrder } from '@rgb-exchange/contracts';
 import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
@@ -49,7 +49,7 @@ function OrderCard({ entry }: { entry: PublicMarketOrder }) {
   return (
     <article className={`order-card order-card--${tone}`}>
       <div className="order-card-top">
-        <span className="order-network">{order.network.toUpperCase()}</span>
+        <span className="order-network">{networkLabel(order.network).toUpperCase()}</span>
         <span className="order-open">
           <span aria-hidden="true" />{' '}
           {order.partialFill

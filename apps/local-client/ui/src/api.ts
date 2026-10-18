@@ -8,6 +8,7 @@ import {
   ReceiptSchema,
   WalletPreviewSchema,
   WalletStateSchema,
+  FundingTargetSchema,
   assetKey,
   formatAmount,
   orderRemainingGive,
@@ -374,6 +375,19 @@ export class LocalClient {
 
   async fundingStatus(): Promise<FundingStatus> {
     return this.request<FundingStatus>('GET', '/api/funding');
+  }
+  async fundingTarget() {
+    if (!this.status || this.status.mode !== 'real')
+      throw new Error('Connect a real wallet to receive BTC.');
+    const profileVersion = this.profileVersion;
+    const target = FundingTargetSchema.parse(await this.request('GET', '/api/funding/target'));
+    if (
+      profileVersion !== this.profileVersion ||
+      target.ownerId !== this.status.ownerId ||
+      target.network !== this.status.network
+    )
+      throw new Error('Receive address does not match the paired wallet profile.');
+    return target;
   }
 
   async createFundingAccount(): Promise<FundingStatus> {

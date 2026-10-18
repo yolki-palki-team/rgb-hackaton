@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { developmentNetwork } from '@rgb-exchange/contracts';
 import { MarketStore } from './store.ts';
 import { createMarketServer } from './server.ts';
 
@@ -23,12 +24,16 @@ function tokenMap(raw: string | undefined): Map<string, string> {
 }
 
 const owners = tokenMap(process.env.MARKET_TOKENS_JSON);
-const path = resolve(process.env.MARKET_DB_PATH ?? './.state/market.sqlite');
+const network = developmentNetwork(process.env.MARKET_NETWORK ?? process.env.PALKA_NETWORK);
+const path = resolve(
+  process.env.MARKET_DB_PATH ??
+    `./.state/market${network === 'regtest' ? '' : '-mutinynet'}.sqlite`,
+);
 const host = process.env.MARKET_HOST ?? '127.0.0.1';
 const port = Number(process.env.MARKET_PORT ?? '4100');
 if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('Invalid MARKET_PORT');
 mkdirSync(dirname(path), { recursive: true });
-const store = new MarketStore(path);
+const store = new MarketStore(path, network);
 const server = createMarketServer(store, owners, { selfRegistration });
 const expiryTimer = setInterval(() => store.expireOrders(), 30000);
 server.listen(port, host, () =>

@@ -1,0 +1,47 @@
+name: palka-mutinynet
+services:
+  bitcoind:
+    build:
+      context: .
+      dockerfile: Mutinynet.Dockerfile
+    restart: 'no'
+    mem_limit: 1g
+    cpus: 2
+    stop_grace_period: 1m
+    ports:
+      - '127.0.0.1:38332:38332'
+    volumes:
+      - mutinynet-bitcoin:/data
+      - ./.state/mutinynet/bitcoin.conf:/config/bitcoin.conf:ro
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: '5m'
+        max-file: '2'
+  proxy-init:
+    image: ghcr.io/rgb-tools/rgb-proxy-server@sha256:b06fe0f234c53030d54fe1e704daf4bc6ff2879a335124353175130a5112d313
+    platform: linux/amd64
+    user: '0:0'
+    entrypoint: ['chown', '1000:1000', '/data']
+    command: []
+    volumes:
+      - mutinynet-proxy:/data
+  proxy:
+    image: ghcr.io/rgb-tools/rgb-proxy-server@sha256:b06fe0f234c53030d54fe1e704daf4bc6ff2879a335124353175130a5112d313
+    platform: linux/amd64
+    restart: 'no'
+    mem_limit: 256m
+    cpus: 0.5
+    environment:
+      APP_DATA: /srv/app/data
+    depends_on:
+      proxy-init:
+        condition: service_completed_successfully
+    ports:
+      - '127.0.0.1:53002:3000'
+    volumes:
+      - mutinynet-proxy:/srv/app/data
+    logging: *logging
+volumes:
+  mutinynet-bitcoin:
+  mutinynet-proxy:

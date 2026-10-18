@@ -4,12 +4,26 @@ import {
   parseOfferLink,
   validateTradeId,
   validateWalletRequest,
+  validateFaucetUrl,
   walletReadyForDesktop,
   walletSidecarStarted,
 } from '../src/security.ts';
 
 const orderId = 'order-123e4567-e89b-42d3-a456-426614174000';
 const tradeId = '123e4567-e89b-42d3-a456-426614174000';
+
+test('desktop only opens the fixed Mutinynet faucet on its matching network', () => {
+  assert.equal(validateFaucetUrl('https://faucet.mutinynet.com/', 'signetcustom'), true);
+  assert.equal(validateFaucetUrl('https://faucet.mutinynet.com/', 'regtest'), false);
+  for (const url of [
+    'http://faucet.mutinynet.com/',
+    'https://faucet.mutinynet.com.evil/',
+    'https://faucet.mutinynet.com/?address=secret',
+    'https://faucet.mutinynet.com/#secret',
+    'https://secret@faucet.mutinynet.com/',
+  ])
+    assert.equal(validateFaucetUrl(url, 'signetcustom'), false);
+});
 
 test('startup accepts only the expected child listener and participant identity', () => {
   const message = {
@@ -58,6 +72,7 @@ test('generic renderer bridge allows only named local operations, with signing i
     '/api/policy',
     '/api/snapshot',
     '/api/funding',
+    '/api/funding/target',
     '/api/history',
     '/api/history?cursor=b3JkZXItMQ',
     `/api/trades/${tradeId}`,
@@ -123,6 +138,13 @@ test('desktop opens for an authenticated real wallet that needs reconciliation',
     reason: 'Allocation index requires reconciliation',
   };
   assert.equal(walletReadyForDesktop({ protocolVersion: 1, result: capabilities }), true);
+  const customSignet = { protocolVersion: 1, result: { ...capabilities, network: 'signetcustom' } };
+  assert.equal(walletReadyForDesktop(customSignet, 'signetcustom'), true);
+  assert.equal(walletReadyForDesktop(customSignet), false);
+  assert.equal(
+    walletReadyForDesktop({ protocolVersion: 1, result: capabilities }, 'signetcustom'),
+    false,
+  );
   assert.equal(
     walletReadyForDesktop({ protocolVersion: 1, result: { ...capabilities, mode: 'mock' } }),
     false,

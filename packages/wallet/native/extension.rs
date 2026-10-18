@@ -1,6 +1,28 @@
 // Project-specific Rust-only bridge, appended to the pinned upstream rust_only.rs.
 // No signing or broadcast occurs here; stock consumption is an explicit post-confirmation operation.
+/// Bind an indexer to a checkpoint because custom Signets share a genesis block.
+#[cfg(any(feature = "electrum", feature = "esplora"))]
+pub fn cooperative_check_indexer(
+    indexer_url: &str,
+    network: BitcoinNetwork,
+    height: usize,
+    expected_hash: &str,
+) -> Result<(), Error> {
+    let (indexer, _) = get_indexer_and_resolver(indexer_url, network)?;
+    if indexer.block_hash(height)? != expected_hash {
+        return Err(Error::InvalidIndexer {
+            details: "indexer does not match the pinned network checkpoint".into(),
+        });
+    }
+    Ok(())
+}
+
 impl Wallet {
+    /// Expose the persisted SDK network for immutable signing checks.
+    pub fn cooperative_bitcoin_network(&self) -> BitcoinNetwork {
+        self.bitcoin_network()
+    }
+
     /// Export public contract data for local verified asset discovery, without wallet keys.
     pub fn cooperative_export_contract(&self, id: ContractId) -> Result<RgbTransfer, Error> {
         Ok(self

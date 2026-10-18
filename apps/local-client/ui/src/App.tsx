@@ -19,7 +19,7 @@ import type { Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
 import { TradeWorkflow, nextTradeAction, tradeProgress } from './workflow';
 import { requestGoalReview } from './goal-review';
-import type { PrivatePolicy } from '@rgb-exchange/contracts';
+import { networkLabel, type PrivatePolicy } from '@rgb-exchange/contracts';
 
 const goalExamples = [
   'Can I swap 10 X for at least 5 DUSD?',
@@ -161,9 +161,10 @@ function App() {
       setPairToken('');
       setNotice({
         tone: 'success',
-        text: health.wallet
-          ? `Welcome back. Your ${health.network} wallet is connected.`
-          : 'Local profile connected. Order history is available while the wallet reconnects.',
+        text:
+          health.wallet && !savedWallet.cached && !savedWallet.walletError
+            ? `Welcome back. Your ${networkLabel(health.network)} wallet is connected.`
+            : 'Local profile connected. Order history is available while the wallet reconnects.',
       });
     } catch (error) {
       setSnapshotLoading(false);
@@ -1198,7 +1199,7 @@ function App() {
             {initialLoading
               ? 'Loading local wallet…'
               : connected
-                ? `Bitcoin ${status?.network}${isMock ? ' · MOCK wallet' : ''}`
+                ? `Bitcoin ${networkLabel(status?.network ?? '')}${isMock ? ' · MOCK wallet' : ''}`
                 : 'No wallet connected'}
           </span>
         </footer>

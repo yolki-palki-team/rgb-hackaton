@@ -92,6 +92,12 @@ access after DNS and firewall setup. The optional [shared regtest profile](deplo
 adds persistent chain infrastructure, HTTPS desktop access, participant funding,
 RGB contract distribution and WDK funding on the same network.
 
+An opt-in [Mutinynet profile](deploy/MUTINYNET.md) selects the public custom Signet
+(`signetcustom`) with separate wallet/market state and explicit infrastructure
+checks. Regtest remains the default. Mutinynet funding and direct/ring settlement
+have not been verified. Native read-only health passed with its public Esplora
+API; the public Electrum endpoint fails the SDK's verbose-transaction requirement.
+
 ## Run with Docker
 
 From the repository root, with Docker Desktop / Docker Engine 25+ and Compose 2.20.2+ running:

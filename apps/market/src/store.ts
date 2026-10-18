@@ -26,6 +26,8 @@ import {
   type PublicOrder,
   type TradePlan,
   type TradeSnapshot,
+  type DevelopmentNetwork,
+  DevelopmentNetworkSchema,
 } from '@rgb-exchange/contracts';
 import { digestValue, planDigest } from '@rgb-exchange/contracts/digest';
 import { participantId, participantTokenHash } from '@rgb-exchange/contracts/participant';
@@ -56,7 +58,11 @@ export class MarketStore {
   private db: DatabaseSync;
   private listeners = new Set<(event: EventEnvelope, audience: string[]) => void>();
 
-  constructor(path: string) {
+  constructor(
+    path: string,
+    readonly network: DevelopmentNetwork = 'regtest',
+  ) {
+    DevelopmentNetworkSchema.parse(network);
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     this.db.exec(`
@@ -75,6 +81,17 @@ export class MarketStore {
       CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, audience TEXT NOT NULL, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS relay_idempotency (trade_id TEXT NOT NULL, owner_id TEXT NOT NULL, message_id TEXT NOT NULL, digest TEXT NOT NULL, sequence INTEGER NOT NULL REFERENCES events(sequence), PRIMARY KEY (trade_id, owner_id, message_id));
     `);
+    if (
+      this.db
+        .prepare("SELECT 1 FROM orders WHERE json_extract(data, '$.network') != ? LIMIT 1")
+        .get(network) ||
+      this.db
+        .prepare("SELECT 1 FROM trades WHERE json_extract(data, '$.plan.network') != ? LIMIT 1")
+        .get(network)
+    ) {
+      this.db.close();
+      throw new MarketError('DATABASE_NETWORK_MISMATCH', 409);
+    }
   }
 
   close(): void {
@@ -438,7 +455,7 @@ export class MarketStore {
   ): { order: PublicOrder; trade: TradeSnapshot | null } {
     const input = PublicOrderSchema.parse(raw);
     if (ownerId !== input.ownerId) throw new MarketError('OWNER_MISMATCH', 403);
-    if (input.network !== 'regtest') throw new MarketError('UNSUPPORTED_NETWORK', 400);
+    if (input.network !== this.network) throw new MarketError('UNSUPPORTED_NETWORK', 400);
     if (input.revision !== 0 || input.status !== 'OPEN' || input.fillProgress !== undefined)
       throw new MarketError('INVALID_INITIAL_ORDER', 400);
     return this.transaction((pending) => {

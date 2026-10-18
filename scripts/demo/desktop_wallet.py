@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create one independent regtest wallet and run its local desktop sidecar."""
+"""Create one independent development wallet and run its local desktop sidecar."""
 
 import argparse
 import fcntl
@@ -18,6 +18,8 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
+
+import chain_profile
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "packages/wallet/native/target/debug/rgb-settlement-spike"
@@ -52,6 +54,8 @@ def save_private(path, data):
 
 def settings(config_path, root=ROOT):
     config = read_private(config_path)
+    if config.get("network", "regtest") != chain_profile.network():
+        raise ValueError("Desktop network differs from PALKA_NETWORK; use its original profile")
     token = config.get("marketToken", "")
     if len(token) != 64 or any(c not in "0123456789abcdef" for c in token):
         raise ValueError("Expected an automatic desktop profile; launch desktop first")
@@ -74,14 +78,33 @@ def settings(config_path, root=ROOT):
         or url.port == config.get("port")
     ):
         raise ValueError("Expected a separate loopback wallet RPC port")
-    state = root / "packages/wallet/state" / ("desktop-" + owner)
+    state = root / "packages/wallet/state"
+    if chain_profile.network() == "signetcustom":
+        state /= "mutinynet"
+    state /= "desktop-" + owner
     return config, state, url.port
 
 
 def native(state, operation, **kwargs):
+    environment = {}
+    if chain_profile.network() == "signetcustom" and operation != "capabilities":
+        config = chain_profile.configuration()
+        # Receive setup is offline; health validates the pinned indexer and proxy itself.
+        if operation not in ("init", "identity", "addresses", "health"):
+            chain_profile.check_chain(config)
+        environment = chain_profile.native_environment(config)
     result = subprocess.run(
         [str(BIN)],
-        input=json.dumps({"op": operation, "stateDir": str(state), "profile": SLOT, **kwargs}),
+        input=json.dumps(
+            {
+                "op": operation,
+                "stateDir": str(state),
+                "profile": SLOT,
+                **kwargs,
+                **chain_profile.native_context(),
+            }
+        ),
+        env={**os.environ, **environment},
         text=True,
         capture_output=True,
         check=False,
@@ -97,6 +120,10 @@ def native(state, operation, **kwargs):
 
 def initialize(config_path, root=ROOT, call_native=native):
     config, state, _ = settings(config_path, root)
+    if chain_profile.network() == "signetcustom":
+        # Prove the operator's infrastructure is usable before creating any keys.
+        if call_native(state, "health").get("network") != "signetcustom":
+            raise ValueError("Rebuild the native wallet with Mutinynet support")
     marker = state / "desktop-wallet.json"
     if not marker.exists() and (config.get("walletRpcToken") or state.exists()):
         raise ValueError("Existing wallet configuration/state found; refusing to replace it")
@@ -111,12 +138,15 @@ def initialize(config_path, root=ROOT, call_native=native):
                 "desktopConfig": str(config_path),
                 "walletRpcToken": secrets.token_hex(32),
                 "initialized": False,
+                "network": chain_profile.network(),
             }
             save_private(marker, metadata)
         if metadata.get("ownerId") != config["ownerId"] or metadata.get("desktopConfig") != str(
             config_path
         ):
             raise ValueError("Wallet belongs to another desktop profile")
+        if metadata.get("network", "regtest") != chain_profile.network():
+            raise ValueError("Wallet network changed; use its original profile")
         if config.get("walletRpcToken") not in (None, "", metadata["walletRpcToken"]):
             raise ValueError("Wallet token mismatch; original credentials were preserved")
         wallet = state / SLOT
@@ -133,8 +163,8 @@ def initialize(config_path, root=ROOT, call_native=native):
             if not metadata["initialized"]:
                 call_native(state, "init")
             identity = call_native(state, "identity")
-            if identity.get("network") != "regtest":
-                raise ValueError("Regtest wallet required")
+            if identity.get("network") != chain_profile.network():
+                raise ValueError("Native wallet network differs from the selected profile")
             if metadata.get("fingerprint", identity["fingerprint"]) != identity["fingerprint"]:
                 raise ValueError("Wallet fingerprint changed; refusing to connect")
             metadata.update(initialized=True, fingerprint=identity["fingerprint"])
@@ -163,11 +193,12 @@ def start(config_path):
         or not config.get("walletRpcToken")
         or metadata.get("walletRpcToken") != config["walletRpcToken"]
         or not (state / SLOT / "keys.json").is_file()
+        or metadata.get("network", "regtest") != chain_profile.network()
     ):
         raise ValueError("Wallet configuration mismatch; run init only for a new profile")
     identity = native(state, "identity")
     if (
-        identity.get("network") != "regtest"
+        identity.get("network") != chain_profile.network()
         or identity.get("fingerprint") != metadata["fingerprint"]
     ):
         raise ValueError("Wallet identity changed")
@@ -187,6 +218,11 @@ def start(config_path):
         str(port),
     ]
     shared = state / "shared-network.json"
+    if chain_profile.network() == "signetcustom":
+        if shared.exists():
+            raise ValueError("A shared regtest invitation cannot be used with Mutinynet")
+        if native(state, "health").get("network") != "signetcustom":
+            raise ValueError("Rebuild the native wallet with Mutinynet support")
     if not shared.exists():
         os.execve(sys.executable, arguments, environment)
     from chain_transport import Adapters, Client
@@ -226,6 +262,10 @@ def idle_wallet(state):
 
 
 def network_command(config_path, args):
+    if chain_profile.network() == "signetcustom":
+        raise ValueError(
+            "Shared regtest onboarding is unavailable on Mutinynet; see deploy/MUTINYNET.md"
+        )
     from chain_transport import Adapters, Client, environment
 
     config, state, _ = settings(config_path)
@@ -366,7 +406,8 @@ def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", choices=["init", "start", "connect", "fund", "issue", "sync", "desktop", "auto"]
+        "command",
+        choices=["init", "start", "status", "connect", "fund", "issue", "sync", "desktop", "auto"],
     )
     parser.add_argument("--desktop-data-dir", required=True, type=Path)
     parser.add_argument("--invite", type=Path)
@@ -376,6 +417,17 @@ def main():
     config_path = args.desktop_data_dir.expanduser().resolve() / "desktop-config.json"
     if args.command == "auto":
         config, state, _ = settings(config_path)
+        if chain_profile.network() == "signetcustom":
+            marker = state / "desktop-wallet.json"
+            metadata = read_private(marker) if marker.exists() else {}
+            if (
+                not metadata.get("initialized")
+                or not config.get("walletRpcToken")
+                or config["walletRpcToken"] != metadata.get("walletRpcToken")
+            ):
+                initialize(config_path)
+            start(config_path)
+            return
         if (state / "automatic-ready.json").exists():
             # start() verifies saved ownership, keys, token and fingerprint itself.
             # A completed profile must not repeat initialization or rewrite its config.
@@ -431,7 +483,7 @@ def main():
             json.dumps(
                 {
                     "initialized": True,
-                    "network": "regtest",
+                    "network": chain_profile.network(),
                     "stateDirectory": str(state),
                     "funded": False,
                 }
@@ -439,6 +491,18 @@ def main():
         )
     elif args.command == "start":
         start(config_path)
+    elif args.command == "status":
+        _, state, _ = settings(config_path)
+        print(
+            json.dumps(
+                {
+                    "network": chain_profile.network(),
+                    "addresses": read_private(state / SLOT / "addresses.json"),
+                    "wallet": native(state, "state"),
+                },
+                indent=2,
+            )
+        )
     else:
         network_command(config_path, args)
 

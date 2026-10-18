@@ -65,6 +65,12 @@ test('funding shows a loader only while an eligible visible account is loading',
   const loading = renderToStaticMarkup(createElement(FundingPanel, { client, wallet }));
   assert.match(loading, /data-slot="morphing-square"/);
   assert.match(loading, /Loading your WDK account…/);
+  const mutinynet = renderToStaticMarkup(
+    createElement(FundingPanel, { client, wallet: { ...wallet, network: 'signetcustom' } }),
+  );
+  assert.match(mutinynet, /Mutinynet \(custom Signet\)/);
+  assert.match(mutinynet, /WDK funding is unavailable on Mutinynet/);
+  assert.doesNotMatch(mutinynet, /data-slot="morphing-square"|REGTEST ONLY|Create WDK account/);
   for (const props of [
     { client: null, wallet: null },
     { client, wallet, visible: false },

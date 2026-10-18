@@ -3,6 +3,7 @@ import {
   PublicOrderSchema,
   PublicMarketActivitySchema,
   PublicMarketHistorySchema,
+  DevelopmentNetworkSchema,
 } from '@rgb-exchange/contracts';
 import type { PublicOrder, PublicMarketOrder, PublicMarketHistory } from '@rgb-exchange/contracts';
 import { z } from 'zod';
@@ -13,6 +14,7 @@ const PublicHealthResponse = z
     ok: z.literal(true),
     protocolVersion: z.literal(PROTOCOL_VERSION),
     mode: z.literal('coordination-only'),
+    network: DevelopmentNetworkSchema.optional(),
   })
   .strict();
 

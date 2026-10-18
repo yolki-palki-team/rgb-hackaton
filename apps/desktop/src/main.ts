@@ -18,9 +18,11 @@ import {
   parseOfferLink,
   validateTradeId,
   validateWalletRequest,
+  validateFaucetUrl,
   walletSidecarStarted,
 } from './security.ts';
-import { loadDesktopConfig, type DesktopConfig } from './config.ts';
+import { desktopDataDirectory, loadDesktopConfig, type DesktopConfig } from './config.ts';
+import { MUTINYNET_FAUCET_URL, networkLabel } from '@rgb-exchange/contracts';
 import type { FundingStatus } from '../../local-client/src/funding-types.ts';
 
 const APP_URL = 'palka-app://local/';
@@ -40,8 +42,9 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'palka-app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 app.setName('palka');
-if (process.env.PALKA_DESKTOP_DATA_DIR) {
-  const dataDir = resolve(process.env.PALKA_DESKTOP_DATA_DIR);
+const desktopDirectory = desktopDataDirectory(app.getPath('userData'));
+if (desktopDirectory !== app.getPath('userData')) {
+  const dataDir = resolve(desktopDirectory);
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   app.setPath('userData', dataDir);
 }
@@ -64,7 +67,7 @@ const backendReady = new Promise<void>((resolveReady) => {
 async function startSharedWallet(): Promise<void> {
   if (
     config.marketRegistration !== 'automatic' ||
-    !config.marketUrl.startsWith('https://') ||
+    (config.network === 'regtest' && !config.marketUrl.startsWith('https://')) ||
     config.walletMode !== 'real' ||
     process.env.PALKA_AUTO_WALLET === 'false'
   )
@@ -73,10 +76,10 @@ async function startSharedWallet(): Promise<void> {
   const helper = join(appRoot, 'scripts', 'demo', 'desktop_wallet.py');
   if (!existsSync(python) || !existsSync(helper))
     throw new Error('Local wallet runtime missing. Run the desktop dependency setup first.');
-  process.env.WDK_ELECTRUM_PORT = '51001';
+  if (config.network === 'regtest') process.env.WDK_ELECTRUM_PORT = '51001';
   walletSidecar = spawn(python, [helper, 'auto', '--desktop-data-dir', app.getPath('userData')], {
     cwd: appRoot,
-    env: process.env,
+    env: { ...process.env, PALKA_NETWORK: config.network },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let failed = false;
@@ -123,7 +126,7 @@ async function startSharedWallet(): Promise<void> {
     if (failed || walletSidecar.exitCode !== null)
       throw new Error(
         networkUnavailable
-          ? 'Shared regtest network is unavailable. Check your connection and retry.'
+          ? 'Configured Bitcoin network is unavailable. Check your connection and retry.'
           : 'Automatic wallet setup failed. Stop any manually started sidecar; check server network readiness. Existing wallets were preserved.',
       );
     if (listening) {
@@ -232,6 +235,7 @@ function startBackend(): void {
   ])
     if (process.env[key]) environment[key] = process.env[key];
   Object.assign(environment, {
+    PALKA_NETWORK: config.network,
     LOCAL_OWNER_ID: config.ownerId,
     LOCAL_PORT: String(config.port),
     LOCAL_HOST: '127.0.0.1',
@@ -336,7 +340,9 @@ else {
     .then(async () => {
       if (
         !existsSync(join(app.getPath('userData'), 'desktop-config.json')) &&
-        !process.env.PALKA_MARKET_URL
+        !process.env.PALKA_MARKET_URL &&
+        process.env.PALKA_NETWORK !== 'mutinynet' &&
+        process.env.PALKA_NETWORK !== 'signetcustom'
       ) {
         process.env.PALKA_MARKET_URL = 'https://api.owlpeer.com';
         process.env.PALKA_PUBLIC_MARKET_URL = 'https://owlpeer.com/market';
@@ -364,7 +370,10 @@ else {
           webSecurity: true,
         },
       });
-      window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      window.webContents.setWindowOpenHandler(({ url }) => {
+        if (validateFaucetUrl(url, config.network)) void shell.openExternal(MUTINYNET_FAUCET_URL);
+        return { action: 'deny' };
+      });
       window.webContents.on('will-navigate', (event, url) => {
         if (url !== APP_URL) event.preventDefault();
       });
@@ -376,7 +385,7 @@ else {
       window.show();
       // Show the startup skeleton while native services connect and index the wallet.
       // The bridge waits for this gate before making any local health requests.
-      startupStage = 'connecting and funding the shared regtest wallet';
+      startupStage = `connecting the ${networkLabel(config.network)} wallet`;
       await startSharedWallet();
       startupStage = 'starting the local wallet service';
       startBackend();
@@ -387,7 +396,7 @@ else {
       const reason =
         error instanceof Error &&
         (error.message ===
-          'Shared regtest network is unavailable. Check your connection and retry.' ||
+          'Configured Bitcoin network is unavailable. Check your connection and retry.' ||
           error.message === 'RGB runtime is locked')
           ? ` ${error.message}`
           : '';
@@ -408,7 +417,11 @@ else {
       validatedSender(event);
       if (!validateWalletRequest(method, path)) throw new Error('Unsupported wallet operation');
       const result = await requestLocal(method as 'GET' | 'POST', path as string, input);
-      if (walletSidecar && (path === '/api/funding' || path === '/api/funding/create')) {
+      if (
+        config.network === 'regtest' &&
+        walletSidecar &&
+        (path === '/api/funding' || path === '/api/funding/create')
+      ) {
         const status = result as FundingStatus;
         if (status.available && status.address && status.address !== fundedWdkAddress) {
           if (!wdkFaucet) {
@@ -490,7 +503,7 @@ else {
       noLink: true,
       title: 'Approve WDK funding',
       message: 'Send BTC to your exchange wallet?',
-      detail: `Network: regtest\nDestination: ${operation.address}\nAmount: ${operation.amountSats} sats\nEstimated fee: ${operation.feeSats} sats\nMaximum fee: ${operation.maxFeeSats} sats\nThis is a separate funding transaction, not an RGB exchange.`,
+      detail: `Network: ${operation.network}\nDestination: ${operation.address}\nAmount: ${operation.amountSats} sats\nEstimated fee: ${operation.feeSats} sats\nMaximum fee: ${operation.maxFeeSats} sats\nThis is a separate funding transaction, not an RGB exchange.`,
     });
     if (decision.response !== 1) throw new Error('Funding was not approved.');
     return requestLocal('POST', '/api/funding/approve', { operationId, confirmed: true });

@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import call, patch
 
 from journal import Journal
-from protocol import BTC, Backend, digest, plan_check, read, save, units
+from protocol import BTC, Backend, asset_key, digest, plan_check, read, save, units
 from server import create_server
 
 
@@ -21,6 +21,7 @@ class ProtocolTests(unittest.TestCase):
         backend.owner = "alice"
         backend.wallet_id = "rgb-synthetic"
         raw = {
+            "network": "regtest",
             "btc": {"vanilla": {"settled": "10"}, "colored": {"settled": "20"}},
             "assets": {"nia": []},
             "stockBalances": {},
@@ -42,6 +43,7 @@ class ProtocolTests(unittest.TestCase):
         backend.owner = "alice"
         backend.wallet_id = "unit-wallet"
         raw = {
+            "network": "regtest",
             "btc": {"vanilla": {"settled": "40"}, "colored": {"settled": "60"}},
             "assets": {"nia": [{"asset_id": "rgb:unit", "ticker": "X", "precision": 0}]},
             "stockBalances": {"rgb:unit": "7"},
@@ -163,6 +165,74 @@ class ProtocolTests(unittest.TestCase):
     def test_final_fee_does_not_exceed_estimate(self):
         self.assertEqual(plan_check(self.plan(), "a"), {"a": 500, "b": 500})
 
+    def test_mutinynet_plan_rejects_cross_network_assets_and_state(self):
+        plan = copy.deepcopy(self.plan())
+        plan["network"] = "signetcustom"
+        for leg in plan["legs"]:
+            leg["asset"]["network"] = "signetcustom"
+        plan["digest"] = digest({k: v for k, v in plan.items() if k != "digest"})
+        with patch("protocol.NETWORK", "signetcustom"):
+            self.assertEqual(plan_check(plan, "a"), {"a": 500, "b": 500})
+            self.assertEqual(asset_key(plan["legs"][0]["asset"]), "signetcustom:btc:btc")
+            plan["legs"][1]["asset"]["network"] = "regtest"
+            plan["digest"] = digest({k: v for k, v in plan.items() if k != "digest"})
+            with self.assertRaisesRegex(ValueError, "unsupported asset/network"):
+                plan_check(plan, "a")
+            with self.assertRaisesRegex(ValueError, "native state network mismatch"):
+                Backend.__new__(Backend)._state_from_raw({"network": "regtest"})
+
+    def test_mutinynet_receive_target_rejects_regtest_and_mainnet_addresses(self):
+        with tempfile.TemporaryDirectory() as tmp, patch("protocol.NETWORK", "signetcustom"):
+            backend = Backend.__new__(Backend)
+            backend.root = Path(tmp)
+            backend.owner = "alice"
+            backend.wallet_id = "rgb-test-wallet-signetcustom"
+            for address in ("bcrt1q" + "a" * 38, "bc1q" + "a" * 38):
+                with patch.object(backend, "call_native", return_value={"btcAddress": address}):
+                    with self.assertRaisesRegex(ValueError, "signetcustom BTC address"):
+                        backend.fundingTarget()
+            with patch.object(
+                backend, "call_native", return_value={"btcAddress": "tb1q" + "a" * 38}
+            ):
+                target = backend.fundingTarget()
+            self.assertEqual(target["network"], "signetcustom")
+            self.assertTrue(target["address"].startswith("tb1"))
+            with patch("protocol.NETWORK", "regtest"):
+                with self.assertRaisesRegex(ValueError, "identity changed"):
+                    backend.fundingTarget()
+
+    def test_old_regtest_binary_cannot_advertise_mutinynet_signing(self):
+        with (
+            patch("protocol.NETWORK", "signetcustom"),
+            patch("protocol.NETWORK_CONTEXT", {"network": "signetcustom"}),
+            patch("protocol.native", return_value={"network": "regtest", "fingerprint": "unit"}),
+        ):
+            with self.assertRaisesRegex(ValueError, "network identity mismatch"):
+                Backend("alice")
+            backend = Backend.__new__(Backend)
+            with patch.object(backend, "call_native") as native_call:
+                capabilities = backend.capabilities()
+            native_call.assert_not_called()
+            self.assertEqual(capabilities["network"], "signetcustom")
+            self.assertFalse(capabilities["signing"])
+            self.assertFalse(capabilities["directSwap"])
+            self.assertFalse(capabilities["ringSwap"])
+
+    def test_healthy_mutinynet_indexer_does_not_enable_signing_while_core_is_syncing(self):
+        backend = Backend.__new__(Backend)
+        with (
+            patch("protocol.NETWORK", "signetcustom"),
+            patch("protocol.native", return_value={"network": "signetcustom"}),
+            patch.object(
+                backend, "call_native", side_effect=ValueError("Core is syncing")
+            ) as native_call,
+        ):
+            capabilities = backend.capabilities()
+        native_call.assert_called_once_with("check-index")
+        self.assertEqual(capabilities["network"], "signetcustom")
+        for capability in ("directSwap", "ringSwap", "signing", "broadcast"):
+            self.assertFalse(capabilities[capability])
+
     def test_wrong_digest_network_owner_and_topology(self):
         original = self.plan()
         for mutate in [
@@ -194,6 +264,7 @@ class ProtocolTests(unittest.TestCase):
         plan = self.plan()
         contract = plan["legs"][1]["asset"]["contractId"]
         raw = {
+            "network": "regtest",
             "btc": {"vanilla": {"settled": "105000"}, "colored": {"settled": "5000"}},
             "assets": {"nia": [{"asset_id": contract, "ticker": "TEST", "precision": 0}]},
             "stockBalances": {contract: "150"},

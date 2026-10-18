@@ -60,6 +60,7 @@ fn parse_psbt(v: &Value) -> Result<Psbt> {
 }
 
 pub fn public_operation(req: &Value) -> Result<Value> {
+    let network = network::Profile::from_request(req)?;
     let mut final_fascia = None;
     let mut psbt = if req["op"] == "build" {
         let inputs = req["inputs"].as_array().ok_or("inputs")?;
@@ -92,7 +93,7 @@ pub fn public_operation(req: &Value) -> Result<Value> {
         }
         for o in req["outputs"].as_array().ok_or("outputs")? {
             let address = Address::from_str(o["address"].as_str().ok_or("address")?)?
-                .require_network(Network::Regtest)?;
+                .require_network(network.bitcoin_network().into())?;
             // Avoid color_psbt's implicit Taproot vout shifting in this fixed SegWit-v0 spike.
             if address.script_pubkey().is_p2tr() {
                 return Err("spike requires SegWit v0 outputs".into());
@@ -194,9 +195,8 @@ pub fn sign(
         return Err("stale approval".into());
     }
     let intent: Value = serde_json::from_slice(&raw)?;
-    if intent["network"] != "regtest"
-        || intent["profile"] != profile
-        || intent["fingerprint"] != wallet.get_keys().master_fingerprint
+    network::Profile::from_wallet(wallet)?.check_intent(&intent)?;
+    if intent["profile"] != profile || intent["fingerprint"] != wallet.get_keys().master_fingerprint
     {
         return Err("wrong local wallet".into());
     }
@@ -341,6 +341,7 @@ pub fn sign(
 
 pub fn sync_confirmed(wallet: &mut Wallet, root: &std::path::Path, req: &Value) -> Result<Value> {
     let intent: Value = serde_json::from_slice(&fs::read(root.join("approval-intent.json"))?)?;
+    network::Profile::from_wallet(wallet)?.check_intent(&intent)?;
     if !root.join("signature-intent.txt").exists() {
         return Err("no signed local intent".into());
     }
@@ -435,8 +436,11 @@ fn validate_online(
     let id = ContractId::from_str(req["contractId"].as_str().ok_or("contractId")?)?;
     let vout: u32 = req["vout"].as_u64().ok_or("vout")?.try_into()?;
     let expected = units(&req["amount"])?;
-    let address = Address::from_str(req["address"].as_str().ok_or("address")?)?
-        .require_network(Network::Regtest)?;
+    let address = Address::from_str(req["address"].as_str().ok_or("address")?)?.require_network(
+        network::Profile::from_wallet(wallet)?
+            .bitcoin_network()
+            .into(),
+    )?;
     let output = psbt
         .unsigned_tx
         .output
@@ -473,7 +477,7 @@ fn validate_online(
         return Err("RGB amount mismatch".into());
     }
     Ok(
-        json!({"valid":true,"network":"regtest","contractId":id.to_string(),"amount":actual.to_string(),"signed":false,"chainConfirmed":false}),
+        json!({"valid":true,"network":network::Profile::from_wallet(wallet)?.name(),"contractId":id.to_string(),"amount":actual.to_string(),"signed":false,"chainConfirmed":false}),
     )
 }
 

@@ -1,6 +1,7 @@
 """Identity and recovery checks for independent desktop wallet setup."""
 
 import hashlib
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,9 @@ from desktop_wallet import SLOT, initialize, read_private, save_private
 
 class DesktopWalletTests(unittest.TestCase):
     def setUp(self):
+        environment = patch.dict(os.environ, {"PALKA_NETWORK": "regtest"})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -177,6 +181,103 @@ class DesktopWalletTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "issuer"):
                 desktop_wallet.network_command(self.config_path, args)
             self.assertNotIn("issue", [operation for operation, _ in calls])
+
+    def test_mutinynet_has_separate_state_and_never_uses_shared_regtest_onboarding(self):
+        regtest_state = desktop_wallet.settings(self.config_path, self.root)[1]
+        save_private(self.config_path, {**self.config, "network": "signetcustom"})
+        with patch.dict(os.environ, {"PALKA_NETWORK": "mutinynet"}):
+            state = desktop_wallet.settings(self.config_path, self.root)[1]
+            self.assertNotEqual(state, regtest_state)
+            self.assertEqual(state.parent.name, "mutinynet")
+            with self.assertRaisesRegex(ValueError, "Shared regtest onboarding"):
+                desktop_wallet.network_command(self.config_path, SimpleNamespace(command="fund"))
+            with patch.object(
+                desktop_wallet, "native", side_effect=RuntimeError("RGB indexer unavailable")
+            ):
+                with self.assertRaisesRegex(RuntimeError, "RGB indexer unavailable"):
+                    initialize(self.config_path, self.root, desktop_wallet.native)
+            self.assertFalse(state.exists())
+
+    def test_mutinynet_auto_starts_existing_wallet_without_bootstrap_or_reinitialization(self):
+        save_private(
+            self.config_path,
+            {**self.config, "network": "signetcustom", "walletRpcToken": "synthetic-token"},
+        )
+        with patch.dict(os.environ, {"PALKA_NETWORK": "mutinynet"}):
+            config, state, _ = desktop_wallet.settings(self.config_path, self.root)
+            state.mkdir(parents=True)
+            save_private(
+                state / "desktop-wallet.json",
+                {"initialized": True, "walletRpcToken": "synthetic-token"},
+            )
+            with (
+                patch(
+                    "sys.argv", ["desktop_wallet.py", "auto", "--desktop-data-dir", str(self.root)]
+                ),
+                patch.object(desktop_wallet, "settings", return_value=(config, state, 4201)),
+                patch.object(desktop_wallet, "initialize") as initialize_wallet,
+                patch.object(desktop_wallet, "start") as start,
+                patch.object(desktop_wallet.http.client, "HTTPSConnection") as connection,
+            ):
+                desktop_wallet.main()
+                initialize_wallet.assert_not_called()
+                connection.assert_not_called()
+                start.assert_called_once_with(self.config_path.resolve())
+
+    def test_mutinynet_auto_recovers_interrupted_config_write(self):
+        save_private(self.config_path, {**self.config, "network": "signetcustom"})
+        with patch.dict(os.environ, {"PALKA_NETWORK": "mutinynet"}):
+            config, state, _ = desktop_wallet.settings(self.config_path, self.root)
+            state.mkdir(parents=True)
+            save_private(
+                state / "desktop-wallet.json",
+                {"initialized": True, "walletRpcToken": "synthetic-token"},
+            )
+            with (
+                patch(
+                    "sys.argv", ["desktop_wallet.py", "auto", "--desktop-data-dir", str(self.root)]
+                ),
+                patch.object(desktop_wallet, "settings", return_value=(config, state, 4201)),
+                patch.object(desktop_wallet, "initialize") as initialize_wallet,
+                patch.object(desktop_wallet, "start") as start,
+                patch.object(desktop_wallet.http.client, "HTTPSConnection") as connection,
+            ):
+                desktop_wallet.main()
+                initialize_wallet.assert_called_once_with(self.config_path.resolve())
+                start.assert_called_once_with(self.config_path.resolve())
+                connection.assert_not_called()
+
+    def test_mutinynet_initialization_checks_sdk_before_keys_and_preserves_network(self):
+        save_private(self.config_path, {**self.config, "network": "signetcustom"})
+        operations = []
+
+        def native(state, operation):
+            operations.append(operation)
+            if operation == "health":
+                self.assertFalse((state / SLOT / "keys.json").exists())
+                return {"network": "signetcustom"}
+            return {**self.native(state, operation), "network": "signetcustom"}
+
+        with patch.dict(os.environ, {"PALKA_NETWORK": "mutinynet"}):
+            state = initialize(self.config_path, self.root, native)
+            self.assertEqual(operations, ["health", "init", "identity"])
+            self.assertEqual(read_private(state / "desktop-wallet.json")["network"], "signetcustom")
+            self.assertEqual(read_private(self.config_path)["network"], "signetcustom")
+
+    def test_mutinynet_rejects_unrebuilt_regtest_binary_before_creating_keys(self):
+        save_private(self.config_path, {**self.config, "network": "signetcustom"})
+        with patch.dict(os.environ, {"PALKA_NETWORK": "mutinynet"}):
+            state = desktop_wallet.settings(self.config_path, self.root)[1]
+            with self.assertRaisesRegex(ValueError, "Rebuild the native wallet"):
+                initialize(self.config_path, self.root, lambda *_: {"network": "regtest"})
+            self.assertFalse(state.exists())
+
+    def test_network_mismatch_preserves_existing_desktop_configuration(self):
+        saved = self.config_path.read_bytes()
+        with patch.dict(os.environ, {"PALKA_NETWORK": "mutinynet"}):
+            with self.assertRaisesRegex(ValueError, "Desktop network differs"):
+                self.initialize()
+        self.assertEqual(self.config_path.read_bytes(), saved)
 
 
 if __name__ == "__main__":

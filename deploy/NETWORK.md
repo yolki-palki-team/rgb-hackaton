@@ -1,5 +1,8 @@
 # Shared Oracle regtest network
 
+For public custom-Signet development, use the separate
+[Mutinynet profile](MUTINYNET.md). This deployment and its funding endpoints remain regtest.
+
 **Recommended:** after the server `network` command below, each participant runs
 `bash deploy/desktop.sh`, then uses `npm run dev:desktop` for later launches.
 See [automatic startup](DESKTOP.md#automatic-shared-network-startup-recommended).

@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { MarketHistory, PublicOrder, TradeStatus } from '@rgb-exchange/contracts';
+import {
+  networkLabel,
+  type MarketHistory,
+  type PublicOrder,
+  type TradeStatus,
+} from '@rgb-exchange/contracts';
 import { formatAsset, orderFillSummary } from '../api';
 import { Button, Panel, SectionTitle, StatusBadge } from './ui/wallet-kit';
 import { MorphingSquare } from './ui/morphing-square';
@@ -75,7 +80,7 @@ export function OrderHistoryRows({ history }: { history: MarketHistory }) {
               <time dateTime={new Date(order.createdAt).toISOString()}>
                 {new Date(order.createdAt).toLocaleString()}
               </time>
-              <span>{order.network}</span>
+              <span>{networkLabel(order.network)}</span>
               <span title={order.id}>
                 Order{' '}
                 {order.id.length > 20 ? `${order.id.slice(0, 10)}…${order.id.slice(-6)}` : order.id}
