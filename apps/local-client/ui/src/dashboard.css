@@ -45,6 +45,11 @@
 .dashboard-grid .chat-input:focus-within {
   border-color: #aaa;
 }
+.dashboard-grid .chat-input-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
 .dashboard-grid .chat-input-textarea {
   flex: 1;
 }
