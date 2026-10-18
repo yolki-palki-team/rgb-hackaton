@@ -655,7 +655,7 @@ class Backend:
                     k: p[k] for k in ("contractId", "vout", "amount", "address", "consignment")
                 }
                 receives.append(check)
-        state = self.state()
+        self.sync_shared_catalog()
         give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == self.owner)
         receive = next(leg for leg in plan["legs"] if leg["toOwnerId"] == self.owner)
         intent = {
@@ -691,7 +691,10 @@ class Backend:
             try:
                 save(review_files[0], {"final": final})
                 save(review_files[1], intent)
-                self.call_native("preflight-sign", trade, approvalDigest=approval_digest(intent))
+                preflight = self.call_native(
+                    "preflight-sign", trade, approvalDigest=approval_digest(intent)
+                )
+                state = self._state_from_raw(preflight["state"])
                 j.bind_approval(trade, plan, intent)
             except Exception:
                 # A rejected proof must not freeze an invalid review for subsequent retries.
