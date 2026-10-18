@@ -603,6 +603,18 @@ p {
   padding: 4px;
   margin-left: auto;
 }
+.notice-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.notice .notice-reply {
+  display: block;
+  margin: 10px 0 0;
+  padding: 4px 12px;
+  border: 1px solid #666;
+  border-radius: 6px;
+}
 .ai-status {
   margin-left: auto;
 }

@@ -25,7 +25,7 @@ import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './mode
 import type { Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
 import { TradeWorkflow, nextTradeAction, tradeProgress } from './workflow';
-import { requestGoalReview } from './goal-review';
+import { prepareGoalReply, requestGoalReview } from './goal-review';
 import type { PrivatePolicy } from '@rgb-exchange/contracts';
 
 const goalExamples = [
@@ -80,11 +80,13 @@ function App() {
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const desktopConnectStarted = useRef(false);
   const [goal, setGoal] = useState('');
+  const focusGoalReply = useRef(false);
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [draftOpen, setDraftOpen] = useState(false);
   const [notice, setNotice] = useState<{
     tone: 'error' | 'success' | 'info';
     text: string;
+    replyToGoal?: string;
   } | null>(null);
   const [busy, setBusy] = useState<string | null>(window.palkaWallet ? 'connect' : null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
@@ -166,10 +168,20 @@ function App() {
   }, [draftOpen]);
 
   useEffect(() => {
-    if (!notice || notice.tone === 'error') return;
+    if (!notice || notice.tone === 'error' || notice.replyToGoal !== undefined) return;
     const timer = setTimeout(() => setNotice(null), 8000);
     return () => clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (!focusGoalReply.current) return;
+    const input = document.querySelector<HTMLTextAreaElement>('#goal');
+    if (!input) return;
+    focusGoalReply.current = false;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.scrollTop = input.scrollHeight;
+  }, [goal, view]);
 
   const connect = useCallback(async () => {
     setBusy('connect');
@@ -441,7 +453,7 @@ function App() {
               text: 'QVAC interpreted the goal locally. Review and confirm the order terms.',
             });
           } else {
-            setNotice({ tone: 'info', text: review.message });
+            setNotice({ tone: 'info', text: review.message, replyToGoal: goal });
           }
         },
       );
@@ -885,7 +897,24 @@ function App() {
           )}
           {notice && view !== 'topup' && (
             <div className={`notice ${notice.tone}`} role="alert">
-              <span>{notice.text}</span>
+              <div className="notice-content">
+                <span>{notice.text}</span>
+                {notice.replyToGoal !== undefined && (
+                  <Button
+                    type="button"
+                    className="notice-reply"
+                    disabled={busy !== null || !connected}
+                    onClick={() => {
+                      focusGoalReply.current = true;
+                      setGoal(prepareGoalReply(notice.replyToGoal!, notice.text, goal));
+                      setView('home');
+                      setNotice(null);
+                    }}
+                  >
+                    Reply
+                  </Button>
+                )}
+              </div>
               <Button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
                 <Icon name="close" size={15} />
               </Button>

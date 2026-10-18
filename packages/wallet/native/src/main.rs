@@ -104,6 +104,16 @@ fn online(wallet: &mut Wallet) -> Result<rgb_lib::wallet::Online> {
     })?)
 }
 
+fn state_snapshot(wallet: &mut Wallet, profile: &str) -> Result<Value> {
+    // Reuse the current locked wallet snapshot; online callers synchronize before this read.
+    let unspents = wallet.list_unspents(None, false, true)?;
+    Ok(
+        json!({"profile":profile,"network":"regtest","btc":wallet.get_btc_balance(None,true)?,
+        "stockBalances":wallet.cooperative_stock_balances()?.iter().map(|(k,v)|(k.clone(),v.to_string())).collect::<std::collections::BTreeMap<_,_>>(),
+        "assets":wallet.list_assets(vec![])?,"unspents":unspents}),
+    )
+}
+
 fn main() {
     if let Err(err) = run() {
         eprintln!("{}", json!({"ok":false,"error":err.to_string()}));
@@ -226,17 +236,11 @@ fn run() -> Result<()> {
         "export" => cooperative::export(&wallet, &root, &req)?,
         "validate" => cooperative::validate(&mut wallet, &root, &req)?,
         "state" | "offline-state" => {
-            let on = if op == "state" {
-                let on = online(&mut wallet)?;
+            if op == "state" {
+                online(&mut wallet)?;
                 wallet.cooperative_check_index()?;
-                Some(on)
-            } else {
-                None
-            };
-            let unspents = wallet.list_unspents(on, false, op == "offline-state")?;
-            json!({"profile":profile,"network":"regtest","btc":wallet.get_btc_balance(on,op == "offline-state")?,
-                "stockBalances":wallet.cooperative_stock_balances()?.iter().map(|(k,v)|(k.clone(),v.to_string())).collect::<std::collections::BTreeMap<_,_>>(),
-                "assets":wallet.list_assets(vec![])?,"unspents":unspents})
+            }
+            state_snapshot(&mut wallet, profile)?
         }
         "issue" => {
             let on = online(&mut wallet)?;

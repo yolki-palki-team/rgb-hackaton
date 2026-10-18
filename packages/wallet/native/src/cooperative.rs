@@ -267,7 +267,7 @@ pub fn sign(
     for receive in intent["receives"].as_array().ok_or("receives")? {
         let mut check = receive.clone();
         check["psbt"] = json!(psbt.to_string());
-        validate(wallet, root, &check)?;
+        validate_online(wallet, root, &check, on)?;
     }
     if intent["assignments"]
         .as_object()
@@ -286,9 +286,10 @@ pub fn sign(
                 meta.proprietary.clear();
             }
         }
-        let own = color(
+        let own = color_online(
             wallet,
             &json!({"psbt":base.to_string(),"assignments":intent["assignments"]}),
+            on,
         )?;
         let own = parse_psbt(&own["psbt"])?;
         let combined = psbt.rgb_bundles()?;
@@ -317,8 +318,10 @@ pub fn sign(
         return Err("unaccounted RGB allocations".into());
     }
     if preflight {
+        wallet.cooperative_check_index()?;
+        let state = state_snapshot(wallet, profile)?;
         return Ok(
-            json!({"readyForApproval":true,"signed":false,"approvalDigest":digest,"btcDeltaSats":(btc_out-btc_in).to_string(),"sighash":"ALL"}),
+            json!({"readyForApproval":true,"signed":false,"approvalDigest":digest,"btcDeltaSats":(btc_out-btc_in).to_string(),"sighash":"ALL","state":state}),
         );
     }
     if !started.exists() {
@@ -421,6 +424,15 @@ pub fn export(wallet: &Wallet, root: &std::path::Path, req: &Value) -> Result<Va
 
 pub fn validate(wallet: &mut Wallet, root: &std::path::Path, req: &Value) -> Result<Value> {
     let on = online(wallet)?;
+    validate_online(wallet, root, req, on)
+}
+
+fn validate_online(
+    wallet: &mut Wallet,
+    root: &std::path::Path,
+    req: &Value,
+    on: rgb_lib::wallet::Online,
+) -> Result<Value> {
     let psbt = parse_psbt(&req["psbt"])?;
     let id = ContractId::from_str(req["contractId"].as_str().ok_or("contractId")?)?;
     let vout: u32 = req["vout"].as_u64().ok_or("vout")?.try_into()?;
@@ -468,6 +480,11 @@ pub fn validate(wallet: &mut Wallet, root: &std::path::Path, req: &Value) -> Res
 }
 
 pub fn color(wallet: &mut Wallet, req: &Value) -> Result<Value> {
+    let on = online(wallet)?;
+    color_online(wallet, req, on)
+}
+
+fn color_online(wallet: &mut Wallet, req: &Value, on: rgb_lib::wallet::Online) -> Result<Value> {
     let mut psbt = parse_psbt(&req["psbt"])?;
     if psbt
         .unsigned_tx
@@ -484,7 +501,6 @@ pub fn color(wallet: &mut Wallet, req: &Value) -> Result<Value> {
     {
         return Err("expected fixed SegWit v0 skeleton with one OP_RETURN".into());
     }
-    let on = online(wallet)?;
     let utxos = wallet.list_unspents(Some(on), false, false)?;
     let mut owned = BTreeMap::<String, u64>::new();
     let mut owned_points = std::collections::HashSet::new();
