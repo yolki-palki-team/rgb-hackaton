@@ -17,7 +17,8 @@ inside WDK or replace the cooperative RGB wallet adapter.
   The renderer cannot supply or replace a recipient address.
 - The user creates the account explicitly, receives plain test BTC into it,
   enters an amount, reviews the destination and fee, then approves sending.
-  Desktop approval uses a native dialog; generic renderer IPC cannot approve.
+  Desktop approval uses the **Approve & send BTC** button in the funding review,
+  without a second native dialog; generic renderer IPC cannot approve.
 - Amounts are integer strings, at least 1,000 sats and at most the Bitcoin supply.
   A preview lasts 120 seconds. The current development fee rate is 1 sat/vB;
   its displayed cap is the quote plus 100 sats, bounded by 10,000 sats.

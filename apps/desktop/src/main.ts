@@ -482,17 +482,6 @@ else {
       operation.expiresAt <= Date.now()
     )
       throw new Error('Funding preview changed or expired. Review it again.');
-    const decision = await dialog.showMessageBox(window!, {
-      type: 'warning',
-      buttons: ['Cancel', 'Approve funding'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-      title: 'Approve WDK funding',
-      message: 'Send BTC to your exchange wallet?',
-      detail: `Network: regtest\nDestination: ${operation.address}\nAmount: ${operation.amountSats} sats\nEstimated fee: ${operation.feeSats} sats\nMaximum fee: ${operation.maxFeeSats} sats\nThis is a separate funding transaction, not an RGB exchange.`,
-    });
-    if (decision.response !== 1) throw new Error('Funding was not approved.');
     return requestLocal('POST', '/api/funding/approve', { operationId, confirmed: true });
   });
   ipcMain.handle('market:open', async (event) => {
