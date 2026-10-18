@@ -1032,9 +1032,7 @@ function App() {
                     </div>
                   </ChatInput>
                   <p className="composer-help" id="goal-help">
-                    {busy === 'interpret'
-                      ? 'QVAC is preparing your order locally. First use may take longer while the model loads.'
-                      : 'Private on this device. Review terms before publishing; signing needs your approval.'}
+                    Private on this device
                   </p>
                 </section>
                 <section className="overview-assets" aria-labelledby="balance-heading">
