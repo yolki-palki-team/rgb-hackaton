@@ -433,6 +433,34 @@ p {
 .chat-input:focus-within {
   border-color: #999;
 }
+.chat-input-editor {
+  position: relative;
+  min-width: 0;
+}
+.chat-input-highlights {
+  position: absolute;
+  inset: 0;
+  padding: 8px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  color: transparent;
+  pointer-events: none;
+}
+.chat-input-highlights mark {
+  color: transparent;
+  background: #86efac18;
+  outline: 1px solid #86efac;
+  outline-offset: 2px;
+  border-radius: 3px;
+  box-decoration-break: clone;
+}
+.chat-input-editor .chat-input-textarea {
+  position: relative;
+}
 .chat-input .chat-input-textarea {
   min-height: 0;
   max-height: 400px;

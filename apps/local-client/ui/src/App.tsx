@@ -911,7 +911,7 @@ function App() {
                       setNotice(null);
                     }}
                   >
-                    Reply
+                    Reply in chat
                   </Button>
                 )}
               </div>
@@ -1006,6 +1006,7 @@ function App() {
                       aria-label="Describe your swap and limits"
                       aria-describedby="goal-help"
                       examples={goalExamples}
+                      highlightText="Your answer:"
                     />
                     <div className="composer-actions">
                       <Button

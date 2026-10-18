@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, Fragment, useContext, useEffect, useRef, useState } from 'react';
 import type { ChangeEventHandler, ComponentProps, ReactNode } from 'react';
 import { ArrowUp } from 'lucide-react';
 import { Button, Textarea } from './wallet-kit';
@@ -35,11 +35,30 @@ export function ChatInputTextArea({
   onKeyDown,
   examples,
   placeholder,
+  highlightText,
+  onScroll,
   ...props
-}: ComponentProps<typeof Textarea> & { examples?: readonly string[] }) {
+}: ComponentProps<typeof Textarea> & { examples?: readonly string[]; highlightText?: string }) {
   const { value, onChange, onSubmit, loading, disabled, rows = 1 } = useContext(ChatInputContext);
   const ref = useTextareaResize(value, rows);
+  const highlightsRef = useRef<HTMLDivElement>(null);
   const [example, setExample] = useState(examples?.[0] ?? '');
+
+  useEffect(() => {
+    const textarea = ref.current;
+    const highlights = highlightsRef.current;
+    if (!textarea || !highlights) return;
+    const sync = () => {
+      // Match the text area excluding its scrollbar, including after resizing.
+      highlights.style.width = `${textarea.clientWidth}px`;
+      highlights.style.height = `${textarea.clientHeight}px`;
+      highlights.scrollTop = textarea.scrollTop;
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [ref, value, highlightText]);
 
   useEffect(() => {
     if (value || !examples?.length) return;
@@ -75,7 +94,7 @@ export function ChatInputTextArea({
     };
   }, [examples, value]);
 
-  return (
+  const textarea = (
     <Textarea
       {...props}
       ref={ref}
@@ -84,6 +103,10 @@ export function ChatInputTextArea({
       onChange={onChange}
       rows={rows}
       className={cn('chat-input-textarea', className)}
+      onScroll={(event) => {
+        if (highlightsRef.current) highlightsRef.current.scrollTop = event.currentTarget.scrollTop;
+        onScroll?.(event);
+      }}
       onKeyDown={(event) => {
         onKeyDown?.(event);
         if (event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229)
@@ -93,6 +116,23 @@ export function ChatInputTextArea({
         if (!loading && !disabled && !props.disabled && value.trim()) onSubmit();
       }}
     />
+  );
+
+  if (!highlightText) return textarea;
+  const parts = value.split(highlightText);
+  return (
+    <div className="chat-input-editor">
+      <div ref={highlightsRef} className="chat-input-highlights" aria-hidden="true">
+        {parts.map((part, index) => (
+          <Fragment key={index}>
+            {index > 0 && <mark>{highlightText}</mark>}
+            {part}
+          </Fragment>
+        ))}
+        {'\n'}
+      </div>
+      {textarea}
+    </div>
   );
 }
 
