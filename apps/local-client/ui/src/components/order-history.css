@@ -55,37 +55,9 @@
   font-weight: 600;
   line-height: 1.4;
 }
-.wallet-history-row[data-active='true'] .progress-steps li {
-  border-top-width: 3px;
-}
-.wallet-history-row[data-active='true'] .progress-steps li > span {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border: 1px solid #3b3b3b;
-  border-radius: 50%;
-  font-size: 11px;
-}
-.wallet-history-row[data-active='true'] .progress-steps li.done {
+.wallet-history-row .progress-steps li.done {
   color: #a1c9af;
   border-color: #497f5c;
-}
-.wallet-history-row[data-active='true'] .progress-steps li.done > span {
-  border-color: #497f5c;
-  background: #193325;
-}
-.wallet-history-row[data-active='true'] .progress-steps li.current {
-  color: #b9f2ce;
-  border-color: #93e1b0;
-  font-weight: 600;
-}
-.wallet-history-row[data-active='true'] .progress-steps li.current > span {
-  border-color: #93e1b0;
-  background: #93e1b0;
-  color: #102b1b;
-  box-shadow: 0 0 0 4px #93e1b014;
 }
 .wallet-history-summary {
   display: flex;
