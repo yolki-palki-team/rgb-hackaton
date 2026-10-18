@@ -593,7 +593,6 @@ class Backend:
                 "final": final,
             },
         }
-        self.validate(package, plan)
         return {"status": "ready", "material": proofs[self.owner], "settlementPackage": package}
 
     def validate(self, package, plan):
@@ -649,12 +648,12 @@ class Backend:
         ):
             raise ValueError("proof commitment changed")
         receives = []
+        # preflight-sign validates these together in one synchronized native wallet session.
         for p in proofs:
             if p["receiver"] == self.owner:
                 check = {
                     k: p[k] for k in ("contractId", "vout", "amount", "address", "consignment")
                 }
-                self.call_native("validate", **check, psbt=final["psbt"])
                 receives.append(check)
         state = self.state()
         give = next(leg for leg in plan["legs"] if leg["fromOwnerId"] == self.owner)
@@ -687,10 +686,21 @@ class Backend:
                 folder / "approval-intent.json"
             ) != intent:
                 raise ValueError("immutable review changed")
-            save(folder / "review-package.json", {"final": final})
-            save(folder / "approval-intent.json", intent)
-            h = j.bind_approval(trade, plan, intent)
-            self.call_native("preflight-sign", trade, approvalDigest=h)
+            review_files = [folder / "review-package.json", folder / "approval-intent.json"]
+            previous = {path: path.read_bytes() if path.exists() else None for path in review_files}
+            try:
+                save(review_files[0], {"final": final})
+                save(review_files[1], intent)
+                self.call_native("preflight-sign", trade, approvalDigest=approval_digest(intent))
+                j.bind_approval(trade, plan, intent)
+            except Exception:
+                # A rejected proof must not freeze an invalid review for subsequent retries.
+                for path, content in previous.items():
+                    if content is None:
+                        path.unlink(missing_ok=True)
+                    else:
+                        path.write_bytes(content)
+                raise
         finally:
             j.db.close()
         after = []
