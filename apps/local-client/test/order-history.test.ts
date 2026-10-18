@@ -191,14 +191,14 @@ test('trade archive opens active orders and only opens completed orders on reque
   assert.equal((completedAfterSelection.match(/<details[^>]* open=""/g) ?? []).length, 1);
 });
 
-test('the current trade embeds the live signing view once and keeps past fills in the archive', () => {
+test('the active trade embeds the live signing view once', () => {
   const html = renderToStaticMarkup(
     createElement(OrderHistoryRows, {
       history: { myOrders: [order], trades: [failedTrade], nextCursor: null },
       liveTrade: {
         id: failedTrade.plan.tradeId,
         kind: 'direct',
-        status: 'REJECTED',
+        status: 'AWAITING_APPROVAL',
         participants: [],
         legs: [],
         feeSats: '500',
@@ -208,5 +208,33 @@ test('the current trade embeds the live signing view once and keeps past fills i
   );
   assert.equal((html.match(/Live validated trade/g) ?? []).length, 1);
   assert.doesNotMatch(html, /wallet-history-outcome/);
-  assert.doesNotMatch(html, /<details[^>]* open=""/);
+  assert.match(html, /<details[^>]* open=""/);
+});
+
+test('finished current trades render the same compact details as archived trades', () => {
+  for (const status of ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'UNSUPPORTED'] as const) {
+    const history: MarketHistory = {
+      myOrders: [{ ...order, status: status === 'CONFIRMED' ? 'FILLED' : 'CANCELLED' }],
+      trades: [{ ...failedTrade, status }],
+      nextCursor: null,
+    };
+    const archived = renderToStaticMarkup(createElement(OrderHistoryRows, { history }));
+    const current = renderToStaticMarkup(
+      createElement(OrderHistoryRows, {
+        history,
+        liveTrade: {
+          id: failedTrade.plan.tradeId,
+          kind: 'direct',
+          status,
+          participants: [],
+          legs: [],
+          feeSats: '500',
+        },
+        liveContent: createElement('div', null, 'Live validated trade'),
+      }),
+    );
+    assert.equal(current, archived);
+    assert.match(current, /wallet-history-outcome/);
+    assert.doesNotMatch(current, /Live validated trade/);
+  }
 });

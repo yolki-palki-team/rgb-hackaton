@@ -121,7 +121,7 @@ export function ChatInputTextArea({
   if (!highlightText) return textarea;
   const parts = value.split(highlightText);
   return (
-    <div className="chat-input-editor">
+    <div className="chat-input-editor" data-highlighted={value.includes(highlightText)}>
       <div ref={highlightsRef} className="chat-input-highlights" aria-hidden="true">
         {parts.map((part, index) => (
           <Fragment key={index}>

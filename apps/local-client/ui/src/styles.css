@@ -451,12 +451,15 @@ p {
   pointer-events: none;
 }
 .chat-input-highlights mark {
+  color: #86efac;
+  background: transparent;
+}
+.chat-input-editor[data-highlighted='true'] .chat-input-highlights {
+  color: #eee;
+}
+.chat-input-editor[data-highlighted='true'] .chat-input-textarea {
   color: transparent;
-  background: #86efac18;
-  outline: 1px solid #86efac;
-  outline-offset: 2px;
-  border-radius: 3px;
-  box-decoration-break: clone;
+  caret-color: #eee;
 }
 .chat-input-editor .chat-input-textarea {
   position: relative;
