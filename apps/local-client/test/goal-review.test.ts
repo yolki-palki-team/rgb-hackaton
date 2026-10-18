@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { requestGoalReview, type GoalReview } from '../ui/src/goal-review.ts';
+import { prepareGoalReply, requestGoalReview, type GoalReview } from '../ui/src/goal-review.ts';
 import { initialDraft } from '../ui/src/model.ts';
 
 test('each attempt clears the old review before awaiting inference, regardless of cached health', async () => {
@@ -60,4 +60,55 @@ test('desktop IPC wrappers do not leak into interpretation messages', async () =
     (event) => events.push(event),
   );
   assert.deepEqual(events.at(-1), { state: 'error', message: 'Check the amount precision.' });
+});
+
+test('clarification replies carry the original goal and earlier answers through repeated requests', async () => {
+  const original = 'Sell X for BTC';
+  const questions = ['How much X?', 'What is the minimum BTC amount in sats?'];
+  const answers = ['10 X', '10000 sats'];
+  const events: GoalReview[] = [];
+  let goal = original;
+  for (let index = 0; index < questions.length; index += 1) {
+    await requestGoalReview(
+      async (submitted) => {
+        assert.equal(submitted, goal);
+        return { draft: null, clarification: questions[index] };
+      },
+      goal,
+      (event) => events.push(event),
+    );
+    const review = events.at(-1)!;
+    assert.equal(review.state, 'clarification');
+    if (review.state !== 'clarification') throw new Error('Expected a question');
+    goal = prepareGoalReply(goal, review.message, goal) + answers[index];
+  }
+  assert.equal(events.map((event) => event.state).includes('review'), false);
+  await requestGoalReview(
+    async (submitted) => {
+      assert.equal(
+        submitted,
+        'Sell X for BTC\n\nAssistant question: How much X?\nYour answer: 10 X' +
+          '\n\nAssistant question: What is the minimum BTC amount in sats?\nYour answer: 10000 sats',
+      );
+      return {
+        draft: { ...initialDraft, giveAmount: '10', minReceiveAmount: '10000' },
+        clarification: null,
+      };
+    },
+    goal,
+    (event) => events.push(event),
+  );
+  assert.equal(events.at(-1)?.state, 'review');
+});
+
+test('reply preparation preserves text edited while inference was pending', () => {
+  const reply = prepareGoalReply('Sell X for BTC', 'How much X?', 'Sell 12 X, fee cap 500 sats');
+  assert.equal(
+    reply,
+    'Sell X for BTC\n\nAssistant question: How much X?\nYour answer: Sell 12 X, fee cap 500 sats',
+  );
+  assert.equal(
+    prepareGoalReply('Sell X for BTC', 'How much X?', ''),
+    'Sell X for BTC\n\nAssistant question: How much X?\nYour answer: ',
+  );
 });

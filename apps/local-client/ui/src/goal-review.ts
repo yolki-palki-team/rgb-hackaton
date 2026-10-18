@@ -7,6 +7,12 @@ export type GoalReview =
   | { state: 'clarification'; message: string }
   | { state: 'error'; message: string };
 
+/** Keep the submitted context and any edits made while waiting for clarification. */
+export function prepareGoalReply(submittedGoal: string, question: string, currentGoal: string) {
+  const answer = currentGoal.trim() === submittedGoal.trim() ? '' : currentGoal.trim();
+  return `${submittedGoal.trim()}\n\nAssistant question: ${question}\nYour answer: ${answer}`;
+}
+
 /** A new goal invalidates the old review immediately, including while inference is pending. */
 export async function requestGoalReview(
   interpret: (goal: string) => Promise<GoalResult>,
