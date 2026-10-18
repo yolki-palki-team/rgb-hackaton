@@ -14,7 +14,12 @@ export default function SiteHeader({ active }: { active: 'home' | 'market' }) {
         <a href="/market" aria-current={active === 'market' ? 'page' : undefined}>
           Market
         </a>
-        <a className="video-hero-glass video-hero-demo" href={DEMO_URL}>
+        <a
+          className="video-hero-glass video-hero-demo"
+          href={DEMO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <Play size={13} fill="currentColor" aria-hidden="true" />
           Demo
         </a>
