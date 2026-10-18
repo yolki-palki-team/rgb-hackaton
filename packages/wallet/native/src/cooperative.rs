@@ -318,8 +318,10 @@ pub fn sign(
         return Err("unaccounted RGB allocations".into());
     }
     if preflight {
+        wallet.cooperative_check_index()?;
+        let state = state_snapshot(wallet, profile)?;
         return Ok(
-            json!({"readyForApproval":true,"signed":false,"approvalDigest":digest,"btcDeltaSats":(btc_out-btc_in).to_string(),"sighash":"ALL"}),
+            json!({"readyForApproval":true,"signed":false,"approvalDigest":digest,"btcDeltaSats":(btc_out-btc_in).to_string(),"sighash":"ALL","state":state}),
         );
     }
     if !started.exists() {

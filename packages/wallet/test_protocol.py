@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import call, patch
 
 from journal import Journal
-from protocol import BTC, Backend, digest, plan_check, read, save, units
+from protocol import BTC, FORMAT, Backend, digest, plan_check, read, save, sha, units
 from server import create_server
 
 
@@ -162,6 +162,82 @@ class ProtocolTests(unittest.TestCase):
 
     def test_final_fee_does_not_exceed_estimate(self):
         self.assertEqual(plan_check(self.plan(), "a"), {"a": 500, "b": 500})
+
+    def test_preview_uses_fresh_preflight_state_and_rolls_back_rejected_snapshots(self):
+        plan = self.plan()
+        raw = {
+            "network": "regtest",
+            "btc": {"vanilla": {"settled": "200000"}, "colored": {"settled": "1000"}},
+            "assets": {"nia": []},
+            "stockBalances": {},
+        }
+        for result in ({"state": raw}, {}, {"state": {"network": "signetcustom"}}):
+            with self.subTest(result=result), tempfile.TemporaryDirectory() as tmp:
+                backend = Backend.__new__(Backend)
+                backend.root = Path(tmp)
+                backend.owner, backend.profile, backend.wallet_id = "a", "alice", "unit-wallet"
+                backend.identity = {"fingerprint": "synthetic"}
+                folder = backend.folder(plan["tradeId"])
+                funding = {"a": {"inputs": [{"txid": "synthetic", "vout": 0}]}, "b": {}}
+                save(folder / "plan.json", plan)
+                save(folder / "funding.json", funding["a"])
+                journal = Journal(backend.root / "journal.sqlite")
+                journal.reserve_plan(plan["tradeId"], plan, ["synthetic:0"])
+                final = {
+                    "candidateTxid": "unsigned",
+                    "unsignedTxHex": "00",
+                    "commitmentScripts": [],
+                    "feeSats": "1000",
+                }
+                package = {
+                    "protocolVersion": 1,
+                    "packageId": final["candidateTxid"],
+                    "tradeId": plan["tradeId"],
+                    "planRevision": plan["revision"],
+                    "planDigest": plan["digest"],
+                    "network": "regtest",
+                    "format": FORMAT,
+                    "unsignedTxDigest": sha(bytes.fromhex(final["unsignedTxHex"])),
+                    "commitmentDigest": digest({"scripts": [], "proofs": []}),
+                    "payload": {
+                        "funding": funding,
+                        "colored": {p: {"psbt": None} for p in plan["participants"]},
+                        "final": final,
+                        "proofs": [],
+                    },
+                }
+                skeleton = {"base": {"psbt": "unsigned"}, "receivers": [], "assignments": {"a": {}}}
+                with (
+                    patch.object(backend, "sync_shared_catalog"),
+                    patch.object(backend, "skeleton", return_value=skeleton),
+                    patch("protocol.native", return_value=final),
+                    patch.object(backend, "call_native", return_value=result) as native_call,
+                ):
+                    if result == {"state": raw}:
+                        for _ in range(2):
+                            preview = backend.validate(package, plan)
+                            self.assertEqual(
+                                preview["balancesAfter"], [{"asset": BTC, "amount": "100500"}]
+                            )
+                        self.assertEqual(
+                            native_call.call_count, 2, "every preview must synchronize again"
+                        )
+                        self.assertEqual(
+                            read(folder / "before.json")["balances"][0]["amount"], "201000"
+                        )
+                        self.assertEqual(
+                            journal.snapshot(plan["tradeId"])["state"], "AWAITING_APPROVAL"
+                        )
+                    else:
+                        with self.assertRaises((KeyError, ValueError)):
+                            backend.validate(package, plan)
+                        self.assertEqual(journal.snapshot(plan["tradeId"])["state"], "PREPARING")
+                        self.assertFalse((folder / "approval-intent.json").exists())
+                        self.assertFalse((folder / "review-package.json").exists())
+                    self.assertTrue(
+                        all(c.args[0] == "preflight-sign" for c in native_call.call_args_list)
+                    )
+                journal.db.close()
 
     def test_wrong_digest_network_owner_and_topology(self):
         original = self.plan()
