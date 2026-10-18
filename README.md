@@ -6,7 +6,7 @@ palka is a non-custodial exchange protocol and marketplace for BTC and RGB asset
 
 **[Live website](https://owlpeer.com/) · [Public market](https://owlpeer.com/market) · [First wallet setup](#first-wallet-setup) · [API health](https://api.owlpeer.com/health)**
 
-[![Animated palka wordmark](docs/media/palka-header.gif)](https://owlpeer.com/)
+[![Palka wordmark with a looping particle wave](docs/media/palka-header.gif)](https://owlpeer.com/)
 
 ## Hackathon stack
 
