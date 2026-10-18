@@ -83,6 +83,8 @@ export function OrderHistoryRows({
           trade.plan.orderRefs.some((ref) => ref.orderId === order.id),
         );
         const current = trades.some((trade) => trade.plan.tradeId === liveTrade?.id);
+        const showLive =
+          current && liveTrade && !isFinishedTrade(liveTrade) && Boolean(liveContent);
         const running = (current && liveTrade && !isFinishedTrade(liveTrade)) || active(order);
         const selected =
           (running || request?.finished !== false) &&
@@ -129,9 +131,9 @@ export function OrderHistoryRows({
                   <span>{order.network}</span>
                   <span>Order {order.id}</span>
                 </div>
-                {current && liveContent}
+                {showLive && liveContent}
                 {trades
-                  .filter((trade) => !liveContent || trade.plan.tradeId !== liveTrade?.id)
+                  .filter((trade) => !showLive || trade.plan.tradeId !== liveTrade?.id)
                   .map((trade) => {
                     const give = trade.plan.legs.find((leg) => leg.fromOwnerId === order.ownerId);
                     const receive = trade.plan.legs.find((leg) => leg.toOwnerId === order.ownerId);
@@ -255,6 +257,7 @@ export function OrderHistory({
         </Button>
       </div>
       {liveTrade &&
+        !isFinishedTrade(liveTrade) &&
         !history.myOrders.some((order) =>
           history.trades.some(
             (trade) =>
