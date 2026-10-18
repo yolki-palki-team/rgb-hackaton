@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { assetKey, type PublicMarketOrder } from '@rgb-exchange/contracts';
 import VideoHero from '@/components/ui/video-hero';
 import SiteHeader from '@/components/ui/site-header';
+import { DEMO_URL } from './links';
 import HalftoneWordmarkFooter from '@/components/ui/halftone-wordmark-footer';
 import { getPublicActivity } from './api';
 import { MorphingSquare } from './components/ui/morphing-square';
@@ -318,6 +319,7 @@ function SiteFooter() {
           links: [
             { label: 'Market', href: marketPath },
             { label: 'Home', href: '/' },
+            { label: 'Demo', href: DEMO_URL },
           ],
         },
         {

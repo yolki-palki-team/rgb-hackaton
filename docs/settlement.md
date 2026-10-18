@@ -540,6 +540,28 @@ BTC/RGB balances. See [recorded receipts](../scripts/demo/evidence/shared-contra
 This verifies the adapter locally, not coordination between three updated remote
 desktop installations.
 
+The subsequent desktop failure used an old native executable despite updated
+Python sources. Its persisted colored contributions conflicted even after the
+executable was rebuilt (`the opout is already signalled as spent by a different
+opid`). Rebuilding does not replace materials already published for a trade.
+The unsigned attempt must be cancelled and new orders published; signed attempts
+must retain their original approval and recovery records.
+
+The Python adapter now checks the native owned-input-coloring capability before
+preparation. Known stale-contribution failures have a public, allowlisted error
+with recovery instructions; the UI pauses instead of calling them reconnections.
+Use `npm run build:wallet` on every participant's machine before restarting.
+
+The reproducible isolated regression is
+`uv run --locked python scripts/demo/shared-contract-ring-smoke.py --execute`
+against the local infrastructure. It creates new wallets, completes an X/DUSD
+direct swap, then an X/DUSD/T000003 atomic ring with two shared input contracts,
+and spends the RGB received from that ring. All three transactions confirmed,
+all recipients accepted RGB, and exact balances matched after sidecar restarts.
+The ring txid is `8d6c28f2db168181de481ac7efe5dbf59356ba24fa6298b1f3626f4a0b6dfda6`;
+see [upgrade regression receipts](../scripts/demo/evidence/ring-upgrade-0a531c741d3b.json).
+This is real local regtest evidence, not a completed three-remote-desktop trade.
+
 All participants must update both the Python adapter and compiled native binary.
 Historical transactions with distinct contributing contracts keep their original
 output layout. Each separate RGB output holds 1000 sats, charged to its owner;
@@ -674,7 +696,8 @@ evidence file; review that diff deliberately.
 ## Recovery and private state
 
 Reservations are transactional and unique by outpoint. Release is allowed only
-before signing. SIGNING/SIGNED/ambiguous-broadcast states never expire by order
+before signing, or after independently verifying a confirmed conflicting
+[on-chain cancellation](cancellation.md). SIGNING/SIGNED/ambiguous-broadcast states never expire by order
 TTL. A signature-start marker without a returned signature stays pinned for
 same-intent recovery. Unknown broadcast results trigger txid lookup, not release.
 Bitcoin confirmation and RGB acceptance are separate; CONFIRMED requires both.

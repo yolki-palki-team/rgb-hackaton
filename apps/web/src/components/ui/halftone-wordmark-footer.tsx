@@ -28,6 +28,7 @@ export interface HalftoneWordmarkFooterProps {
   dotGap?: number;
   radius?: number;
   crop?: number;
+  centered?: boolean;
   grain?: number;
   interactive?: boolean;
   fontFamily?: string;
@@ -169,6 +170,7 @@ export default function HalftoneWordmarkFooter({
   dotGap = 6,
   radius = 80,
   crop = 0.2,
+  centered = false,
   grain = 0.5,
   interactive = true,
   fontFamily = SANS_STACK,
@@ -185,6 +187,7 @@ export default function HalftoneWordmarkFooter({
     dotGap,
     radius,
     crop,
+    centered,
     grain,
     interactive,
     fontFamily,
@@ -196,6 +199,7 @@ export default function HalftoneWordmarkFooter({
     dotGap,
     radius,
     crop,
+    centered,
     grain,
     interactive,
     fontFamily,
@@ -206,6 +210,7 @@ export default function HalftoneWordmarkFooter({
     wordmark,
     dotGap,
     crop,
+    centered,
     grain,
     fontFamily,
     fontWeight,
@@ -255,14 +260,27 @@ export default function HalftoneWordmarkFooter({
       const face = o.fontWeight + ' 100px ' + o.fontFamily;
       m.font = face;
       const word = o.wordmark || ' ';
-      const fit = hwfFitSize(m.measureText(word).width, w * 1.02);
+      const measured = m.measureText(word);
+      const measuredWidth = measured.actualBoundingBoxLeft + measured.actualBoundingBoxRight;
+      const measuredHeight = measured.actualBoundingBoxAscent + measured.actualBoundingBoxDescent;
+      const fit = o.centered
+        ? Math.min(
+            hwfFitSize(measuredWidth || measured.width, w * 0.88),
+            hwfFitSize(measuredHeight || 100, h * 0.7),
+          )
+        : hwfFitSize(measured.width, w * 1.02);
       m.font = o.fontWeight + ' ' + fit + 'px ' + o.fontFamily;
       const box = m.measureText(word);
       const cap = box.actualBoundingBoxAscent || fit * 0.72;
       const c = Math.max(0, Math.min(0.6, o.crop));
       m.fillStyle = '#000';
       m.textBaseline = 'alphabetic';
-      m.fillText(word, (w - box.width) / 2, h + cap * c);
+      const x = o.centered
+        ? (w - box.actualBoundingBoxLeft - box.actualBoundingBoxRight) / 2 +
+          box.actualBoundingBoxLeft
+        : (w - box.width) / 2;
+      const y = o.centered ? (h + cap - box.actualBoundingBoxDescent) / 2 : h + cap * c;
+      m.fillText(word, x, y);
       const img = m.getImageData(0, 0, w, h).data;
       const gap = Math.max(3, o.dotGap);
       const cols = Math.ceil(w / gap);

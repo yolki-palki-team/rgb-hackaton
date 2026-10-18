@@ -10,6 +10,8 @@ import sys
 import time
 from pathlib import Path
 
+from errors import WalletPreparationConflict, WalletUpgradeRequired
+
 from journal import Journal, canonical
 from journal import digest as approval_digest
 
@@ -332,6 +334,7 @@ class Backend:
                         "amountSats": str(u["utxo"]["btc_amount"]),
                         "scriptPubKey": chain["scriptPubKey"]["hex"],
                         "rawTx": rpc("getrawtransaction", point["txid"], False),
+                        "replaceable": True,
                     }
                 )
                 total += int(u["utxo"]["btc_amount"])
@@ -357,6 +360,24 @@ class Backend:
                 + fees[self.owner]
                 + (units(give["amount"]) if give["asset"]["kind"] == "btc" else 0)
             )
+            # Every new swap has a vanilla input that its owner can spend to self
+            # to invalidate the whole swap without consuming an RGB seal.
+            cancel_fee = sum(fees.values()) + 1000
+            cancellable = next(
+                (
+                    pair
+                    for pair in candidates
+                    if not pair[0]["utxo"]["colorable"]
+                    and not pair[0]["rgb_allocations"]
+                    and int(pair[0]["utxo"]["btc_amount"]) >= cancel_fee + 1000
+                ),
+                None,
+            )
+            if cancellable is None:
+                raise ValueError(
+                    "a confirmed vanilla BTC input is required for unilateral cancellation"
+                )
+            take(cancellable)
             for pair in list(candidates):
                 if total >= needed:
                     break
@@ -495,6 +516,14 @@ class Backend:
         )
 
     def prepare(self, plan, materials):
+        # Python and the native executable are deployed separately. Fail before reserving
+        # or publishing a contribution when an older executable is still installed.
+        bridge = native("capabilities")
+        if (
+            bridge.get("ownedInputColoring") is not True
+            or bridge.get("unilateralCancellation") is not True
+        ):
+            raise WalletUpgradeRequired()
         self.reserve(plan)
         folder = self.folder(plan["tradeId"])
         n = len(plan["participants"])
@@ -529,13 +558,15 @@ class Backend:
             raise ValueError("different skeleton")
         if not published or len(colored) < n:
             return {"status": "pending", "material": colored[self.owner]}
-        final = native(
-            "merge",
+        final = self.merge(
             basePsbt=skeleton["base"]["psbt"],
             contributions=[colored[p]["psbt"] for p in plan["participants"] if colored[p]["psbt"]],
         )
         if units(final["feeSats"]) != sum(skeleton["fees"].values()):
             raise ValueError("fee changed")
+        # Persist before publishing proofs: a peer may sign while this wallet is
+        # offline, and cancellation must be verifiable without a local preview.
+        save(folder / "cancellation-context.json", {"psbt": final["psbt"]})
         proofs = self.collect(plan, materials, "proofs")
         path = folder / "proofs.json"
         if not path.exists():
@@ -594,6 +625,21 @@ class Backend:
             },
         }
         return {"status": "ready", "material": proofs[self.owner], "settlementPackage": package}
+
+    @staticmethod
+    def merge(**kwargs):
+        try:
+            return native("merge", **kwargs)
+        except RuntimeError as error:
+            try:
+                diagnostic = json.loads(str(error))
+            except (ValueError, TypeError):
+                raise error from None
+            if isinstance(diagnostic, dict) and diagnostic.get("error") == (
+                "the opout is already signalled as spent by a different opid"
+            ):
+                raise WalletPreparationConflict() from error
+            raise
 
     def validate(self, package, plan):
         fees = plan_check(plan, self.owner)
@@ -696,6 +742,7 @@ class Backend:
                 )
                 state = self._state_from_raw(preflight["state"])
                 j.bind_approval(trade, plan, intent)
+                save(folder / "cancellation-context.json", {"psbt": final["psbt"]})
             except Exception:
                 # A rejected proof must not freeze an invalid review for subsequent retries.
                 for path, content in previous.items():
@@ -740,6 +787,8 @@ class Backend:
     def sign(self, package, approval):
         trade = package["tradeId"]
         folder = self.folder(trade)
+        if (folder / "cancellation-approval.json").exists():
+            raise ValueError("cancellation authorized; original signing is disabled")
         if package != read(folder / "package.json"):
             raise ValueError("unreviewed package")
         expected = {
@@ -792,6 +841,8 @@ class Backend:
         """Read an existing signature only; never start signing or change approval."""
         trade = package["tradeId"]
         folder = self.folder(trade)
+        if (folder / "cancellation-approval.json").exists():
+            raise ValueError("cancellation authorized; original signature relay is disabled")
         if package != read(folder / "package.json"):
             raise ValueError("changed recovery package")
         approval = read(folder / "user-approval.json")
@@ -835,6 +886,8 @@ class Backend:
     def finalize(self, package, signatures):
         trade = package["tradeId"]
         folder = self.folder(trade)
+        if (folder / "cancellation-approval.json").exists():
+            return self.sync(trade)
         plan = read(folder / "plan.json")
         if package != read(folder / "package.json"):
             raise ValueError("changed package")
@@ -901,13 +954,36 @@ class Backend:
             **({"txid": txid} if txid else {}),
         }
 
-    def sync(self, tradeId):
+    def previewCancellation(self, tradeId):
+        from cancellation import preview
+
+        return preview(self, tradeId)
+
+    def cancel(self, tradeId, approvalDigest, confirmed):
+        from cancellation import cancel
+
+        return cancel(self, tradeId, approvalDigest, confirmed)
+
+    def sync(self, tradeId, cancellationTxid=None):
+        from cancellation import reconcile
+
+        cancelled = reconcile(self, tradeId, cancellationTxid)
+        if cancelled is not None:
+            return cancelled
         folder = self.folder(tradeId)
         j = Journal(self.root / "journal.sqlite")
         try:
             row = j.snapshot(tradeId)
             if not row:
                 raise ValueError("unknown trade")
+            released = folder / "released-signature.psbt"
+            if not row["signature"] and row["state"] == "CANCELLING" and released.exists():
+                # Crypto may have completed before Python saved its result. Read
+                # only the already released signature; cancellation cannot sign a swap.
+                if (folder / "signature-intent.txt").read_text() != row["digest"]:
+                    raise ValueError("saved signature intent mismatch")
+                j.record_signature(tradeId, released.read_text())
+                row = j.snapshot(tradeId)
             if not row["signature"]:
                 return self.receipt(tradeId, "pending", False, False)
             package = read(folder / "package.json")
@@ -970,6 +1046,8 @@ class Backend:
             "validate",
             "sign",
             "recoverSignature",
+            "previewCancellation",
+            "cancel",
             "finalize",
             "sync",
         ):

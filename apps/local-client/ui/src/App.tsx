@@ -10,6 +10,7 @@ import {
 } from './components/ui/wallet-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FundingPanel } from './FundingPanel';
+import { CancellationPanel } from './CancellationPanel';
 import { AssetSelect } from './components/ui/asset-select';
 import { MatrixRain } from './components/ui/matrix-rain';
 import { MorphingSquare } from './components/ui/morphing-square';
@@ -275,7 +276,7 @@ function App() {
         if (active) {
           setMarketLoading(false);
           setSnapshotLoading(false);
-          progressTimer = setTimeout(() => void refreshProgress(), 1000);
+          progressTimer = setTimeout(() => void refreshProgress(), 3000);
         }
       }
     };
@@ -793,6 +794,28 @@ function App() {
                     </Button>
                   )}
                 <div className="approval-foot">
+                  {client &&
+                    trade &&
+                    !isMock &&
+                    trade.recoveryRequired &&
+                    ['SIGNING', 'RECONCILING', 'BROADCAST', 'AWAITING_APPROVAL'].includes(
+                      trade.status,
+                    ) && (
+                      <CancellationPanel
+                        key={trade.id}
+                        client={client}
+                        tradeId={trade.id}
+                        disabled={busy !== null || workflowRunning}
+                        onChanged={() => {
+                          workflow.current.retry();
+                        }}
+                      />
+                    )}
+                  {trade?.cancellationTxid && (
+                    <p>
+                      Cancellation transaction: <code>{trade.cancellationTxid}</code>
+                    </p>
+                  )}
                   Your wallet checks the exact amounts again before signing.
                 </div>
               </Panel>

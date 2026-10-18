@@ -4,9 +4,13 @@
 
 pálka is a non-custodial exchange protocol and marketplace for BTC and RGB assets. It connects traders who cannot find a direct counterparty, lets them describe orders with on-device AI, and settles compatible exchanges with keys and signing on their own computers.
 
-**[Live website](https://owlpeer.com/) · [Public market](https://owlpeer.com/market) · [First wallet setup](#first-wallet-setup) · [API health](https://api.owlpeer.com/health)**
+**[Live website](https://owlpeer.com/) · [Public market](https://owlpeer.com/market) · [Watch demo](https://drive.google.com/file/d/1wVGdVCJkSkN-l-c0wORCuNjcZnDvesgR/view?usp=sharing) · [First wallet setup](#first-wallet-setup) · [API health](https://api.owlpeer.com/health)**
 
 [![Palka wordmark with a looping particle wave](docs/media/palka-header.gif)](https://owlpeer.com/)
+
+## Demo
+
+**[▶ Watch the pálka demo on Google Drive](https://drive.google.com/file/d/1wVGdVCJkSkN-l-c0wORCuNjcZnDvesgR/view?usp=sharing)**
 
 ## Hackathon stack
 
@@ -46,6 +50,8 @@ The graph idea is inspired by [Cycles' introduction to MTCS](https://cycles.mone
 5. **Settle and recover.** Completion requires Bitcoin confirmation **and** RGB acceptance by every participant. Durable journals reconcile interrupted operations against the same transaction after restart.
 
 Missing signatures prevent completion. Sequential independent transfers are never presented as an atomic ring. Optional **partial direct fills** use separate atomic two-party transactions, each with its own approval. The entire parent order is not atomic; its fee limit is a total budget allocated across fills.
+
+**Stalled after signing?** The local wallet can review and submit an [on-chain cancellation](docs/cancellation.md) using its own BTC input without spending RGB. Reservations are released only after the conflicting transaction is confirmed. The original swap can still confirm first; cancellation has a separate BTC fee. Verified on regtest for direct and three-party swaps, including restart and subsequent spending.
 
 ## What is proven
 

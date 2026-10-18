@@ -11,6 +11,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from errors import WalletPreparationConflict, WalletUpgradeRequired
+
 from protocol import Backend, save
 
 
@@ -107,14 +109,17 @@ def create_server(backend, token, port=4201):
                     {"errorType": type(error).__name__, "message": str(error)},
                 )
                 # Logs/messages must not reveal full wallet state or private filesystem details.
+                public_error = {
+                    "code": "WALLET_REJECTED",
+                    "message": "Local validation failed; inspect the private wallet records and reconcile before retrying.",
+                }
+                if isinstance(error, (WalletUpgradeRequired, WalletPreparationConflict)):
+                    public_error = {"code": error.code, "message": error.public_message}
                 return self.respond(
                     200,
                     {
                         "protocolVersion": 1,
-                        "error": {
-                            "code": "WALLET_REJECTED",
-                            "message": "Local validation failed; inspect the private wallet records and reconcile before retrying.",
-                        },
+                        "error": public_error,
                     },
                 )
 

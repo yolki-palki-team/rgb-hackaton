@@ -50,6 +50,27 @@ cargo build. This does not create or fund a wallet. QVAC downloads approximately
 2.7 GB on first load; subsequent inference is local. The UI shows model readiness;
 the manual form works independently.
 
+After a wallet update, close palka on **every participant's computer** and run
+the following from the repository root (plain shell commands are sufficient):
+
+```sh
+git pull --ff-only
+npm run build:wallet
+npm run dev:desktop
+```
+
+`build:wallet` refreshes the verified SDK bridge and compiles the native wallet.
+Building the desktop UI alone does not rebuild it. If Cargo is installed but
+missing from PATH, load `$HOME/.cargo/env` first. Preserve the existing wallet
+state, keys and desktop configuration.
+
+An unsigned trade prepared with an older native executable may retain conflicting
+RGB contributions after rebuilding. Cancel that attempt through the application
+and have every participant publish a new order with a fresh expiry. Do not delete
+trade records or reset wallet state. Signed or uncertain trades must be reconciled
+against their original package instead. The wallet reports outdated executables
+and conflicting preparation explicitly; these errors pause automatic retries.
+
 ## Infrastructure: initial setup and restarts
 
 On a **new** machine without a previous chain:

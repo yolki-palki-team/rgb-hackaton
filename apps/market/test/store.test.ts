@@ -56,11 +56,11 @@ function withStore(run: (store: MarketStore, path: string) => void): void {
   }
 }
 
-function signingTrade(store: MarketStore, trade: TradeSnapshot): void {
+function signingTrade(store: MarketStore, trade: TradeSnapshot, packageId = 'package-1'): void {
   const id = trade.plan.tradeId;
   const packageValue = {
     protocolVersion: 1,
-    packageId: 'package-1',
+    packageId,
     tradeId: id,
     planRevision: 0,
     planDigest: trade.plan.digest,
@@ -100,6 +100,53 @@ function confirmedReceipt(tradeId: string, txid = 'a'.repeat(64)) {
     state: 'confirmed',
   };
 }
+
+test('on-chain cancellation keeps orders reserved until a confirmed conflict report, including rings', () =>
+  withStore((store) => {
+    store.createOrder('a', order('a', 'a', x, '100', dusd, '100'), now);
+    store.createOrder('b', order('b', 'b', dusd, '100', btc, '100000'), now);
+    const trade = store.createOrder('c', order('c', 'c', btc, '100000', x, '100'), now).trade!;
+    const id = trade.plan.tradeId;
+    signingTrade(store, trade, 'a'.repeat(64));
+    const payload = {
+      mode: 'real',
+      tradeId: id,
+      network: 'regtest',
+      txid: 'a'.repeat(64),
+      cancellationTxid: 'b'.repeat(64),
+      chainConfirmed: false,
+      rgbAccepted: false,
+      state: 'cancelling',
+    };
+    assert.throws(
+      () =>
+        store.relayTradeMessage('a', id, {
+          messageId: 'wrong',
+          revision: 0,
+          type: 'receipt',
+          payload: { ...payload, txid: 'c'.repeat(64) },
+        }),
+      /INVALID_CANCELLATION_RECEIPT/,
+    );
+    store.relayTradeMessage('a', id, {
+      messageId: 'pending-cancel',
+      revision: 0,
+      type: 'receipt',
+      payload,
+    });
+    store.expireOrders(now + 86400001);
+    assert.equal(store.getTrade(id, 'a')!.status, 'RECONCILING');
+    assert.equal(store.snapshot('a', 0, now).myOrders[0].status, 'RESERVED');
+    store.relayTradeMessage('a', id, {
+      messageId: 'confirmed-cancel',
+      revision: 0,
+      type: 'receipt',
+      payload: { ...payload, state: 'cancelled' },
+    });
+    assert.equal(store.getTrade(id, 'b')!.status, 'CANCELLED');
+    for (const owner of ['a', 'b', 'c'])
+      assert.equal(store.snapshot(owner, 0, now).myOrders[0].status, 'CANCELLED');
+  }));
 
 function confirmTrade(store: MarketStore, trade: TradeSnapshot, confirmedAt = now): void {
   signingTrade(store, trade);

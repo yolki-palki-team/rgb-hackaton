@@ -459,6 +459,22 @@ export const SignatureResultSchema = z
   })
   .strict();
 export type SignatureResult = z.infer<typeof SignatureResultSchema>;
+export const CancellationPreviewSchema = z
+  .object({
+    tradeId: IdSchema,
+    walletId: IdSchema,
+    ownerId: IdSchema,
+    network: z.literal('regtest'),
+    originalTxid: DigestSchema,
+    cancellationTxid: DigestSchema,
+    input: z.string().regex(/^[a-f0-9]{64}:[0-9]+$/),
+    address: z.string().regex(/^bcrt1[ac-hj-np-z02-9]{8,87}$/),
+    returnSats: PositiveAmountSchema,
+    feeSats: PositiveAmountSchema,
+    approvalDigest: DigestSchema,
+  })
+  .strict();
+export type CancellationPreview = z.infer<typeof CancellationPreviewSchema>;
 export const ReceiptSchema = z
   .object({
     mode: z.enum(['mock', 'real']),
@@ -470,7 +486,15 @@ export const ReceiptSchema = z
       .optional(),
     chainConfirmed: z.boolean(),
     rgbAccepted: z.boolean(),
-    state: z.enum(['pending', 'confirmed', 'reconciling', 'unsupported']),
+    state: z.enum([
+      'pending',
+      'confirmed',
+      'reconciling',
+      'unsupported',
+      'cancelling',
+      'cancelled',
+    ]),
+    cancellationTxid: DigestSchema.optional(),
     reason: z.string().optional(),
   })
   .strict()
@@ -479,6 +503,17 @@ export const ReceiptSchema = z
       v.mode !== 'mock' ||
       (!v.txid && !v.chainConfirmed && !v.rgbAccepted && v.state !== 'confirmed'),
     'Mock cannot claim settlement',
+  )
+  .refine(
+    (v) =>
+      !['cancelling', 'cancelled'].includes(v.state) ||
+      (v.mode === 'real' &&
+        Boolean(v.txid) &&
+        Boolean(v.cancellationTxid) &&
+        v.txid !== v.cancellationTxid &&
+        !v.chainConfirmed &&
+        !v.rgbAccepted),
+    'Cancellation requires a distinct conflict transaction and must not claim swap settlement',
   );
 export type Receipt = z.infer<typeof ReceiptSchema>;
 /** RPC method params are identical to these method arguments; B owns payload codecs and cryptography. */
@@ -501,7 +536,9 @@ export interface WalletAdapter {
     pkg: SettlementPackage,
     signatures: Array<{ ownerId: string; signature: unknown }>,
   ): Promise<Receipt>;
-  sync(tradeId: string): Promise<Receipt>;
+  previewCancellation?(tradeId: string): Promise<CancellationPreview>;
+  cancel?(tradeId: string, approvalDigest: string, confirmed: true): Promise<Receipt>;
+  sync(tradeId: string, cancellationTxid?: string): Promise<Receipt>;
 }
 /** Human units only. A model is never trusted to compute atomic amounts or choose contract IDs. */
 export const AiIntentSchema = z

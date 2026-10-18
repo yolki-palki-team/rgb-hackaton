@@ -161,12 +161,13 @@ class Journal:
             row = self.db.execute(
                 "SELECT state,signature FROM trades WHERE id=?", (trade_id,)
             ).fetchone()
-            if not row or row[0] not in ("SIGNING", "SIGNED"):
+            if not row or row[0] not in ("SIGNING", "SIGNED", "CANCELLING"):
                 raise ValueError("not signing")
             if row[1] and row[1] != signed_psbt:
                 raise ValueError("signature already recorded")
             self.db.execute(
-                "UPDATE trades SET state='SIGNED',signature=? WHERE id=?", (signed_psbt, trade_id)
+                "UPDATE trades SET state=?,signature=? WHERE id=?",
+                ("CANCELLING" if row[0] == "CANCELLING" else "SIGNED", signed_psbt, trade_id),
             )
 
         self.transaction(op)
@@ -197,7 +198,7 @@ class Journal:
             ).fetchone()
             if (
                 not row
-                or row[0] not in ("SIGNED", "RECONCILING", "BROADCAST")
+                or row[0] not in ("SIGNED", "RECONCILING", "BROADCAST", "CANCELLING")
                 or (row[1] and row[1] != txid)
             ):
                 raise ValueError("invalid broadcast transition")
@@ -205,6 +206,33 @@ class Journal:
                 "UPDATE trades SET state=?,txid=? WHERE id=?",
                 ("BROADCAST" if known else "RECONCILING", txid, trade_id),
             )
+
+        self.transaction(op)
+
+    def begin_cancellation(self, trade_id):
+        def op():
+            row = self.snapshot(trade_id)
+            if not row or row["state"] not in (
+                "SIGNING",
+                "SIGNED",
+                "RECONCILING",
+                "BROADCAST",
+                "CANCELLING",
+            ):
+                raise ValueError("trade is not cancellable on chain")
+            self.db.execute("UPDATE trades SET state='CANCELLING' WHERE id=?", (trade_id,))
+
+        self.transaction(op)
+
+    def confirm_cancellation(self, trade_id):
+        """Caller must independently verify a confirmed conflicting transaction first."""
+
+        def op():
+            row = self.snapshot(trade_id)
+            if not row or row["state"] == "CONFIRMED":
+                raise ValueError("cannot cancel a settled trade")
+            self.db.execute("DELETE FROM reservations WHERE trade_id=?", (trade_id,))
+            self.db.execute("UPDATE trades SET state='CANCELLED' WHERE id=?", (trade_id,))
 
         self.transaction(op)
 

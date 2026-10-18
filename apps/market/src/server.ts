@@ -94,7 +94,7 @@ export function createMarketServer(
         return json(response, 201, { ownerId });
       }
       if (request.method === 'GET' && path === '/health')
-        return json(response, 200, { ok: true, protocolVersion: 1, mode: 'coordination-only' });
+        return json(response, 200, { ok: true, protocolVersion: 1, role: 'market-coordinator' });
       if (request.method === 'GET' && path === '/orders')
         return json(response, 200, { orders: store.listOpen() });
       if (request.method === 'GET' && path === '/activity')

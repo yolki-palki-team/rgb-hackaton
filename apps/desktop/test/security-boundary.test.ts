@@ -75,6 +75,7 @@ test('generic renderer bridge allows only named local operations, with signing i
     `/api/orders/${orderId}/cancel`,
     `/api/trades/${tradeId}/prepare`,
     `/api/trades/${tradeId}/preview`,
+    `/api/trades/${tradeId}/cancel-preview`,
     `/api/trades/${tradeId}/sync`,
     `/api/trades/${tradeId}/reject`,
   ]) {
@@ -82,6 +83,7 @@ test('generic renderer bridge allows only named local operations, with signing i
   }
   for (const [method, path] of [
     ['POST', `/api/trades/${tradeId}/approve`],
+    ['POST', `/api/trades/${tradeId}/cancel`],
     ['POST', '/api/funding/approve'],
     ['POST', '/api/funding/preview?address=attacker'],
     ['GET', '/api/funding/seed'],

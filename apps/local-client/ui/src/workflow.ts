@@ -8,6 +8,7 @@ export type WorkflowClient = {
 };
 export type WorkflowAction = 'prepare' | 'preview' | 'sync';
 export function nextTradeAction(trade: Trade): WorkflowAction | null {
+  if (trade.status === 'CANCELLING') return 'sync';
   if (
     ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
       trade.status,
@@ -63,9 +64,15 @@ export class TradeWorkflow {
       this.retry();
       return action === 'preview' ? (result as Trade['validatedPreview']) : undefined;
     } catch (error) {
-      this.failures += 1;
-      this.retryAt = now + Math.min(30_000, 5000 * 2 ** this.failures);
       this.error = error instanceof Error ? error.message : 'Local wallet unavailable';
+      // A rejected wallet request is not a disconnected transport, including when
+      // Electron wraps the message. Repeating it cannot repair saved RGB inputs.
+      this.failures = /\bWALLET_(?:REJECTED|UPGRADE_REQUIRED|PREPARATION_CONFLICT)\b/.test(
+        this.error,
+      )
+        ? 3
+        : this.failures + 1;
+      this.retryAt = now + Math.min(30_000, 5000 * 2 ** this.failures);
     } finally {
       this.inFlight = false;
     }
@@ -81,6 +88,22 @@ export function tradeProgress(
   detail: string;
   waiting: boolean;
 } {
+  if (trade.status === 'CANCELLING')
+    return {
+      step: 2,
+      title: 'Cancellation awaiting confirmation',
+      detail:
+        'Funds stay reserved until your wallet verifies the cancellation on Bitcoin. The original swap can still confirm first.',
+      waiting: true,
+    };
+  if (trade.status === 'CANCELLED' && trade.cancellationTxid)
+    return {
+      step: 4,
+      title: 'Swap cancelled on Bitcoin',
+      detail:
+        'Your wallet verified the conflicting transaction. Swap reservations are released; the cancelling wallet paid a BTC fee.',
+      waiting: false,
+    };
   if (trade.status === 'CONFIRMED')
     return {
       step: 4,
@@ -96,7 +119,9 @@ export function tradeProgress(
       detail: 'Review the details below before creating another order.',
       waiting: false,
     };
-  if (trade.txid || ['BROADCAST', 'READY_TO_BROADCAST'].includes(trade.status))
+  // The unsigned package already determines the txid. Its presence does not
+  // prove that the other participants signed or that the transaction was sent.
+  if (trade.chainConfirmed || ['BROADCAST', 'READY_TO_BROADCAST'].includes(trade.status))
     return {
       step: 3,
       title: 'Waiting for confirmation',

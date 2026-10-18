@@ -82,7 +82,11 @@ pub fn public_operation(req: &Value) -> Result<Value> {
             tx.input.push(TxIn {
                 previous_output: outpoint,
                 script_sig: ScriptBuf::new(),
-                sequence: Sequence::MAX,
+                sequence: if i["replaceable"] == true {
+                    Sequence::ENABLE_RBF_NO_LOCKTIME
+                } else {
+                    Sequence::MAX
+                },
                 witness: Witness::new(),
             });
             prevouts.push(TxOut {
@@ -183,6 +187,9 @@ pub fn sign(
     req: &Value,
 ) -> Result<Value> {
     let preflight = req["op"] == "preflight-sign";
+    if root.join("cancellation-approval.json").exists() {
+        return Err("cancellation authorized; original signing disabled".into());
+    }
     if !preflight && req["approved"] != true {
         return Err("explicit user approval required".into());
     }

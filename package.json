@@ -23,6 +23,7 @@
     "build:local": "vite build --config apps/local-client/ui/vite.config.ts",
     "predev:mock": "npm run build:local",
     "build:desktop": "tsx apps/desktop/scripts/build.ts",
+    "build:wallet": "uv run --locked python scripts/demo/bootstrap-native.py --refresh && cargo build --locked --manifest-path packages/wallet/native/Cargo.toml",
     "dev:desktop": "npm run build:local && npm run build:desktop && electron .",
     "package:desktop": "tsx apps/desktop/scripts/package.ts",
     "lint": "npm run lint:js && npm run lint:css && npm run lint:python && npm run lint:rust",

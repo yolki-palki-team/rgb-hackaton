@@ -10,12 +10,45 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import call, patch
 
+from errors import WalletPreparationConflict, WalletUpgradeRequired
+
 from journal import Journal
 from protocol import BTC, FORMAT, Backend, digest, plan_check, read, save, sha, units
 from server import create_server
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_outdated_native_is_rejected_before_reserving_or_publishing(self):
+        backend = Backend.__new__(Backend)
+        with (
+            patch("protocol.native", return_value={"cooperativePrepare": True}) as native_call,
+            patch.object(backend, "reserve") as reserve,
+        ):
+            with self.assertRaises(WalletUpgradeRequired):
+                backend.prepare({}, [])
+            native_call.assert_called_once_with("capabilities")
+            reserve.assert_not_called()
+
+    def test_saved_conflicting_transitions_require_a_new_unsigned_attempt(self):
+        error = RuntimeError(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "the opout is already signalled as spent by a different opid",
+                }
+            )
+        )
+        with patch("protocol.native", side_effect=error) as native_call:
+            with self.assertRaises(WalletPreparationConflict):
+                Backend.merge(basePsbt="synthetic", contributions=["stale"])
+            self.assertEqual(native_call.call_count, 1)
+        for diagnostic in ["private native detail", '{"error":"other failure"}', "[]"]:
+            error = RuntimeError(diagnostic)
+            with patch("protocol.native", side_effect=error):
+                with self.assertRaises(RuntimeError) as caught:
+                    Backend.merge(basePsbt="synthetic", contributions=[])
+                self.assertIs(caught.exception, error)
+
     def test_balances_require_a_fresh_checked_state_and_propagate_index_failures(self):
         backend = Backend.__new__(Backend)
         backend.owner = "alice"
@@ -184,6 +217,7 @@ class ProtocolTests(unittest.TestCase):
                 journal = Journal(backend.root / "journal.sqlite")
                 journal.reserve_plan(plan["tradeId"], plan, ["synthetic:0"])
                 final = {
+                    "psbt": "synthetic-psbt",
                     "candidateTxid": "unsigned",
                     "unsignedTxHex": "00",
                     "commitmentScripts": [],
@@ -278,11 +312,16 @@ class ProtocolTests(unittest.TestCase):
                     "utxo": {
                         "outpoint": {"txid": "btc-funding", "vout": 0},
                         "btc_amount": "105000",
+                        "colorable": False,
                     },
                     "rgb_allocations": [],
                 },
                 {
-                    "utxo": {"outpoint": {"txid": "rgb-funding", "vout": 1}, "btc_amount": "5000"},
+                    "utxo": {
+                        "outpoint": {"txid": "rgb-funding", "vout": 1},
+                        "btc_amount": "5000",
+                        "colorable": True,
+                    },
                     "rgb_allocations": [
                         {"asset_id": contract, "settled": True, "assignment": {"Fungible": "150"}}
                     ],
@@ -327,6 +366,11 @@ class ProtocolTests(unittest.TestCase):
                         call("gettxout", "btc-funding", 0),
                         call("gettxout", "rgb-funding", 1),
                         call("getrawtransaction", txid, False),
+                        *(
+                            [call("getrawtransaction", "btc-funding", False)]
+                            if owner == "b"
+                            else []
+                        ),
                     ],
                 )
                 funding = read(backend.folder("unit") / "funding.json")
@@ -339,7 +383,22 @@ class ProtocolTests(unittest.TestCase):
                             "amountSats": amount,
                             "scriptPubKey": "synthetic-script",
                             "rawTx": "synthetic-raw-tx",
-                        }
+                            "replaceable": True,
+                        },
+                        *(
+                            [
+                                {
+                                    "txid": "btc-funding",
+                                    "vout": 0,
+                                    "amountSats": "105000",
+                                    "scriptPubKey": "synthetic-script",
+                                    "rawTx": "synthetic-raw-tx",
+                                    "replaceable": True,
+                                }
+                            ]
+                            if owner == "b"
+                            else []
+                        ),
                     ],
                 )
                 self.assertEqual(
@@ -351,7 +410,10 @@ class ProtocolTests(unittest.TestCase):
                     self.assertEqual(journal.snapshot("unit")["state"], "PREPARING")
                     self.assertEqual(
                         journal.db.execute("SELECT outpoint,trade_id FROM reservations").fetchall(),
-                        [(f"{txid}:{vout}", "unit")],
+                        [
+                            (f"{txid}:{vout}", "unit"),
+                            *([("btc-funding:0", "unit")] if owner == "b" else []),
+                        ],
                     )
                 finally:
                     journal.db.close()
@@ -400,6 +462,10 @@ class HttpTests(unittest.TestCase):
     def test_auth_origin_host_and_envelope(self):
         class FakeBackend:
             def handle(self, method, params):
+                if method == "upgrade":
+                    raise WalletUpgradeRequired()
+                if method == "conflict":
+                    raise WalletPreparationConflict()
                 if method != "state":
                     raise ValueError("synthetic rejection")
                 return {"fixtureOnly": True}
@@ -434,6 +500,18 @@ class HttpTests(unittest.TestCase):
                     )
                 with request({"Authorization": "Bearer " + token}, b"{}") as response:
                     self.assertEqual(json.load(response)["error"]["code"], "WALLET_REJECTED")
+                for method, error in [
+                    ("upgrade", WalletUpgradeRequired),
+                    ("conflict", WalletPreparationConflict),
+                ]:
+                    data = json.dumps(
+                        {"protocolVersion": 1, "requestId": "unit", "method": method, "params": {}}
+                    ).encode()
+                    with request({"Authorization": "Bearer " + token}, data) as response:
+                        self.assertEqual(
+                            json.load(response)["error"],
+                            {"code": error.code, "message": error.public_message},
+                        )
             finally:
                 server.shutdown()
                 server.server_close()

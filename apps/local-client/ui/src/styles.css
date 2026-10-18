@@ -926,6 +926,13 @@ textarea {
 .approval-foot {
   padding: 20px 0 0;
   margin-top: 24px;
+  overflow-wrap: anywhere;
+}
+.cancellation-panel {
+  margin-bottom: 16px;
+}
+.cancellation-panel h3 {
+  color: #eee;
 }
 .reject-button {
   width: 100%;
