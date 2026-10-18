@@ -10,6 +10,7 @@ COPY tsconfig.json ./
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/ui/ ./packages/ui/
 COPY apps/web/ ./apps/web/
+COPY presentation/palka-presentation.html ./presentation/palka-presentation.html
 RUN npm exec vite -- build --config apps/web/vite.config.ts
 
 FROM base AS market

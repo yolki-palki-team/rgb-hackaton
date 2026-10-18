@@ -5,6 +5,8 @@
 !package.json
 !package-lock.json
 !tsconfig.json
+!presentation/
+!presentation/palka-presentation.html
 !apps/
 !apps/market/
 !apps/market/**

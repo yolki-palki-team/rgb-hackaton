@@ -1,5 +1,5 @@
 import { Play } from 'lucide-react';
-import { DEMO_URL } from '../../links';
+import { DEMO_URL, PRESENTATION_URL } from '../../links';
 
 export default function SiteHeader({ active }: { active: 'home' | 'market' }) {
   return (
@@ -13,6 +13,9 @@ export default function SiteHeader({ active }: { active: 'home' | 'market' }) {
         </a>
         <a href="/market" aria-current={active === 'market' ? 'page' : undefined}>
           Market
+        </a>
+        <a href={PRESENTATION_URL} target="_blank" rel="noopener noreferrer">
+          Presentation
         </a>
         <a
           className="video-hero-glass video-hero-demo"

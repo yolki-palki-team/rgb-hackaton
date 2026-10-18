@@ -1,12 +1,41 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import tailwindcss from '@tailwindcss/vite';
+import { PRESENTATION_URL } from './src/links';
+
+const presentationFile = new URL('../../presentation/palka-presentation.html', import.meta.url);
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   plugins: [
     tailwindcss(),
+    {
+      name: 'standalone-presentation',
+      configureServer(server) {
+        server.middlewares.use(async (request, response, next) => {
+          if (new URL(request.url ?? '/', 'http://localhost').pathname !== PRESENTATION_URL) {
+            next();
+            return;
+          }
+          try {
+            const html = await readFile(presentationFile);
+            response.setHeader('Content-Type', 'text/html; charset=utf-8');
+            response.end(html);
+          } catch (error) {
+            next(error);
+          }
+        });
+      },
+      async generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: PRESENTATION_URL.slice(1),
+          source: await readFile(presentationFile),
+        });
+      },
+    },
     {
       name: 'public-market-reads',
       configureServer(server) {

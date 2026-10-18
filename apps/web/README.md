@@ -1,5 +1,7 @@
 # pálka public web UI
 
+The **Presentation** link in the shared navigation opens `/presentation/palka-presentation.html` in a new tab, alongside the video **Demo** link. The five-slide deck is authored in `presentation/palka-presentation.html`; Vite serves that source during development and copies it unchanged into production builds. Its fonts and wordmark are embedded, so the HTML also works offline. Use arrow keys to navigate and **F** for fullscreen.
+
 React/Vite public site for the RGB A2A exchange. Start it from the repository root with `npm run dev:web`, then open `http://127.0.0.1:5173/` for the landing page or `http://127.0.0.1:5173/market` for open orders. The order book is read-only; it shows public exchange intent, plus a minimal execution status and participant count, not wallet balances, private policy, trade packages or signing controls. A single Orders view shows waiting, executing and completed activity and refreshes every 5 seconds. There is no duplicate History tab. Completed/declined outcomes remain visible for the latest 50 finished trades; completion reflects participant wallet reports, not independent public-site chain verification.
 
 The browser calls only `GET /market-api/health` and `GET /market-api/orders`. In Docker, Nginx proxies those exact paths to the market over the private bridge and strips incoming authentication headers, cookies, bodies and queries. Other market and local-client APIs are not exposed by this site. The market port is not published by Compose.

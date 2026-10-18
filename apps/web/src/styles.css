@@ -224,7 +224,7 @@ a {
     order: 3;
     width: 100%;
     justify-content: center;
-    gap: 28px;
+    gap: clamp(10px, 3vw, 28px);
     font-size: 13px;
   }
   .video-hero-copy {

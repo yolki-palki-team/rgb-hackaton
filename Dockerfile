@@ -20,6 +20,7 @@ COPY packages/contracts/ ./packages/contracts/
 COPY packages/ui/ ./packages/ui/
 
 FROM source AS ui-build
+COPY presentation/palka-presentation.html ./presentation/palka-presentation.html
 RUN npm run build
 
 FROM source AS runtime
