@@ -4,9 +4,13 @@
 
 pálka is a non-custodial exchange protocol and marketplace for BTC and RGB assets. It connects traders who cannot find a direct counterparty, lets them describe orders with on-device AI, and settles compatible exchanges with keys and signing on their own computers.
 
-**[Live website](https://owlpeer.com/) · [Public market](https://owlpeer.com/market) · [First wallet setup](#first-wallet-setup) · [API health](https://api.owlpeer.com/health)**
+**[Live website](https://owlpeer.com/) · [Public market](https://owlpeer.com/market) · [Watch demo](https://drive.google.com/file/d/1wVGdVCJkSkN-l-c0wORCuNjcZnDvesgR/view?usp=sharing) · [First wallet setup](#first-wallet-setup) · [API health](https://api.owlpeer.com/health)**
 
 [![Palka wordmark with a looping particle wave](docs/media/palka-header.gif)](https://owlpeer.com/)
+
+## Demo
+
+**[▶ Watch the pálka demo on Google Drive](https://drive.google.com/file/d/1wVGdVCJkSkN-l-c0wORCuNjcZnDvesgR/view?usp=sharing)**
 
 ## Hackathon stack
 

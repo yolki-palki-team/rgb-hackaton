@@ -161,6 +161,15 @@ a {
   background: rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
 }
+.video-hero-links .video-hero-demo {
+  min-height: 44px;
+  padding: 10px 18px;
+  gap: 8px;
+  font-weight: 500;
+}
+.video-hero-links .video-hero-demo:hover {
+  opacity: 1;
+}
 .video-hero-copy {
   position: relative;
   margin: clamp(36px, 7vh, 100px) auto 0;

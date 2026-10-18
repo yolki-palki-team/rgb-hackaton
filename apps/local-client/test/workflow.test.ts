@@ -33,6 +33,32 @@ test('cancellation polls proof without preparing or signing and stops after loca
   assert.equal(tradeProgress(cancelled).title, 'Swap cancelled on Bitcoin');
 });
 
+test('wallet rejection pauses immediately even inside an Electron IPC error', async () => {
+  for (const code of [
+    'WALLET_REJECTED',
+    'WALLET_UPGRADE_REQUIRED',
+    'WALLET_PREPARATION_CONFLICT',
+  ]) {
+    let calls = 0;
+    const client: WorkflowClient = {
+      prepare: async () => {
+        calls++;
+        throw new Error(`Error invoking remote method 'wallet:request': Error: ${code}`);
+      },
+      preview: async () => assert.fail('must not preview'),
+      sync: async () => assert.fail('must not sign or sync'),
+    };
+    const workflow = new TradeWorkflow();
+    await workflow.advance(client, trade('PREPARING'), 0);
+    assert.equal(workflow.paused, true);
+    await workflow.advance(client, trade('PREPARING'), 100_000);
+    assert.equal(calls, 1);
+    workflow.retry();
+    await workflow.advance(client, trade('PREPARING'), 100_001);
+    assert.equal(calls, 2);
+  }
+});
+
 test('approval progress never falls back to preparation when the preview is cleared', () => {
   const pending = tradeProgress(trade('AWAITING_APPROVAL'), true);
   assert.equal(pending.step, 1);
@@ -42,6 +68,26 @@ test('approval progress never falls back to preparation when the preview is clea
     assert.equal(tradeProgress(trade(status, { signingAuthorized: true })).step, 2);
   }
   assert.equal(nextTradeAction(trade('SIGNING')), 'preview');
+});
+
+test('a known transaction ID does not skip the other participants approval', () => {
+  for (const kind of ['direct', 'ring'] as const) {
+    for (const status of ['SIGNING', 'RECONCILING']) {
+      const signed = trade(status, {
+        kind,
+        txid: 'known-before-broadcast',
+        signingAuthorized: true,
+        chainConfirmed: false,
+        rgbAccepted: false,
+      });
+      assert.equal(tradeProgress(signed).step, 2);
+      assert.equal(tradeProgress(signed).title, 'Waiting for the other wallets');
+      assert.equal(tradeProgress({ ...signed, signingAuthorized: false }).step, 1);
+      assert.equal(tradeProgress({ ...signed, status: 'BROADCAST' }).step, 3);
+      assert.equal(tradeProgress({ ...signed, chainConfirmed: true }).step, 3);
+      assert.equal(tradeProgress({ ...signed, status: 'CONFIRMED' }).step, 4);
+    }
+  }
 });
 
 test('direct and ring workflows prepare, validate once, and stop for explicit approval', async () => {

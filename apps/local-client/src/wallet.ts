@@ -31,6 +31,12 @@ export function requireLoopback(value: string): URL {
 }
 export const REAL_WALLET_UNAVAILABLE =
   'Real wallet unavailable: configure WALLET_RPC_URL and WALLET_RPC_TOKEN.';
+const walletErrors: Record<string, string> = {
+  WALLET_UPGRADE_REQUIRED:
+    "The native wallet is outdated. Rebuild the native wallet and restart every participant's app.",
+  WALLET_PREPARATION_CONFLICT:
+    "Saved RGB preparation contains conflicting inputs. Update and rebuild every participant's wallet, cancel this unsigned swap, then publish new orders.",
+};
 const unavailable = async (): Promise<never> => {
   throw new Error(REAL_WALLET_UNAVAILABLE);
 };
@@ -88,7 +94,9 @@ export class HttpWalletAdapter implements WalletAdapter {
       .strict()
       .parse(await response.json());
     if (envelope.error)
-      throw new Error(`Wallet adapter rejected the request: ${envelope.error.code}`);
+      throw new Error(
+        `Wallet adapter rejected the request: ${envelope.error.code}${walletErrors[envelope.error.code] ? `. ${walletErrors[envelope.error.code]}` : ''}`,
+      );
     return envelope.result;
   }
   async capabilities() {

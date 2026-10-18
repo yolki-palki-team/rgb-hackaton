@@ -12,7 +12,7 @@ const PublicHealthResponse = z
   .object({
     ok: z.literal(true),
     protocolVersion: z.literal(PROTOCOL_VERSION),
-    mode: z.literal('coordination-only'),
+    role: z.literal('market-coordinator'),
   })
   .strict();
 

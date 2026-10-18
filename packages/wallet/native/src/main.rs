@@ -149,7 +149,7 @@ fn run() -> Result<()> {
             "sdkCommit":"1eaf0024c591e41843eb80cc8834082292668871",
             "directAtomic":false,"ringAtomic":false,"sign":false,
             "cooperativePrepare":true,"validateConsignment":true,"experimentalSigner":"explicit CLI approval only",
-            "localSdkExtension":true,"unilateralCancellation":true,
+            "localSdkExtension":true,"ownedInputColoring":true,"unilateralCancellation":true,
             "reason":"Low-level bridge is not a network signing API; use authenticated protocol-v1 HTTP sidecar for supported regtest settlement"})
         );
         return Ok(());

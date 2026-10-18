@@ -10,6 +10,8 @@ import sys
 import time
 from pathlib import Path
 
+from errors import WalletPreparationConflict, WalletUpgradeRequired
+
 from journal import Journal, canonical
 from journal import digest as approval_digest
 
@@ -516,8 +518,12 @@ class Backend:
     def prepare(self, plan, materials):
         # Python and the native executable are deployed separately. Fail before reserving
         # or publishing a contribution when an older executable is still installed.
-        if native("capabilities").get("unilateralCancellation") is not True:
-            raise ValueError("native wallet upgrade required for unilateral cancellation")
+        bridge = native("capabilities")
+        if (
+            bridge.get("ownedInputColoring") is not True
+            or bridge.get("unilateralCancellation") is not True
+        ):
+            raise WalletUpgradeRequired()
         self.reserve(plan)
         folder = self.folder(plan["tradeId"])
         n = len(plan["participants"])
@@ -552,8 +558,7 @@ class Backend:
             raise ValueError("different skeleton")
         if not published or len(colored) < n:
             return {"status": "pending", "material": colored[self.owner]}
-        final = native(
-            "merge",
+        final = self.merge(
             basePsbt=skeleton["base"]["psbt"],
             contributions=[colored[p]["psbt"] for p in plan["participants"] if colored[p]["psbt"]],
         )
@@ -620,6 +625,21 @@ class Backend:
             },
         }
         return {"status": "ready", "material": proofs[self.owner], "settlementPackage": package}
+
+    @staticmethod
+    def merge(**kwargs):
+        try:
+            return native("merge", **kwargs)
+        except RuntimeError as error:
+            try:
+                diagnostic = json.loads(str(error))
+            except (ValueError, TypeError):
+                raise error from None
+            if isinstance(diagnostic, dict) and diagnostic.get("error") == (
+                "the opout is already signalled as spent by a different opid"
+            ):
+                raise WalletPreparationConflict() from error
+            raise
 
     def validate(self, package, plan):
         fees = plan_check(plan, self.owner)

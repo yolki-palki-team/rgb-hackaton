@@ -20,6 +20,34 @@ test('unconfigured real wallet is explicitly unavailable and cannot sign', async
   await assert.rejects(wallet.sign(), { message: REAL_WALLET_UNAVAILABLE });
 });
 
+test('wallet upgrade diagnostics use allowlisted text and never expose native error messages', async () => {
+  let code = 'WALLET_UPGRADE_REQUIRED';
+  const server = createServer((_req, res) => {
+    res.end(JSON.stringify({ protocolVersion: 1, error: { code, message: 'PRIVATE_DIAGNOSTIC' } }));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  const adapter = new HttpWalletAdapter(`http://127.0.0.1:${address.port}`, 'synthetic-token-only');
+  try {
+    for (const [nextCode, expected] of [
+      ['WALLET_UPGRADE_REQUIRED', 'Rebuild the native wallet'],
+      ['WALLET_PREPARATION_CONFLICT', 'cancel this unsigned swap'],
+      ['WALLET_REJECTED', 'WALLET_REJECTED'],
+    ]) {
+      code = nextCode;
+      await assert.rejects(adapter.state(), (error: Error) => {
+        assert.ok(error.message.includes(expected));
+        assert.ok(!error.message.includes('PRIVATE_DIAGNOSTIC'));
+        return true;
+      });
+    }
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
 test('degraded real-wallet health is visible without starting QVAC', async () => {
   const store = new LocalStore(':memory:');
   const market = new MarketClient('http://127.0.0.1:4100', 'test-token');
