@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import tailwindcss from '@tailwindcss/vite';
 import { PRESENTATION_URL } from './src/links';
+import { buildPresentation } from './presentation-build';
 
 const presentationFile = new URL('../../presentation/palka-presentation.html', import.meta.url);
 
@@ -29,11 +30,9 @@ export default defineConfig({
         });
       },
       async generateBundle() {
-        this.emitFile({
-          type: 'asset',
-          fileName: PRESENTATION_URL.slice(1),
-          source: await readFile(presentationFile),
-        });
+        for (const asset of buildPresentation(await readFile(presentationFile, 'utf8'))) {
+          this.emitFile({ type: 'asset', ...asset });
+        }
       },
     },
     {
