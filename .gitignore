@@ -22,3 +22,4 @@ tools/
 
 # Packaged desktop builds
 .dist/
+media/
