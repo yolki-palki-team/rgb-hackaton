@@ -1,280 +1,158 @@
-# palka.
+# palka. Protocol
 
-A non-custodial A2A marketplace prototype for BTC and RGB assets, designed for direct swaps between two users and atomic ring swaps between three users.
+**Turn a circle of compatible orders into one atomic Bitcoin transaction.**
 
-Users describe their goals in plain language. An on-device QVAC assistant turns those goals and private preferences into orders for users to review. A deterministic matching engine finds compatible orders; each wallet validates the proposed exchange and requests approval before signing a shared Bitcoin transaction.
+palka is a non-custodial exchange protocol and marketplace for BTC and RGB assets. It connects traders who cannot find a direct counterparty, lets them describe orders with on-device AI, and settles compatible exchanges with keys and signing on their own computers.
 
-## Motivation: validate multilateral exchange on RGB
+**[Live website](https://owlpeer.com/) · [Public market](https://owlpeer.com/market) · [First wallet setup](#first-wallet-setup) · [API health](https://api.owlpeer.com/health)**
 
-**Our primary research goal is to test whether cyclic exchange can unlock trades that bilateral matching cannot execute, without requiring participants to buy intermediate assets first—and whether RGB can settle those trades atomically.** The marketplace and local AI are interfaces for this experiment, not the experiment's main result.
+[![Animated palka wordmark](docs/media/palka-header.gif)](https://owlpeer.com/)
 
-We were inspired by Paolo Dini's [An Introduction to MTCS](https://cycles.money/blog/an-introduction-to-mtcs) (Cycles, November 27, 2023). It explains how Multilateral Trade Credit Set-off finds cycles in business obligation networks, allowing debts to be reduced without changing each firm's net position. Its graph-based approach motivates looking at a whole network of participants instead of requiring every exchange to have a reciprocal pair.
+## Hackathon stack
 
-This is an adaptation of that idea, **not an implementation or proof of the MTCS algorithm**. MTCS clears existing monetary obligations; palka exchanges independently owned BTC and RGB assets with explicit amounts and consent. Different assets cannot simply be added together as equivalent debts. Our current matcher selects a feasible direct swap or three-party cycle; it does not implement MTCS's minimum-cost maximum-flow optimization or claim globally optimal liquidity savings.
+| Technology                           | How palka uses it                                                                                                                                                                    | Working result                                                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **RGB on Bitcoin — required**        | Client-side asset validation through `rgb-lib`, a local Rust bridge and Python wallet service. Participants combine BTC inputs and RGB transitions into one cooperative transaction. | Real direct and three-party swaps on regtest; received RGB spent again after restart.                                         |
+| **QVAC — required**                  | Local Qwen3.5 4B inference converts natural-language goals into reviewable swap terms. No cloud inference or model API key.                                                          | Real inference checks, including BTC/sats conversion, Russian input and clarification of incomplete orders.                   |
+| **KaleidoMind — builder kit**        | `@kaleidorg/mind` supplies the agent engine and typed `review_swap` / `ask_clarification` tools over QVAC.                                                                           | The model maps language; deterministic code checks exact amounts, asset identity and balances.                                |
+| **WDK — optional bonus integration** | A separate self-custodial Bitcoin account funds the native RGB wallet after amount/fee review and approval.                                                                          | Real **50,000-sat** regtest top-up, **141-sat** fee and recovery across restart. Full onboarding integration remains planned. |
 
-### The hypothesis we want to test
+Versions are pinned in [package.json](package.json) and the [native wallet manifest](packages/wallet/native/Cargo.toml). Original requirements: [materials.md](materials.md).
 
-Consider three participants with these proposed terms (illustrative quantities, not market prices):
+**Navigate:** [Why palka](#why-palka) · [How it works](#how-it-works) · [What is proven](#what-is-proven) · [First wallet setup](#first-wallet-setup) · [Try a swap](#try-a-swap) · [Architecture](#architecture) · [Development](#development) · [MVP boundaries](#mvp-boundaries) · [Roadmap](#roadmap)
 
-| Participant | Owns and offers | Wants to receive |
-| ----------- | --------------- | ---------------- |
-| Alice       | 100 X           | 100 DUSD         |
-| Bob         | 100 DUSD        | 100,000 sats     |
-| Carol       | 100,000 sats    | 100 X            |
+## Why palka
 
-No two orders match directly. A ring can connect Alice's X to Carol, Carol's BTC to Bob, and Bob's DUSD to Alice in one atomic settlement. Alice need not hold or purchase BTC as an intermediate asset. Every asset offered must nevertheless exist in its sender's wallet, and Bitcoin fees require additional funding. “Trading through assets a participant does not hold” means avoiding intermediate inventory, not creating missing assets or spending an unfunded balance.
+A direct exchange needs two people with opposite wants. In a fragmented asset market, compatible demand can exist across several people without any pair matching:
 
-RGB makes this a concrete engineering question: can independently validated asset histories and owned inputs be coordinated into one approved Bitcoin transaction while preserving each participant's terms? Finding a graph cycle alone is insufficient. We must check conservation separately for each asset, BTC fees, ownership, private limits, signatures and RGB acceptance. Sequential transfers do not count as an atomic ring. QVAC only drafts intent locally; deterministic code checks amounts and each user approves signing.
+| Trader | Offers       | Wants at least |
+| ------ | ------------ | -------------- |
+| Alice  | 100 X        | 100 DUSD       |
+| Bob    | 100 DUSD     | 100,000 sats   |
+| Carol  | 100,000 sats | 100 X          |
 
-### Planned validation campaign
+**Alice → X → Carol → BTC → Bob → DUSD → Alice.** No pair matches; together they form an executable ring. All three transfers settle in one Bitcoin transaction. Alice never needs intermediate BTC to buy DUSD. Each participant still needs their offered assets and additional BTC for fees.
 
-The following is a **proposed experiment, not a report of 100 completed swaps**:
+The core contribution is to **find exchanges that pairwise matching misses, then execute the complete cycle atomically**. Participants use existing inventory without requiring an AMM pool or an intermediary holding every trading pair. More compatible orders can create more execution opportunities; measuring that improvement at scale is future work.
 
-1. Run 100 scheduled real regtest settlement attempts: 20 direct swaps as controls and 80 three-party rings, with reproducible order fixtures and recorded starting balances. Include rings where the desired asset starts at zero in the receiving wallet and no participant needs to acquire an intermediate asset.
-2. Compare direct-only matching with direct-plus-ring matching on the same order sets. Report executable orders, unmatched orders, completed settlements out of all attempts, fees, latency and failures. Measure intermediate inventory per asset; do not invent a common valuation to sum BTC and RGB quantities.
-3. For each successful attempt, retain the approved plan digest, transaction ID, Bitcoin confirmation, every participant's RGB acceptance and before/after balances. Verify that received RGB can be spent again after restarting the wallets. A match or broadcast alone is not settlement evidence. Publish sanitized results without keys, tokens or private policies.
-4. Run separate failure cases: insufficient balance, excessive fee, expired order, unavailable participant, conflicting inputs and restart during settlement. Reject invalid plans before signing; after broadcast, reconcile the existing transaction rather than pretending it was rolled back. No partial or unresolved result may be reported as success.
-5. Extend the experiment to five-party rings only after expanding the contracts, matcher, wallet validation and settlement tests. **Current support is two or three participants; five-party swaps are a research milestone, not an existing feature.**
+The graph idea is inspired by [Cycles' introduction to MTCS](https://cycles.money/blog/an-introduction-to-mtcs). MTCS nets existing debts; palka exchanges owned assets under explicit orders. Our matcher finds feasible cycles and does not claim MTCS's global optimization or measured liquidity savings.
 
-Success would provide bounded evidence that cyclic matching improves execution for the tested orders and that RGB can enforce the resulting exchange without prefunded intermediate inventory. It would not establish mainnet readiness, market-wide liquidity savings or a general mathematical proof. Existing settlement evidence is documented separately in [integration verification](docs/integration.md); the campaign above still needs to be run and measured.
+## How it works
 
-## Scope and status
+1. **Describe.** Enter a local goal: `Sell 10 X for at least 10000 sats of BTC. Maximum fee 1000 sats.` QVAC drafts an order or asks for missing terms. Manual entry is available.
+2. **Review and publish.** Deterministic checks validate amounts, contract IDs, network, available funds and fees. Only confirmed public order terms reach the market; the natural-language goal stays local.
+3. **Match.** The coordinator finds a compatible direct pair or ring and reserves the orders. AI does not choose prices or decide transaction validity.
+4. **Validate and approve.** Wallets cooperate on one shared Bitcoin transaction and its RGB proofs. Each participant reviews exact incoming/outgoing amounts and their fee, then approves signing the immutable package.
+5. **Settle and recover.** Completion requires Bitcoin confirmation **and** RGB acceptance by every participant. Durable journals reconcile interrupted operations against the same transaction after restart.
 
-- Target: direct and three-party atomic swaps on Bitcoin regtest, using BTC and two test RGB assets.
-- Local AI inference, private keys and wallet state stay on the user's device.
-- Fixed total amounts, full execution by default, optional partial direct fills, and explicit approval before each signature.
-- Public web interface, matching server, local wallet client and packaged macOS shell.
+Missing signatures prevent completion. Sequential independent transfers are never presented as an atomic ring. Optional **partial direct fills** use separate atomic two-party transactions, each with its own approval. The entire parent order is not atomic; its fee limit is a total budget allocated across fills.
 
-**Status:** Public web, deterministic direct/ring matching, local QVAC, private wallet UI, Electron and the real RGB sidecar are integrated. Fresh service checks on the combined tree confirmed direct and atomic three-party swaps, plus re-spending received RGB after restart. Historical recovery evidence is retained separately. The persistent host launcher now starts the real stack together; UI preparation and recovery no longer disappear between cooperative rounds or when balance reconciliation fails. A user-operated Electron Alice and API-operated Bob also completed a direct swap with both Bitcoin confirmation and RGB acceptance, independently checked against wallet balances and Core. Three-desktop, cloud and multi-computer verification remain separate. Mock cannot sign or report blockchain success.
+## What is proven
 
-Separate WDK Bitcoin funding has passed a real regtest transfer and restart check; see [WDK funding](docs/handoffs/wdk-funding.md). This is a separate funding transaction, with explicit approval, and does not replace the native RGB settlement adapter.
+These are recorded real regtest results, separate from mock UI data and unit tests. Linked reports retain their original dates and scope.
 
-### Partial direct fills
+| Capability                                 | Evidence                                                                                                                                                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Direct + three-party atomic settlement** | [Integration report](docs/integration.md#fresh-real-settlement): one shared transaction per swap, all participant receipts, exact balance changes and independent Bitcoin Core checks.                                                         |
+| **Spend received RGB after restart**       | [Reverse direct](scripts/demo/evidence/integration-direct-repeat.json) and [reverse ring](scripts/demo/evidence/integration-ring-repeat.json): received outputs spent in subsequent confirmed swaps.                                           |
+| **Real desktop participation**             | [Desktop receipt](scripts/demo/evidence/integration-desktop-direct.json): user-operated Electron Alice and API-operated Bob completed a direct swap.                                                                                           |
+| **Partial direct execution**               | [Two-fill evidence](scripts/demo/evidence/service-partial-fill-20261017T175857Z-703b6af6.json): 100 X filled in two 50 X / 500,000-sat trades, with restart between fills and separate approvals.                                              |
+| **Local AI + WDK funding**                 | [QVAC report](docs/handoffs/qvac-evidence.md) and [WDK transfer](scripts/demo/evidence/wdk-funding.json). Separate checks, not a claim of one fully automated AI-to-settlement run.                                                            |
+| **N-party extension**                      | [Four-party settlement and reverse](docs/n-party-milestone.md), synthetic matching tests for 1,000 participants and an interactive cycle graph. Implemented in `codex/n-party-swaps`; current `main` still supports two or three participants. |
 
-Enable **Allow partial fills** in the review form to fill a larger order through separate two-party swaps. For example, an order offering 100 X for at least 1,000,000 sats can exchange 50 X for 500,000 sats with Bob, then the other 50 X for 500,000 sats with Carol. Each fill has its own transaction and approval. The whole order is not atomic: one half can finish while the other remains unmatched. Full execution remains the default; three-party rings still execute in full.
+The engineering result spans the marketplace, local AI, wallet validation, cooperative RGB settlement and recovery. A broadcast alone does not count as success; a 1,000-order matching test does not establish 1,000-wallet settlement.
 
-The minimum fill is expressed in the asset you give; the final remainder may be smaller. Integer checks preserve the original minimum exchange rate without rounding against either participant. Only one fill can be active for an order. Confirmed fills update its remaining amount and stay in history across restarts. A rejected or unsuccessful fill stops the remaining order while keeping its confirmed progress visible; publish a new order for that remainder if you want to continue. An uncertain signed transaction stays reserved until reconciliation, so it cannot be reused by another fill.
+## First wallet setup
 
-**The fee limit is a total order budget.** Each fill receives a proportional cap based on its share of the original give amount. Confirmed caps consume this budget even when actual fees are lower; the displayed budget used is not a claim about actual fees paid. Small fills can therefore require a larger total budget, and native minimum-output and funding checks still apply. Incoming BTC cannot fund the fill's fee or satisfy a protected pre-trade balance. Partial execution does not authorize later signatures automatically.
+**Recommended demo: macOS desktop connected to the deployed shared regtest network.** Browsing the [public market](https://owlpeer.com/market) needs no wallet. Trading needs the local application.
 
-Update both the market backend and the wallet client before using partial fills. Older backends reject the new order terms; the client must not silently republish them as a full-only order.
-
-**Verified on local regtest:** one 100 X order completed as two 50 X / 500,000 sat fills with Bob and Carol, using two different Bitcoin transactions. Both wallets confirmed Bitcoin settlement and RGB acceptance for each fill; exact balances matched the approved previews. Restarting the isolated services between fills preserved the parent order, remainder and history, and the first fill's approval token was rejected for the second. Alice paid 500 sats per fill within the 2,000 sat total budget and retained her protected 7 KEEP. See the [sanitized evidence](scripts/demo/evidence/service-partial-fill-20261017T175857Z-703b6af6.json). Reproduce against local regtest infrastructure with `uv run --locked python scripts/demo/service-partial-smoke.py --execute`; it creates new ignored test wallets and never reuses an existing wallet. This is service-level evidence, not a multi-desktop or load test; QVAC and stage timings were not measured in this run.
-
-The desktop/local wallet now follows the public market's visual layout. Publishing checks the draft in one action; preparation, package validation and post-approval reconciliation run automatically while the app is open. Users still review exact amounts and approve signing separately. Repeated transport failures back off and pause with a retry action; reopening restores local approval/receipt state. The workflow and recovery checks pass. The user reviewed the updated desktop and accepted its appearance on 2026-10-17; no Computer Use was used. A new end-to-end swap through the redesigned UI remains unverified.
-
-Start with the practical [usage and deployment guide](docs/usage.md): first setup, restart without wallet reinitialization, pairing, direct/ring orders, approval, recovery, and the concrete remaining work for two/three computers. See [current integration evidence](docs/integration.md) and [historical settlement evidence](docs/settlement.md).
-
-For an **already initialized and configured** real profile set:
-
-```sh
-# Use the same private state directory as during setup/configure.
-export RGB_DEMO_STATE="$PWD/packages/wallet/state/my-direct"
-rtk proxy uv run --locked python scripts/demo/service-profile.py up
-# Or, after stopping that runner, use desktop Alice and browser Bob/Carol:
-rtk proxy uv run --locked python scripts/demo/service-profile.py up --desktop alice
-```
-
-The launcher runs on the host alongside `infra/compose.yaml` Bitcoin infrastructure.
-It preserves wallets, pairing credentials and local approval history. The Docker
-quickstart below is a separate web/runtime option and does not start real sidecars.
-
-Hackathon resources and stack guidance are in [materials.md](materials.md).
-
-## Server deployment
-
-For a separate VM running **only public web and market**, use
-[deploy/README.md](deploy/README.md). The tracked Compose configuration and launcher
-preserve SQLite and private credentials, register new desktops automatically,
-and leave desktop/QVAC/wallets on users' computers. The default profile serves HTTP;
-[the owlpeer.com HTTPS profile](deploy/HTTPS.md) enables direct desktop HTTPS/WSS
-access after DNS and firewall setup. The optional [shared regtest profile](deploy/NETWORK.md)
-adds persistent chain infrastructure, HTTPS desktop access, participant funding,
-RGB contract distribution and WDK funding on the same network.
-
-## Run with Docker
-
-From the repository root, with Docker Desktop / Docker Engine 25+ and Compose 2.20.2+ running:
+Install **Git, Node 22.21+ (or a newer LTS), uv and rustup**. The launcher installs locked project dependencies, Python dependencies and the pinned Rust 1.94 toolchain. No local Docker or manual sidecar setup is needed for this shared-network path.
 
 ```sh
-docker compose up -d --build --wait
-docker compose exec runtime node --import tsx apps/local-client/scripts/docker-pairing.ts
+git clone https://github.com/yolki-palki-team/rgb-hackaton.git
+cd rgb-hackaton
+bash deploy/desktop.sh
 ```
 
-Open **http://127.0.0.1:5173/** for the public landing page or **http://127.0.0.1:5173/market** for open orders. By default, the second command displays one private real-mode profile at **http://127.0.0.1:4101/** and its pairing token. Open that profile's URL and enter its token there. The public site never asks for a pairing token. No `.env` setup is needed to see the site, but a working wallet RPC sidecar and its token are required for balances or trading.
+A fresh profile registers with `https://api.owlpeer.com`, creates an independent local wallet, connects to the shared chain and receives test BTC. New participants receive their own demo RGB asset: **X, DUSD, T000001, T000002, …**, with **1,000 units** issued locally and the public contract shared through the catalog. Existing profiles retain their identity and assets.
 
-`web` serves the public Vite build through Nginx. It can proxy only `GET /market-api/health`, `GET /market-api/orders`, `GET /market-api/activity` and `GET /market-api/history`; the proxy strips incoming authentication headers, cookies, request bodies and queries except the validated history cursor. `runtime` supervises the market and one real-mode local client by default. That client serves its private wallet UI on the same origin as its API. Published ports bind to `127.0.0.1`; the market port is not published and remains available only on the Docker bridge. The Compose file retains loopback mappings for 4102/4103 for the opt-in mock demo, but those profiles are not started by default. Pairing/Origin/Host checks remain enabled. Missing wallet RPC credentials leave the real client visibly unavailable; they do not select a synthetic wallet. The retained telephony/Face ID utilities are not started.
+The first native build can take time. First AI use downloads approximately **2.7 GB** of public model weights; subsequent inference runs locally. Wait for wallet/model readiness before using their respective actions.
 
-Published orders and trade outcomes remain in the market SQLite database, including cancelled, expired and unsuccessful attempts. The History view loads older records in pages without a 50-record total limit. Desktop and browser wallet also retain successfully viewed history pages in their private local SQLite store; if the market is unavailable after a restart, saved pages appear with a stale notice. This is not a backup against deleting the state directory or database. Private plans and failure reasons are available only to the authenticated participant; public history contains public order terms and execution status only.
+For later launches, run `npm run dev:desktop` from the same checkout. After updating source, close the app, run `git pull --ff-only`, then `bash deploy/desktop.sh`. Keep the same profile and state directories; do not reinitialize or delete a wallet to reconnect. Back up complete private RGB state, not only the seed.
 
-Trade status polling runs independently of slower wallet balance refreshes. On startup, the local client reconciles durably recorded signed operations against their original approved package, with bounded retries; this recovery only checks settlement and relays verified receipts, never signs or broadcasts. Legacy records missing the approved package remain pending for explicit reconciliation. For performance diagnosis, start the wallet sidecar with `PALKA_TIMINGS=1`: stderr reports only an allowlisted operation name, handling duration and outcome, without request bodies or credentials. Timings exclude HTTP queue and network time.
+These commands work without RTK. The [desktop guide](deploy/DESKTOP.md) covers prerequisites and manual diagnostics; [shared-network setup](deploy/NETWORK.md) covers funding, contracts and operator configuration. A standalone installer bundling the whole wallet runtime is still planned.
 
-The browser wallet on **4101** and desktop share `apps/local-client/ui`. Docker
-keeps its own built copy: rebuilding desktop or the public `web` service does not
-update the browser wallet. After UI changes, rebuild the `runtime` service and
-reload the browser tab:
+## Try a swap
 
-```sh
-rtk proxy docker compose up -d --build --no-deps runtime
+Use two independently funded wallets for a direct exchange, or three for the ring above. All participants need the same chain and compatible client/native-wallet versions.
+
+1. Check the catalog and balances. Use exact contract identities; symbols alone do not identify an RGB asset.
+2. Enter matching terms through QVAC or the manual form. Review direction, quantities, expiry and fee cap before publishing. The form uses **atomic units**: BTC in sats; demo RGB assets have precision 0.
+3. Keep each app open while it prepares and validates the shared package. Every participant separately approves signing.
+4. Check the transaction ID, Bitcoin confirmation and RGB acceptance. If interrupted, reopen the same wallet and reconcile the existing trade.
+
+**Top up:** create the separate WDK account in **Top up**, receive its one-time test-BTC allowance, then review and approve a transfer into the RGB wallet. Onboarding already funds the main wallet directly, so WDK is currently an optional extra funding path. It transfers BTC; it does not mint RGB tokens. [Funding details](docs/handoffs/wdk-funding.md).
+
+X, DUSD and generated tokens are test assets. **DUSD is not USDT or a backed dollar.** Local isolated scenarios and recovery: [operations guide](docs/usage.md).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Web[Public web / order book] --> Market[Market coordinator]
+    Desktop[Local desktop / user approval] <--> Market
+    AI[QVAC + KaleidoMind] --> Desktop
+    Desktop <--> Wallet[Local RGB wallet]
+    WDK[Local WDK account] -->|BTC funding| Wallet
+    Wallet <--> Chain[Bitcoin Core / indexer / RGB proxy]
 ```
 
-This briefly restarts the Docker market/local APIs and preserves their data and
-model-cache volumes. Keep the same environment/mode settings used at startup.
-The browser profile remains separate from the desktop wallet; matching appearance
-does not connect it to the desktop's keys or balances.
+| Component                                                                 | Responsibility                                                                                            |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [`apps/web`](apps/web)                                                    | React/Vite public marketplace, order status and history; no keys or signing.                              |
+| [`apps/market`](apps/market)                                              | Node/TypeScript coordinator, deterministic BigInt matching, HTTP/WebSocket events and SQLite persistence. |
+| [`apps/local-client`](apps/local-client) + [`apps/desktop`](apps/desktop) | Private wallet UI, local QVAC, approvals, WDK funding, recovery and Electron shell.                       |
+| [`packages/contracts`](packages/contracts)                                | Versioned schemas, exact integer quantities and shared validation.                                        |
+| [`packages/wallet`](packages/wallet)                                      | Python RPC/journals and native Rust RGB/Bitcoin construction, verification and signing.                   |
+| [`deploy`](deploy) + [`infra`](infra)                                     | Public hosting, shared regtest services and isolated local infrastructure.                                |
 
-The desktop opens with a skeleton while local services start and the first wallet
-snapshot loads. Connection, order, signing and funding actions show a spinner in
-the active button; swap and funding panels explain pending confirmation. Loading
-animations respect reduced-motion settings. Rebuild the desktop UI/shell (or the
-packaged app) and restart to pick up these changes; browser Docker profiles need
-the runtime rebuild above. Live settlement through these loading states has not
-been reverified.
+The coordinator sees published orders and coordinates execution; **keys, seeds, private wallet state and inference stay on participant devices**. Local APIs require authentication. The public web cannot approve trades. Coordination is currently centralized: non-custodial settlement does not make the whole marketplace decentralized.
 
-Named volumes keep the databases, generated tokens and QVAC model cache across container rebuilds and restarts. The real-default path does not preload QVAC; first actual AI use downloads about 2.7 GB of public model weights, then loads them locally. Docker runs Linux CPU inference. Model readiness is shown in the local UI. Allow enough disk space and memory for the model; inference speed depends on the machine.
+## Development
 
-To run the explicit synthetic three-profile demonstration instead:
-
-```sh
-PALKA_DEMO_MODE=true docker compose up -d --build --wait
-```
-
-It starts mock A/B/C on ports 4101–4103 and preloads QVAC once for the shared cache. Mock wallets can match orders but cannot sign or report Bitcoin/RGB settlement. This setting is for demonstration only; omit it to return to the real-default path. The real wallet RPC URL is restricted to loopback, so a Docker deployment needs B's sidecar in the same container/network namespace; Compose does not launch one.
-
-```sh
-docker compose ps
-docker compose logs --tail=100 runtime
-docker compose restart runtime
-docker compose down
-```
-
-`down` stops/removes containers but preserves volumes. Do not add `--volumes` if you need to keep wallet/demo state. To explicitly test local model inference inside the running container: `docker compose exec runtime npm run smoke:qvac`.
-
-## Run the local demo
-
-```sh
-npm ci
-npm run dev:mock
-```
-
-Open **http://127.0.0.1:5173/** for the landing page or **http://127.0.0.1:5173/market** for the public order book. The runner starts the market on port 4100 and local profiles A/B/C on 4101/4102/4103. It prints the path to a private `.state/mock-*/pairing.json` file. Open the desired profile's local URL and enter its `sessionToken` on that page; the public market cannot access local balances, policy, signing or the pairing token. The token stays in that tab's memory; seed/private keys are never sent to the browser. `npm run dev:mock` builds the local UI before starting. Each invocation creates separate demo state. Stop the runner with Ctrl+C.
-
-`mock` applies to the wallet: its labeled balances are synthetic. The market, SQLite persistence, HTTP/WebSocket authorization and QVAC inference are real. Preparing a mock trade returns `UNSUPPORTED`, without a fake transaction ID. Three profiles on this machine are a demonstration, not three independent devices.
-
-Natural-language interpretation uses the hackathon's **@kaleidorg/mind 0.11.1** (KaleidoMind) agent engine with **@qvac/sdk 0.21.1**, **QWEN3_5_4B_MULTIMODAL_Q4_K_M**, and the workspace's local Node 22.17 runtime. First use downloads about 2.7 GB of public model weights; subsequent inference stays local, with no model API key or cloud fallback. KaleidoMind selects review/clarification tools and validates or repairs their arguments. The LLM maps wording, direction, asset identities, quantities and units; there is no handwritten trade-verb grammar or language whitelist. Deterministic code converts amounts using asset precision and checks the verified catalog and available balances before showing a draft.
-
-The available action is a fixed BTC/RGB swap order for direct or three-party matching. The assistant does not invent rates or quantities: `get some dusd for 100 sat` needs a minimum DUSD quantity, so it asks for clarification. Update the goal with that quantity and retry. Missing/ambiguous terms keep the review closed; manual entry remains a separate action with empty amount fields. The LLM has no publishing, signing, payment or invoice tools. Natural-language accuracy is bounded by the local model: review all amounts and constraints before confirming.
-
-Private-policy restrictions are disabled for this prototype, including legacy asset allowlists, BTC-sale bans, protected reserves and separate policy fee caps. They are not extracted by the local model or enforced for existing orders. An explicit fee in a new goal becomes its proposed order limit (otherwise 1,000 sats). Verified assets, positive exact amounts, funded outgoing amounts and fees, immutable published order terms and final signing approval are still checked. Saved orders and history are not deleted. Legacy policy fields remain readable for stored-record/API compatibility, but do not restrict execution.
-
-Example goal: `Sell 100 X for at least 100 DUSD. Fee up to 1000 sats.` The local order form displays **atomic units** (BTC in sats); X and test DUSD have precision 0 in the mock. DUSD is not USDT or a backed dollar.
-
-For the ring, confirm these three independent orders:
-
-| Profile | Gives       | Receives at least |
-| ------- | ----------- | ----------------- |
-| A       | 100 X       | 100 DUSD          |
-| B       | 100 DUSD    | 100000 sats       |
-| C       | 100000 sats | 100 X             |
-
-Confirming an order authorizes matching only. Signing has a separate final wallet-validated preview and approval. Real mode retains reservations after a signing attempt or an uncertain broadcast; expiry is not permission to reuse the funds.
-
-## Desktop wallet client (macOS)
-
-```sh
-npm ci
-npm run dev:desktop
-# Or build a distributable macOS app:
-npm run package:desktop
-# Open the built Apple Silicon app:
-open .dist/desktop/palka-darwin-arm64/palka.app
-```
-
-The macOS package is written to `.dist/desktop/palka-darwin-arm64/palka.app`. The `dev:desktop` command rebuilds the UI and desktop shell before opening them; rebuild the package after source changes to update the Finder app. The app keeps the market token, wallet RPC token and local API bearer in Electron's main process. Signing requires explicit approval of the wallet-validated amounts and fee in the swap UI. The local service revalidates the exact package before signing; regtest swaps do not show a second native confirmation dialog. WDK funding uses its own native approval dialog. A `palka://offer/order-<UUID>` argument delivered to an already running second instance selected the offer for review and did not act on the trade. The macOS scheme is declared in the app bundle; delivery through LaunchServices `open` remains unverified. The public marketplace has no access to this bridge.
-
-The default desktop config is **real** mode. On first launch the app creates `desktop-config.json` in its Electron user-data directory with owner-only permissions. A new profile generates and saves its participant ID and secret token before connecting, then registers automatically with a market that enables `MARKET_SELF_REGISTRATION=true` (enabled by the server deployment). The file is reused across restarts; existing profiles retain their original identity and credentials without migration. Configure the matching local wallet RPC URL/token separately; registration does not create or fund a wallet. Do not delete the config to reconnect. Environment variables `PALKA_OWNER_ID`, `PALKA_LOCAL_PORT`, `PALKA_MARKET_URL`, `PALKA_MARKET_TOKEN`, `PALKA_WALLET_RPC_URL`, `PALKA_WALLET_RPC_TOKEN`, `PALKA_WALLET_MODE`, `PALKA_PUBLIC_MARKET_URL`, and `PALKA_LOCAL_STATE_DIR` can override those values for a run. The repository provides the sidecar in `packages/wallet/server.py` and persistent host profiles through `scripts/demo/service-profile.py`. Configure an initialized real profile as described in [settlement.md](docs/settlement.md); desktop launch does not initialize or start that sidecar. Missing RPC or unsupported capabilities leave the wallet unavailable. Use the browser-local `npm run dev:mock` path only for explicit synthetic demonstrations.
-
-## Layout and integration
-
-- `apps/web`: public React/Vite landing page and read-only market.
-- `apps/market`: HTTP/WebSocket coordination, deterministic matcher and SQLite.
-- `apps/local-client`: local wallet UI and same-origin loopback API, QVAC, private policies, approval state and wallet RPC client.
-- `apps/desktop`: Electron main/preload bridge, local service launcher and macOS package script.
-- `packages/contracts`: protocol v1 runtime schemas, exact BigInt quantities and synthetic JSON fixtures.
-- `tools/telephony`, `tools/faceid`: retained earlier utilities, not used by the exchange or its local AI flow.
-
-The old Expo `front/` directory was removed at the user's request. Root `node_modules/` contains shared workspace dependencies and is ignored by Git.
-
-See [A handoff](docs/handoffs/a.md) for the complete adapter boundary and ports, [QVAC evidence](docs/handoffs/qvac-evidence.md) for actual inference checks, and [.env.example](.env.example) for local configuration names. The application does not automatically load the existing root `.env`. Never put private wallet state or pairing tokens in Git.
-
-To connect the native wallet, start its loopback sidecar and configure a local profile with `WALLET_RPC_URL` and `WALLET_RPC_TOKEN`; real mode is already the default. Match `LOCAL_OWNER_ID` to the sidecar owner. Its declared capabilities must support the requested direct/ring swap. The real HTTP sidecar implements the `rgb-cooperative-v1` codec; recorded API integration checks include actual on-chain receipts for both direct and ring swaps. The supported scope is regtest, precision-0 NIA assets, SegWit v0, with test-only deterministic blinding. Shared-contract inputs use separate RGB proof outputs; all participants must run the updated Python adapter and native binary (see [settlement scope](docs/settlement.md#shared-contract-inputs)). This is not production/mainnet readiness. Unsupported rings are never replaced with sequential transfers.
-
-## Checks
-
-Use Node 22.17 (`.nvmrc`), Python 3.12+ through uv, and Rust 1.94 through
-rustup (`rust-toolchain.toml` installs rustfmt and Clippy). The desktop launcher and wallet helpers run standard commands directly; RTK is not
-required for desktop setup or wallet operations. Install the development dependencies and
-materialize the pinned SDK once before running the complete check:
+For a visibly synthetic UI/matching demo:
 
 ```sh
 rtk proxy npm ci
+rtk proxy npm run dev:mock
+```
+
+Open `http://127.0.0.1:5173/market`. The runner prints private pairing-file locations for profiles on ports 4101–4103. Pair only on the local wallet page. **Mock wallets cannot sign or report blockchain settlement.** QVAC still uses real local inference.
+
+For the full development checks, install the prerequisites above and run:
+
+```sh
 rtk proxy uv sync --locked
 rtk proxy uv run --locked python scripts/demo/bootstrap-native.py
 rtk proxy npm run check
 ```
 
-The SDK bootstrap downloads source and adds the reviewed local Rust bridge; it
-does not initialize a wallet or transfer funds. If the bridge changes after a
-previous bootstrap, use `--refresh` as described in [settlement.md](docs/settlement.md).
+This runs formatting, linters, type checks, JS/Python/wallet/deployment tests and both UI builds. Live inference (`npm run smoke:qvac`) and real regtest transfers are separate explicit checks. Tools and lockfiles are pinned; private wallet state and generated SDK code stay outside formatting.
 
-Code style is enforced locally and by `.github/workflows/quality.yml` on pushes
-and pull requests:
+**Operator references:** [Public web/API deployment](deploy/README.md) · [HTTPS](deploy/HTTPS.md) · [Shared chain](deploy/NETWORK.md) · [Settlement protocol and reproduction](docs/settlement.md) · [Environment names](.env.example).
 
-The separate **Tests** workflow (`.github/workflows/tests.yml`) also runs on pushes,
-pull requests, and manual launches. Its JavaScript and Python jobs run independently
-of the native RGB/SDK build: application and wallet-adapter tests cover the client boundary,
-while Python tests cover wallet journals, protocol validation and crash recovery.
-These are isolated tests with synthetic fixtures; they do not perform real transfers
-or download QVAC model weights. The full quality workflow retains its existing tests.
+## MVP boundaries
 
-| Code                                                           | Linter                                                         | Formatter                         |
-| -------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------- |
-| TypeScript, TSX, JavaScript, MJS (including tests and scripts) | ESLint, typescript-eslint, React Hooks rules                   | Prettier                          |
-| CSS                                                            | Stylelint recommended rules                                    | Prettier                          |
-| Python wallet and demo scripts                                 | Ruff via uv                                                    | Ruff                              |
-| Native Rust and the local SDK bridge                           | Clippy for the application; bridge compiled as part of the SDK | rustfmt, including `extension.rs` |
-| JSON, YAML, HTML                                               | Prettier syntax validation                                     | Prettier                          |
+- **Regtest is the verified settlement network.** Current scope is precision-0 NIA assets, SegWit v0 and one active trade per wallet. Test blinding/nonces and fixed fee estimates need replacement before production; general reorg handling, fee bumping and a security audit remain open.
+- **Main and the N-party extension are separate.** The extension removes the fixed participant cap; real settlement is verified through four participants. Transaction size, fees, search budget and participant availability still bound practical rings. Integration with subsequent main-branch changes remains work.
+- **Users retain signing authority.** The model can misunderstand language; every draft needs review. Legacy private-policy features such as protected reserves and BTC-sale bans are currently disabled. Exact order terms, funding checks, fee caps and final approval remain enforced.
+- **Verification is scoped.** Service swaps, a user-operated desktop direct swap and shared-network onboarding have evidence. A full multi-computer AI-to-ring journey, large-ring settlement and production distribution are not yet established by those records. Mainnet signing requires explicit user approval.
 
-```sh
-rtk proxy npm run format       # Apply all formatters
-rtk proxy npm run format:check # Check formatting without rewriting files
-rtk proxy npm run lint         # Run all linters; warnings fail the check
-rtk proxy npm run lint:fix     # Apply JS/CSS/Python lint fixes, then run format
-rtk proxy npm run test:python  # Isolated wallet journal/protocol unit tests
-rtk proxy npm run test:wallet  # JavaScript wallet adapter unit tests
-```
+## Roadmap
 
-Individual `lint:js`, `lint:css`, `lint:python`, `lint:rust`, `format:web`,
-`format:python`, and `format:rust` commands are available for focused work.
-`.editorconfig` supplies basic editor defaults. Lockfiles pin the tools.
-Generated SDK/vendor code, build output, private state, retained ignored tools,
-and recorded settlement evidence are excluded from formatting. The checked-in
-SDK bridge itself is formatted; upstream dependency lints are not enforced.
-CSS specificity ordering is not enforced across independent components, and
-the existing local-wallet theme override block explicitly permits repeated
-selectors so its cascade is preserved.
-
-`npm run check` includes formatting, lint, typecheck, the JS/Python unit tests
-and both UI builds. It does not run live QVAC inference, Docker/regtest transfers
-or mainnet signing. Those integration checks remain explicit:
-
-```sh
-npm test
-npm run typecheck
-npm run build
-npm run smoke:qvac
-```
-
-`npm run build` builds both the public and local UIs. Tests cover exact amounts/limits, direct/ring/no-match, ownership, revisions, expiration, double reservation, event replay/access, local Origin/pairing, rejected AI JSON, stale final previews and recovery after uncertain signature delivery. The QVAC smoke performs actual local inference and prints only synthetic test output and runtime diagnostics. Wallet test doubles prove boundary behavior, not atomic RGB settlement.
-
-The root documentation, initial ideas and retained utilities predate the exchange implementation. A's workspace code was created during this development session on 17 October 2026; no Git history rewrite or deployment was performed.
+- [x] **Arbitrary-hop atomic rings:** remove the fixed two/three-party limit and render larger cycles in the wallet. Completed in `codex/n-party-swaps`; real four-party forward/reverse settlement and 1,000-party synthetic matching are documented in the [milestone report](docs/n-party-milestone.md). “Arbitrary” means no fixed software hop cap, not infinite transaction capacity.
+- [ ] **Full WDK top-ups:** make WDK funding a complete onboarding and replenishment flow instead of an optional path alongside direct faucet funding.
+- [ ] **A proper installable app:** bundle Python, the native RGB runtime and dependencies into signed releases, with updates that do not require users to rebuild from source.
+- [ ] **Testnet → mainnet:** validate public-network paths, implement production fees/privacy/recovery, audit signing and settlement, and retain explicit mainnet approval.
+- [ ] **Liquidity and distribution:** onboard asset issuers, wallet integrations and initial trading communities; seed compatible offers and measure additional execution unlocked by rings.
+- [ ] **Integrate and measure the extended MVP:** merge N-party work with current fixes, verify independent-computer journeys, and compare pair-only versus ring matching on reproducible order sets, reporting fills, fees, latency and failures.
