@@ -8,6 +8,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from wallet_lifecycle import run_native
+
 ROOT = Path(__file__).resolve().parents[2]
 STATE = Path(os.environ.get("RGB_DEMO_STATE", str(ROOT / "packages/wallet/state"))).resolve()
 if not STATE.is_relative_to(ROOT / "packages/wallet/state"):
@@ -39,12 +41,15 @@ def rpc(*args):
 
 
 def native(op, profile=None, **kwargs):
-    return json.loads(
-        call(
-            [str(BIN)],
-            input=json.dumps({"op": op, "stateDir": str(STATE), "profile": profile, **kwargs}),
-        )
+    result = run_native(
+        [str(BIN)],
+        input=json.dumps({"op": op, "stateDir": str(STATE), "profile": profile, **kwargs}),
+        text=True,
+        capture_output=True,
     )
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or "native operation failed")
+    return json.loads(result.stdout)
 
 
 def setup():

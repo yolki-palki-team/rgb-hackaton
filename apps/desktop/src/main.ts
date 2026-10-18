@@ -21,6 +21,7 @@ import {
   walletSidecarStarted,
 } from './security.ts';
 import { loadDesktopConfig, type DesktopConfig } from './config.ts';
+import { stopWalletServices } from './lifecycle.ts';
 import type { FundingStatus } from '../../local-client/src/funding-types.ts';
 
 const APP_URL = 'palka-app://local/';
@@ -56,6 +57,8 @@ let pendingOffer: string | null = null;
 let backendToken = '';
 let config: DesktopConfig;
 let startupStage = 'configuration';
+let shuttingDown = false;
+let shutdownComplete = false;
 let markBackendReady: () => void;
 const backendReady = new Promise<void>((resolveReady) => {
   markBackendReady = resolveReady;
@@ -77,6 +80,7 @@ async function startSharedWallet(): Promise<void> {
   walletSidecar = spawn(python, [helper, 'auto', '--desktop-data-dir', app.getPath('userData')], {
     cwd: appRoot,
     env: process.env,
+    detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let failed = false;
@@ -114,6 +118,7 @@ async function startSharedWallet(): Promise<void> {
   const deadline = Date.now() + 180_000;
   console.log('pálka · Connecting to the shared wallet and checking the indexer…');
   while (Date.now() < deadline) {
+    if (shuttingDown) throw new Error('Desktop is shutting down');
     if (runtimeLocked) {
       console.error(
         'pálka · RGB runtime lock remains from a previous run. Stop wallet processes and recover the stale lock; do not delete wallet data.',
@@ -248,6 +253,7 @@ function startBackend(): void {
   backend = spawn(nodeBin, ['--import', 'tsx', backendEntry], {
     cwd: appRoot,
     env: environment,
+    detached: true,
     stdio: 'ignore',
   });
   backend.on('error', () => {
@@ -373,16 +379,19 @@ else {
       });
       startupStage = 'loading the bundled wallet UI';
       await window.loadURL(APP_URL);
+      if (shuttingDown) return;
       window.show();
       // Show the startup skeleton while native services connect and index the wallet.
       // The bridge waits for this gate before making any local health requests.
       startupStage = 'connecting and funding the shared regtest wallet';
       await startSharedWallet();
+      if (shuttingDown) return;
       startupStage = 'starting the local wallet service';
       startBackend();
       markBackendReady();
     })
     .catch((error: unknown) => {
+      if (shuttingDown) return;
       console.error(`pálka · startup failed while ${startupStage}`);
       const reason =
         error instanceof Error &&
@@ -488,9 +497,18 @@ else {
     validatedSender(event);
     await shell.openExternal(config.publicMarketUrl);
   });
-  app.on('before-quit', () => {
-    backend?.kill('SIGTERM');
-    walletSidecar?.kill('SIGTERM');
+  app.on('before-quit', (event) => {
+    if (shutdownComplete) return;
+    event.preventDefault();
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log('pálka · Finishing local wallet operations before closing…');
+    void stopWalletServices(backend, walletSidecar).finally(() => {
+      shutdownComplete = true;
+      app.quit();
+    });
   });
+  process.on('SIGINT', () => app.quit());
+  process.on('SIGTERM', () => app.quit());
   app.on('window-all-closed', () => app.quit());
 }
