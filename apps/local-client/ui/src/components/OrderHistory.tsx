@@ -92,6 +92,7 @@ export function OrderHistoryRows({
           <li key={order.id}>
             <details
               className="wallet-history-row"
+              data-active={Boolean(running)}
               key={`${order.id}:${Boolean(running)}:${selected ? request?.version : 0}`}
               open={Boolean(running || selected)}
             >
@@ -104,6 +105,7 @@ export function OrderHistoryRows({
                   <span aria-label="for at least">→ ≥</span>
                   <strong>{formatAsset(order.receiveAsset, order.minReceiveAmount)}</strong>
                 </span>
+                {running && <StatusBadge className="history-active">Active</StatusBadge>}
                 <StatusBadge className="status-pill">
                   {current && liveTrade && !isFinishedTrade(liveTrade)
                     ? (tradeLabels[liveTrade.status as TradeStatus] ?? liveTrade.status)
@@ -262,6 +264,7 @@ export function OrderHistory({
         ) && (
           <details
             className="wallet-history-row live-trade-fallback"
+            data-active={!isFinishedTrade(liveTrade)}
             key={`${liveTrade.id}:${isFinishedTrade(liveTrade)}:${selection?.tradeId === liveTrade.id ? selection.version : 0}`}
             open={
               !isFinishedTrade(liveTrade) ||
@@ -273,6 +276,9 @@ export function OrderHistory({
                 ›
               </span>
               <strong>{liveTrade.status === 'CONFIRMED' ? 'Swap complete' : 'Current swap'}</strong>
+              {!isFinishedTrade(liveTrade) && (
+                <StatusBadge className="history-active">Active</StatusBadge>
+              )}
               <StatusBadge>
                 {tradeLabels[liveTrade.status as TradeStatus] ?? liveTrade.status}
               </StatusBadge>

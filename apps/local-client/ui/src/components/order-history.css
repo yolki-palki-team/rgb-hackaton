@@ -42,6 +42,51 @@
   overflow: hidden;
   background: #141414;
 }
+.wallet-history-row[data-active='true'] {
+  border-color: #3a6049;
+}
+.wallet-history-summary .history-active {
+  padding: 5px 10px;
+  border: 1px solid #4c855f;
+  border-radius: 999px;
+  background: #173325;
+  color: #a4e5b9;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.wallet-history-row[data-active='true'] .progress-steps li {
+  border-top-width: 3px;
+}
+.wallet-history-row[data-active='true'] .progress-steps li > span {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #3b3b3b;
+  border-radius: 50%;
+  font-size: 11px;
+}
+.wallet-history-row[data-active='true'] .progress-steps li.done {
+  color: #a1c9af;
+  border-color: #497f5c;
+}
+.wallet-history-row[data-active='true'] .progress-steps li.done > span {
+  border-color: #497f5c;
+  background: #193325;
+}
+.wallet-history-row[data-active='true'] .progress-steps li.current {
+  color: #b9f2ce;
+  border-color: #93e1b0;
+  font-weight: 600;
+}
+.wallet-history-row[data-active='true'] .progress-steps li.current > span {
+  border-color: #93e1b0;
+  background: #93e1b0;
+  color: #102b1b;
+  box-shadow: 0 0 0 4px #93e1b014;
+}
 .wallet-history-summary {
   display: flex;
   align-items: center;
