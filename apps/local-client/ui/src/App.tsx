@@ -14,6 +14,13 @@ import { AssetSelect } from './components/ui/asset-select';
 import { MatrixRain } from './components/ui/matrix-rain';
 import { MorphingSquare } from './components/ui/morphing-square';
 import { OrderHistory } from './components/OrderHistory';
+import {
+  completionKey,
+  dismissCompletion,
+  isCompletionDismissed,
+  isFinishedTrade,
+  sortBalances,
+} from './dashboard';
 import { initialDraft, sampleBalances, sampleOrders, sampleTrades } from './model';
 import type { Balance, Draft, Order, Trade, View } from './model';
 import { LocalClient, type ClientStatus } from './api';
@@ -34,6 +41,25 @@ const navItems: { key: View; label: string; subtitle: string; icon: string }[] =
 
 function App() {
   const [view, setView] = useState<View>('home');
+  const [assetsExpanded, setAssetsExpanded] = useState(false);
+  const [offerIndex, setOfferIndex] = useState(0);
+  const [dismissedCompletion, setDismissedCompletion] = useState<string | null>(null);
+  const [tradeRequest, setTradeRequest] = useState<{
+    tradeId?: string;
+    orderId?: string;
+    finished?: boolean;
+    version: number;
+  }>({ version: 0 });
+  const openTrade = (selection: { tradeId?: string; orderId?: string } = {}) => {
+    setTradeRequest((current) => ({
+      ...selection,
+      finished: Boolean(
+        selection.tradeId && trade?.id === selection.tradeId && isFinishedTrade(trade),
+      ),
+      version: current.version + 1,
+    }));
+    setView('trade');
+  };
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [pairToken, setPairToken] = useState('');
   const [client, setClient] = useState<LocalClient | null>(null);
@@ -56,9 +82,10 @@ function App() {
   const [goal, setGoal] = useState('');
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [draftOpen, setDraftOpen] = useState(false);
-  const [notice, setNotice] = useState<{ tone: 'error' | 'success' | 'info'; text: string } | null>(
-    null,
-  );
+  const [notice, setNotice] = useState<{
+    tone: 'error' | 'success' | 'info';
+    text: string;
+  } | null>(null);
   const [busy, setBusy] = useState<string | null>(window.palkaWallet ? 'connect' : null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const workflow = useRef(new TradeWorkflow());
@@ -82,8 +109,20 @@ function App() {
     !walletCached &&
     balances.length > 0;
   const connectionError = syncError ?? status?.walletError ?? walletError;
-  const visibleBalances = connected ? balances : samplePreview ? sampleBalances : [];
+  const visibleBalances = sortBalances(connected ? balances : samplePreview ? sampleBalances : []);
   const visibleOrders = connected ? orders : samplePreview ? sampleOrders : [];
+  const selectedOfferIndex = selectedOfferId
+    ? visibleOrders.findIndex((order) => order.id === selectedOfferId)
+    : -1;
+  const currentOfferIndex = Math.min(
+    selectedOfferIndex >= 0 ? selectedOfferIndex : offerIndex,
+    Math.max(0, visibleOrders.length - 1),
+  );
+  const runningTrade = trade && !isFinishedTrade(trade) ? trade : null;
+  const completedKey =
+    status && trade?.status === 'CONFIRMED' ? completionKey(status, trade.id) : null;
+  const showCompletion =
+    completedKey && dismissedCompletion !== completedKey && !isCompletionDismissed(completedKey);
   const loadHistory = useCallback(
     (cursor?: string) => {
       if (!client) throw new Error('Pair the wallet first.');
@@ -498,6 +537,260 @@ function App() {
 
   const shownTrade = trade ?? (!connected && samplePreview ? sampleTrades[sampleTradeKind] : null);
 
+  const liveTradeContent = (
+    <>
+      {trade &&
+        status &&
+        !(trade.kind === 'ring' ? status.wallet?.ringSwap : status.wallet?.directSwap) && (
+          <div className="capability-warning" role="status">
+            <span>
+              {trade.kind === 'ring' ? 'Three-party atomic swap' : 'Direct atomic swap'} is not
+              supported by this wallet.{' '}
+              {status.wallet?.reason ?? status.walletError ?? 'Signing unavailable.'}
+            </span>
+          </div>
+        )}
+      {!shownTrade && (
+        <div className="empty-state" role="status">
+          {connected
+            ? syncError
+              ? 'Trade data unavailable. Check the local backend.'
+              : 'No trade plan yet. A matched order will appear here.'
+            : 'No wallet connected. Pair the local backend to view trades.'}
+        </div>
+      )}
+      {trade && connected && (
+        <section className="swap-progress" aria-label="Swap progress" aria-live="polite">
+          <div className="progress-heading">
+            {tradeProgress(trade, busy === 'approve').waiting &&
+              !workflowPaused &&
+              !syncError &&
+              client?.supportsTrade(trade) && (
+                <MorphingSquare
+                  className="h-6 w-6"
+                  wrapperClassName="mt-1 shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+            <div>
+              <h2>
+                {workflowPaused
+                  ? 'Your swap needs attention'
+                  : tradeProgress(trade, busy === 'approve').title}
+              </h2>
+              <p>
+                {workflowPaused
+                  ? 'We couldn’t finish this step. Your approval and transaction history are saved. Check the details, then try again.'
+                  : tradeProgress(trade, busy === 'approve').detail}
+              </p>
+            </div>
+          </div>
+          <ol className="progress-steps">
+            {['Prepare', 'Your approval', 'All wallets', 'Confirmation'].map((label, index) => (
+              <li
+                key={label}
+                className={
+                  tradeProgress(trade, busy === 'approve').step > index
+                    ? 'done'
+                    : tradeProgress(trade, busy === 'approve').step === index
+                      ? 'current'
+                      : ''
+                }
+                aria-current={
+                  tradeProgress(trade, busy === 'approve').step === index ? 'step' : undefined
+                }
+              >
+                <span>
+                  {tradeProgress(trade, busy === 'approve').step > index ? '✓' : index + 1}
+                </span>
+                {label}
+              </li>
+            ))}
+          </ol>
+          {workflowError && (
+            <details className="technical-details">
+              <summary>{workflowPaused ? 'What happened?' : 'Reconnecting automatically…'}</summary>
+              <p>{workflowError}</p>
+            </details>
+          )}
+          {workflowPaused && (
+            <Button
+              className="outline-button"
+              disabled={workflowRunning || busy !== null}
+              onClick={() => {
+                workflow.current.retry();
+                setWorkflowPaused(false);
+                setWorkflowError(null);
+              }}
+            >
+              Try again
+            </Button>
+          )}
+        </section>
+      )}
+      {shownTrade && (
+        <div
+          className={`trade-layout ${isFinishedTrade(shownTrade) ? 'trade-layout-finished' : ''}`}
+        >
+          <Panel className="panel trade-panel">
+            <div className="panel-heading trade-head">
+              <div>
+                <span className="eyebrow">
+                  {shownTrade.kind === 'direct' ? 'TWO PARTICIPANTS' : 'THREE PARTICIPANTS · RING'}
+                </span>
+                <h2>{shownTrade.kind === 'direct' ? 'Direct swap' : 'Ring swap'}</h2>
+                <details className="technical-details">
+                  <summary>Transaction details</summary>
+                  <p>Plan {shownTrade.id}</p>
+                  {shownTrade.txid && (
+                    <p className="reason">
+                      Bitcoin transaction: {shownTrade.txid}
+                      <br />
+                      Bitcoin {shownTrade.chainConfirmed ? 'confirmed' : 'unconfirmed'} · RGB{' '}
+                      {shownTrade.rgbAccepted ? 'accepted' : 'not accepted'}
+                    </p>
+                  )}
+                </details>
+              </div>
+              <StatusBadge className={`status-pill ${trade ? 'open' : 'sample'}`}>
+                {trade ? statusLabel(shownTrade.status) : shownTrade.status}
+              </StatusBadge>
+            </div>
+            <div className="flow-caption">TRADE PARTICIPANTS</div>
+            <div className="trade-flow" data-trade-kind={shownTrade.kind}>
+              {shownTrade.participants.map((participant, index) => (
+                <div
+                  className={`participant-card ${participant.mine ? 'mine' : ''}`}
+                  key={`${participant.name}-${index}`}
+                >
+                  <div className="participant-avatar">{String.fromCharCode(65 + index)}</div>
+                  <div>
+                    <strong>{participant.name}</strong>
+                    <span>Gives {participant.give}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="leg-list">
+              {shownTrade.legs.map((leg, index) => (
+                <div key={`${leg.from}-${leg.to}-${index}`}>
+                  <strong>{leg.from}</strong>
+                  <Icon name="arrow" size={15} />
+                  <strong>{leg.to}</strong>
+                  <span>{leg.amount}</span>
+                </div>
+              ))}
+            </div>
+            <div className="trade-legend">
+              {shownTrade.kind === 'ring'
+                ? 'All three transfers must be in one atomic package. Sequential transfers are not an atomic swap.'
+                : 'Both wallets must validate the final package before signing.'}
+            </div>
+            <div className="trade-summary">
+              <div>
+                <span>I give</span>
+                <strong>{shownTrade.participants.find((p) => p.mine)?.give ?? '—'}</strong>
+              </div>
+              <div>
+                <span>I receive</span>
+                <strong>{shownTrade.participants.find((p) => p.mine)?.receive ?? '—'}</strong>
+              </div>
+              <div>
+                <span>My fee</span>
+                <strong>{shownTrade.feeSats} sats</strong>
+              </div>
+            </div>
+            {shownTrade.reason && <div className="reason">{shownTrade.reason}</div>}
+          </Panel>
+          {(!shownTrade || !isFinishedTrade(shownTrade)) && (
+            <aside className="market-side">
+              <Panel className="panel approval-panel">
+                <span className="eyebrow">YOUR DECISION</span>
+                <h3>
+                  {trade?.status === 'CONFIRMED'
+                    ? 'All done'
+                    : trade?.signingAuthorized
+                      ? 'You’ve approved'
+                      : 'Review your swap'}
+                </h3>
+                {trade?.validatedPreview ? (
+                  <>
+                    <p>The local wallet validated the final package. Review exact changes:</p>
+                    <dl>
+                      <div>
+                        <dt>Give</dt>
+                        <dd>{trade.validatedPreview.give}</dd>
+                      </div>
+                      <div>
+                        <dt>Receive</dt>
+                        <dd>{trade.validatedPreview.receive}</dd>
+                      </div>
+                      <div>
+                        <dt>Fee</dt>
+                        <dd>{trade.validatedPreview.feeSats} sats</dd>
+                      </div>
+                      <div>
+                        <dt>BTC change</dt>
+                        <dd>{trade.validatedPreview.btcDeltaSats} sats</dd>
+                      </div>
+                    </dl>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      {trade
+                        ? tradeProgress(trade, busy === 'approve').detail
+                        : 'This is a sample plan. Connect your wallet to start a real swap.'}
+                    </p>
+                    {(isMock || !trade || trade.status === 'UNSUPPORTED') && (
+                      <Button className="primary-button full" disabled>
+                        Signing unavailable
+                      </Button>
+                    )}
+                  </>
+                )}
+                {(trade?.validatedPreview || busy === 'approve') && (
+                  <Button
+                    className="primary-button full"
+                    onClick={() => void approve()}
+                    disabled={
+                      busy !== null ||
+                      workflowRunning ||
+                      Boolean(syncError) ||
+                      !trade?.validatedPreview ||
+                      !client?.supportsTrade(trade)
+                    }
+                    loading={busy === 'approve'}
+                    loadingText="Signing transaction…"
+                  >
+                    Review & sign <Icon name="arrow" size={16} />
+                  </Button>
+                )}
+                {trade &&
+                  !trade.recoveryRequired &&
+                  ['RESERVED', 'PREPARING', 'AWAITING_APPROVAL'].includes(trade.status) && (
+                    <Button
+                      className="text-button danger reject-button"
+                      type="button"
+                      onClick={() => void reject()}
+                      loading={busy === 'reject'}
+                      loadingText="Cancelling swap…"
+                      disabled={busy !== null || workflowRunning}
+                    >
+                      Cancel swap
+                    </Button>
+                  )}
+                <div className="approval-foot">
+                  Your wallet checks the exact amounts again before signing.
+                </div>
+              </Panel>
+            </aside>
+          )}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="app-shell">
       {!desktop && (
@@ -514,8 +807,8 @@ function App() {
       )}
       <div className="main-area">
         <header className="topbar">
-          <button className="site-brand" onClick={() => setView('home')} aria-label="pálka. home">
-            p<span className="brand-stress">a</span>lka.
+          <button className="site-brand" onClick={() => setView('home')} aria-label="pálka home">
+            p<span className="brand-stress">a</span>lka
           </button>
           <nav className="site-nav" aria-label="Wallet navigation">
             {navItems.map((item) => (
@@ -590,7 +883,7 @@ function App() {
               )}
             </div>
           )}
-          {notice && (
+          {notice && view !== 'topup' && (
             <div className={`notice ${notice.tone}`} role="alert">
               <span>{notice.text}</span>
               <Button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
@@ -599,28 +892,33 @@ function App() {
             </div>
           )}
 
-          {trade &&
-            view !== 'trade' &&
-            !['REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
-              trade.status,
-            ) && (
-              <button className="trade-notification" onClick={() => setView('trade')}>
-                <span>
-                  <strong>{tradeProgress(trade, busy === 'approve').title}</strong>
-                  <small>
-                    {trade.kind === 'ring' ? 'Three-party ring' : 'Direct swap'} · View your swap
-                  </small>
-                </span>
-                {tradeProgress(trade, busy === 'approve').waiting &&
-                !workflowPaused &&
-                !syncError &&
-                client?.supportsTrade(trade) ? (
-                  <MorphingSquare className="h-5 w-5 bg-current" aria-hidden="true" />
-                ) : (
-                  <Icon name="arrow" size={20} />
-                )}
-              </button>
-            )}
+          {view === 'home' && trade && showCompletion && (
+            <div className="completion-notice" role="status">
+              <span className="completion-check" aria-hidden="true">
+                ✓
+              </span>
+              <strong>Swap complete</strong>
+              <Button className="completion-open" onClick={() => openTrade({ tradeId: trade.id })}>
+                View swap <Icon name="arrow" size={17} />
+              </Button>
+              <Button
+                className="completion-dismiss"
+                aria-label="Dismiss completed swap"
+                onClick={() => {
+                  if (!completedKey) return;
+                  const saved = dismissCompletion(completedKey);
+                  setDismissedCompletion(completedKey);
+                  if (!saved)
+                    setNotice({
+                      tone: 'info',
+                      text: 'Hidden for this session. Local storage is unavailable, so this notice may return after reopening.',
+                    });
+                }}
+              >
+                <Icon name="close" size={16} />
+              </Button>
+            </div>
+          )}
           {initialLoading && (
             <>
               {busy !== 'connect' && (
@@ -631,73 +929,6 @@ function App() {
           )}
           {view === 'home' && !initialLoading && (
             <>
-              <section className="goal-section" aria-labelledby="goal-heading">
-                <div className="composer-heading">
-                  <h1 id="goal-heading">What would you like to swap?</h1>
-                  <StatusBadge className="ai-status">
-                    {status?.qvacState === 'loading' && (
-                      <MorphingSquare className="h-3 w-3 bg-current" aria-hidden="true" />
-                    )}
-                    QVAC ·{' '}
-                    {status?.qvacAvailable
-                      ? 'LOCAL'
-                      : status?.qvacState === 'loading'
-                        ? 'LOADING'
-                        : connected
-                          ? 'UNAVAILABLE'
-                          : 'OFFLINE'}
-                  </StatusBadge>
-                </div>
-                {connected && !status?.qvacAvailable && (
-                  <p className="qvac-reason" role="status">
-                    {status?.qvacReason ??
-                      'Local model unavailable. Retry the goal or fill in the terms manually.'}
-                  </p>
-                )}
-                <ChatInput
-                  value={goal}
-                  onChange={(event) => setGoal(event.target.value)}
-                  onSubmit={() => void interpret()}
-                  loading={busy === 'interpret'}
-                  disabled={busy !== null || !connected}
-                  rows={2}
-                >
-                  <ChatInputTextArea
-                    id="goal"
-                    aria-label="Describe your swap and limits"
-                    aria-describedby="goal-help"
-                    examples={goalExamples}
-                  />
-                  <div className="composer-actions">
-                    <Button
-                      className="text-button"
-                      disabled={busy !== null}
-                      onClick={() => {
-                        if (connected || samplePreview) {
-                          setDraft({
-                            ...initialDraft,
-                            giveAsset: visibleBalances[0]?.code ?? 'X',
-                            receiveAsset: visibleBalances[1]?.code ?? 'DUSD',
-                          });
-                          setDraftOpen(true);
-                        } else
-                          setNotice({
-                            tone: 'info',
-                            text: 'Pair a local wallet before creating an order.',
-                          });
-                      }}
-                    >
-                      Fill in manually
-                    </Button>
-                    <ChatInputSubmit />
-                  </div>
-                </ChatInput>
-                <p className="composer-help" id="goal-help">
-                  {busy === 'interpret'
-                    ? 'QVAC is preparing your order locally. First use may take longer while the model loads.'
-                    : 'Private on this device. Review terms before publishing; signing needs your approval.'}
-                </p>
-              </section>
               {selectedOfferId && (
                 <div className="selected-offer" role="status">
                   <strong>Selected public offer</strong>
@@ -709,117 +940,74 @@ function App() {
                   </p>
                 </div>
               )}
-              <div className="overview-layout">
-                <div className="overview-orders">
-                  <Panel className="panel orderbook">
-                    <div className="panel-heading">
-                      <div>
-                        <span className="eyebrow">OPEN OFFERS</span>
-                        <h2>Order book</h2>
-                      </div>
-                      <StatusBadge className="count-pill">{visibleOrders.length}</StatusBadge>
-                    </div>
-                    <div className="order-list">
-                      {visibleOrders.length ? (
-                        visibleOrders.map((order) => (
-                          <article
-                            key={order.id}
-                            className={`offer-card ${selectedOfferId === order.id ? 'selected-order' : ''}`}
-                          >
-                            <div className="offer-meta">
-                              <span>{order.owner}</span>
-                              <StatusBadge className="status-pill">{order.status}</StatusBadge>
-                            </div>
-                            <div className="offer-amounts">
-                              <div>
-                                <small>{order.fillSummary ? 'Total offer' : 'Gives'}</small>
-                                <strong>
-                                  {order.giveAmount}{' '}
-                                  {order.giveAsset !== 'BTC' ? order.giveAsset : ''}
-                                </strong>
-                              </div>
-                              <Icon name="arrow" size={20} />
-                              <div>
-                                <small>
-                                  {order.fillSummary
-                                    ? 'Total receive at least'
-                                    : 'Receives at least'}
-                                </small>
-                                <strong>
-                                  {order.minReceiveAmount}{' '}
-                                  {order.receiveAsset !== 'BTC' &&
-                                  !order.minReceiveAmount.includes(order.receiveAsset)
-                                    ? order.receiveAsset
-                                    : ''}
-                                </strong>
-                              </div>
-                            </div>
-                            {order.fillSummary && (
-                              <p className="order-fill-progress">
-                                {order.fillSummary}
-                                <br />
-                                Minimum fill {order.minimumFill}
-                              </p>
-                            )}
-                          </article>
-                        ))
-                      ) : connected && marketLoading ? (
-                        <MorphingSquare
-                          message="Loading orders…"
-                          wrapperClassName="empty-state py-8"
-                        />
-                      ) : (
-                        <p className="empty-state">
-                          {connected
-                            ? 'No open orders yet. Your next swap starts with an order.'
-                            : 'Connect your wallet to see open orders.'}
-                        </p>
+              <div className="dashboard-grid">
+                <section className="ui-panel panel goal-section" aria-labelledby="goal-heading">
+                  <div className="composer-heading">
+                    <h1 id="goal-heading">What would you like to swap?</h1>
+                    <StatusBadge className="ai-status">
+                      {status?.qvacState === 'loading' && (
+                        <MorphingSquare className="h-3 w-3 bg-current" aria-hidden="true" />
                       )}
-                    </div>
-                    <div className="panel-footer">
-                      {connected
-                        ? 'Public orders are visible to the market. Private instructions stay local.'
-                        : samplePreview
-                          ? 'Synthetic preview only. Pair the wallet for live orders.'
-                          : 'Local backend unavailable. No orders loaded.'}
-                    </div>
-                  </Panel>
-                  {myOrder && (
-                    <Panel className="panel my-order">
-                      <span className="eyebrow">MY ORDER</span>
-                      <h3>
-                        {myOrder.giveAmount} {myOrder.giveAsset} <span>→</span>{' '}
-                        {myOrder.minReceiveAmount} {myOrder.receiveAsset}
-                      </h3>
-                      <p>
-                        Status: {myOrder.status}. Publishing an order does not authorize signing.
-                      </p>
-                      {myOrder.fillSummary && (
-                        <p className="order-fill-progress">{myOrder.fillSummary}</p>
-                      )}
-                      {['Open', 'Partially filled'].includes(myOrder.status) ? (
-                        <Button
-                          type="button"
-                          className="outline-button"
-                          onClick={() => void cancelOrder()}
-                          disabled={busy !== null || !connected || Boolean(syncError)}
-                          loading={busy === 'cancel'}
-                          loadingText="Canceling order…"
-                        >
-                          {myOrder.fillSummary ? 'Cancel remaining order' : 'Cancel order'}
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          className="outline-button"
-                          onClick={() => setView('trade')}
-                        >
-                          View trade <Icon name="arrow" size={15} />
-                        </Button>
-                      )}
-                    </Panel>
+                      QVAC ·{' '}
+                      {status?.qvacAvailable
+                        ? 'LOCAL'
+                        : status?.qvacState === 'loading'
+                          ? 'LOADING'
+                          : connected
+                            ? 'UNAVAILABLE'
+                            : 'OFFLINE'}
+                    </StatusBadge>
+                  </div>
+                  {connected && !status?.qvacAvailable && (
+                    <p className="qvac-reason" role="status">
+                      {status?.qvacReason ??
+                        'Local model unavailable. Retry the goal or fill in the terms manually.'}
+                    </p>
                   )}
-                </div>
+                  <ChatInput
+                    value={goal}
+                    onChange={(event) => setGoal(event.target.value)}
+                    onSubmit={() => void interpret()}
+                    loading={busy === 'interpret'}
+                    disabled={busy !== null || !connected}
+                    rows={2}
+                  >
+                    <ChatInputTextArea
+                      id="goal"
+                      aria-label="Describe your swap and limits"
+                      aria-describedby="goal-help"
+                      examples={goalExamples}
+                    />
+                    <div className="composer-actions">
+                      <Button
+                        className="text-button"
+                        disabled={busy !== null}
+                        onClick={() => {
+                          if (connected || samplePreview) {
+                            setDraft({
+                              ...initialDraft,
+                              giveAsset: visibleBalances[0]?.code ?? 'X',
+                              receiveAsset: visibleBalances[1]?.code ?? 'DUSD',
+                            });
+                            setDraftOpen(true);
+                          } else
+                            setNotice({
+                              tone: 'info',
+                              text: 'Pair a local wallet before creating an order.',
+                            });
+                        }}
+                      >
+                        Fill in manually
+                      </Button>
+                      <ChatInputSubmit />
+                    </div>
+                  </ChatInput>
+                  <p className="composer-help" id="goal-help">
+                    {busy === 'interpret'
+                      ? 'QVAC is preparing your order locally. First use may take longer while the model loads.'
+                      : 'Private on this device. Review terms before publishing; signing needs your approval.'}
+                  </p>
+                </section>
                 <section className="overview-assets" aria-labelledby="balance-heading">
                   <Panel className="panel">
                     <div className="panel-heading">
@@ -849,9 +1037,11 @@ function App() {
                     </div>
                     {visibleBalances.length ? (
                       <ul className="asset-list" aria-label="Wallet balances">
-                        {visibleBalances.map((balance) => (
-                          <AssetRow key={balance.code} balance={balance} />
-                        ))}
+                        {(assetsExpanded ? visibleBalances : visibleBalances.slice(0, 3)).map(
+                          (balance) => (
+                            <AssetRow key={balance.code} balance={balance} />
+                          ),
+                        )}
                       </ul>
                     ) : connected && walletRefreshing ? (
                       <MorphingSquare
@@ -879,6 +1069,20 @@ function App() {
                           : 'No wallet connected. Pair the local backend to load balances.'}
                       </p>
                     )}
+                    {visibleBalances.length > 3 && (
+                      <Button
+                        className="assets-toggle"
+                        aria-expanded={assetsExpanded}
+                        onClick={() => setAssetsExpanded((current) => !current)}
+                      >
+                        {assetsExpanded
+                          ? 'Show fewer assets'
+                          : `Show all ${visibleBalances.length} assets`}
+                        <span className={assetsExpanded ? 'chevron-up' : 'chevron-down'}>
+                          <Icon name="chevron" size={15} />
+                        </span>
+                      </Button>
+                    )}
                     {walletUpdatedAt && (
                       <p className="asset-disclaimer" role="status">
                         Updated{' '}
@@ -890,13 +1094,181 @@ function App() {
                     )}
                   </Panel>
                 </section>
+                <Panel className="panel orderbook">
+                  <div className="panel-heading">
+                    <div>
+                      <span className="eyebrow">OPEN OFFERS</span>
+                      <h2>Open orders</h2>
+                    </div>
+                    <StatusBadge className="count-pill">{visibleOrders.length}</StatusBadge>
+                  </div>
+                  <div className="order-list">
+                    {visibleOrders.length ? (
+                      visibleOrders.slice(currentOfferIndex, currentOfferIndex + 1).map((order) => (
+                        <article
+                          key={order.id}
+                          className={`offer-card ${selectedOfferId === order.id ? 'selected-order' : ''}`}
+                        >
+                          <div className="offer-meta">
+                            <span>{order.owner}</span>
+                            <StatusBadge className="status-pill">{order.status}</StatusBadge>
+                          </div>
+                          <div className="offer-amounts">
+                            <div>
+                              <small>{order.fillSummary ? 'Total offer' : 'Gives'}</small>
+                              <strong>
+                                {order.giveAmount}{' '}
+                                {order.giveAsset !== 'BTC' ? order.giveAsset : ''}
+                              </strong>
+                            </div>
+                            <Icon name="arrow" size={20} />
+                            <div>
+                              <small>
+                                {order.fillSummary ? 'Total receive at least' : 'Receives at least'}
+                              </small>
+                              <strong>
+                                {order.minReceiveAmount}{' '}
+                                {order.receiveAsset !== 'BTC' &&
+                                !order.minReceiveAmount.includes(order.receiveAsset)
+                                  ? order.receiveAsset
+                                  : ''}
+                              </strong>
+                            </div>
+                          </div>
+                          {order.fillSummary && (
+                            <p className="order-fill-progress">
+                              {order.fillSummary}
+                              <br />
+                              Minimum fill {order.minimumFill}
+                            </p>
+                          )}
+                        </article>
+                      ))
+                    ) : connected && marketLoading ? (
+                      <MorphingSquare
+                        message="Loading orders…"
+                        wrapperClassName="empty-state py-8"
+                      />
+                    ) : (
+                      <p className="empty-state">
+                        {connected
+                          ? 'No open orders yet. Your next swap starts with an order.'
+                          : 'Connect your wallet to see open orders.'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="order-pagination" aria-label="Order book pages">
+                    <span>
+                      {visibleOrders.length
+                        ? `${currentOfferIndex + 1} of ${visibleOrders.length}`
+                        : 'No open offers'}
+                    </span>
+                    <div>
+                      <Button
+                        aria-label="Previous order"
+                        disabled={currentOfferIndex === 0}
+                        onClick={() => {
+                          setSelectedOfferId(null);
+                          setOfferIndex(currentOfferIndex - 1);
+                        }}
+                      >
+                        <span className="previous-arrow">
+                          <Icon name="chevron" size={17} />
+                        </span>
+                      </Button>
+                      <Button
+                        aria-label="Next order"
+                        disabled={currentOfferIndex >= visibleOrders.length - 1}
+                        onClick={() => {
+                          setSelectedOfferId(null);
+                          setOfferIndex(currentOfferIndex + 1);
+                        }}
+                      >
+                        <Icon name="chevron" size={17} />
+                      </Button>
+                    </div>
+                  </div>
+                </Panel>
+                <Panel className="panel running-orders">
+                  <div className="panel-heading">
+                    <div>
+                      <span className="eyebrow">IN PROGRESS</span>
+                      <h2>My running orders</h2>
+                    </div>
+                    <StatusBadge className="count-pill">
+                      {myOrder || runningTrade ? 1 : 0}
+                    </StatusBadge>
+                  </div>
+                  <div className="order-list">
+                    {myOrder || runningTrade ? (
+                      <article className="offer-card running-order">
+                        <div className="offer-meta">
+                          <span>My wallet</span>
+                          <StatusBadge className="status-pill">
+                            {runningTrade ? statusLabel(runningTrade.status) : myOrder?.status}
+                          </StatusBadge>
+                        </div>
+                        <div className="offer-amounts">
+                          <div>
+                            <small>Giving</small>
+                            <strong>
+                              {runningTrade?.participants.find((p) => p.mine)?.give ??
+                                `${myOrder?.giveAmount} ${myOrder?.giveAsset === 'BTC' ? '' : myOrder?.giveAsset}`}
+                            </strong>
+                          </div>
+                          <Icon name="arrow" size={20} />
+                          <div>
+                            <small>Receiving</small>
+                            <strong>
+                              {runningTrade?.participants.find((p) => p.mine)?.receive ??
+                                `${myOrder?.minReceiveAmount} ${myOrder?.receiveAsset === 'BTC' ? '' : myOrder?.receiveAsset}`}
+                            </strong>
+                          </div>
+                        </div>
+                        {myOrder?.fillSummary && (
+                          <p className="order-fill-progress">{myOrder.fillSummary}</p>
+                        )}
+                      </article>
+                    ) : (
+                      <div className="empty-state">
+                        <Icon name="route" size={26} />
+                        <strong>No running orders</strong>
+                        <span>Your next match will appear here.</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="order-pagination running-actions">
+                    {myOrder && ['Open', 'Partially filled'].includes(myOrder.status) && (
+                      <Button
+                        className="text-button"
+                        onClick={() => void cancelOrder()}
+                        disabled={busy !== null || !connected || Boolean(syncError)}
+                        loading={busy === 'cancel'}
+                        loadingText="Cancelling…"
+                      >
+                        Cancel order
+                      </Button>
+                    )}
+                    <Button
+                      className="text-button"
+                      onClick={() =>
+                        openTrade(
+                          runningTrade
+                            ? { tradeId: runningTrade.id }
+                            : myOrder
+                              ? { orderId: myOrder.id }
+                              : {},
+                        )
+                      }
+                    >
+                      {myOrder || runningTrade ? 'Open trade' : 'View past orders'}{' '}
+                      <Icon name="arrow" size={16} />
+                    </Button>
+                  </div>
+                </Panel>
               </div>
             </>
           )}
-
-          <div hidden={view !== 'home'}>
-            {connected && status && <OrderHistory key={status.ownerId} loadPage={loadHistory} />}
-          </div>
 
           {/* Keep funding state mounted so switching tabs cannot reset an approval attempt. */}
           <div hidden={view !== 'topup' || initialLoading}>
@@ -907,288 +1279,43 @@ function App() {
             />
           </div>
 
-          {view === 'trade' && !initialLoading && (
-            <>
-              {!connected && samplePreview && (
-                <div className="sample-switch" role="group" aria-label="Sample trade type">
-                  <span>Sample plan:</span>
-                  <Button
-                    className={sampleTradeKind === 'direct' ? 'selected' : ''}
-                    type="button"
-                    onClick={() => setSampleTradeKind('direct')}
-                  >
-                    Direct swap
-                  </Button>
-                  <Button
-                    className={sampleTradeKind === 'ring' ? 'selected' : ''}
-                    type="button"
-                    onClick={() => setSampleTradeKind('ring')}
-                  >
-                    Three-party ring
-                  </Button>
-                </div>
-              )}
-              {trade &&
-                status &&
-                !(trade.kind === 'ring' ? status.wallet?.ringSwap : status.wallet?.directSwap) && (
-                  <div className="capability-warning" role="status">
-                    <span>
-                      {trade.kind === 'ring' ? 'Three-party atomic swap' : 'Direct atomic swap'} is
-                      not supported by this wallet.{' '}
-                      {status.wallet?.reason ?? status.walletError ?? 'Signing unavailable.'}
-                    </span>
-                  </div>
-                )}
-              {!shownTrade && (
-                <div className="empty-state" role="status">
-                  {connected
-                    ? syncError
-                      ? 'Trade data unavailable. Check the local backend.'
-                      : 'No trade plan yet. A matched order will appear here.'
-                    : 'No wallet connected. Pair the local backend to view trades.'}
-                </div>
-              )}
-              {trade && connected && (
-                <section className="swap-progress" aria-label="Swap progress" aria-live="polite">
-                  <div className="progress-heading">
-                    {tradeProgress(trade, busy === 'approve').waiting &&
-                      !workflowPaused &&
-                      !syncError &&
-                      client?.supportsTrade(trade) && (
-                        <MorphingSquare
-                          className="h-6 w-6"
-                          wrapperClassName="mt-1 shrink-0"
-                          aria-hidden="true"
-                        />
-                      )}
-                    <div>
-                      <h2>
-                        {workflowPaused
-                          ? 'Your swap needs attention'
-                          : tradeProgress(trade, busy === 'approve').title}
-                      </h2>
-                      <p>
-                        {workflowPaused
-                          ? 'We couldn’t finish this step. Your approval and transaction history are saved. Check the details, then try again.'
-                          : tradeProgress(trade, busy === 'approve').detail}
-                      </p>
-                    </div>
-                  </div>
-                  <ol className="progress-steps">
-                    {['Prepare', 'Your approval', 'All wallets', 'Confirmation'].map(
-                      (label, index) => (
-                        <li
-                          key={label}
-                          className={
-                            tradeProgress(trade, busy === 'approve').step > index
-                              ? 'done'
-                              : tradeProgress(trade, busy === 'approve').step === index
-                                ? 'current'
-                                : ''
-                          }
-                          aria-current={
-                            tradeProgress(trade, busy === 'approve').step === index
-                              ? 'step'
-                              : undefined
-                          }
-                        >
-                          <span>
-                            {tradeProgress(trade, busy === 'approve').step > index
-                              ? '✓'
-                              : index + 1}
-                          </span>
-                          {label}
-                        </li>
-                      ),
-                    )}
-                  </ol>
-                  {workflowError && (
-                    <details className="technical-details">
-                      <summary>
-                        {workflowPaused ? 'What happened?' : 'Reconnecting automatically…'}
-                      </summary>
-                      <p>{workflowError}</p>
-                    </details>
-                  )}
-                  {workflowPaused && (
-                    <Button
-                      className="outline-button"
-                      disabled={workflowRunning || busy !== null}
-                      onClick={() => {
-                        workflow.current.retry();
-                        setWorkflowPaused(false);
-                        setWorkflowError(null);
-                      }}
-                    >
-                      Try again
-                    </Button>
-                  )}
-                </section>
-              )}
-              {shownTrade && (
-                <div className="trade-layout">
-                  <Panel className="panel trade-panel">
-                    <div className="panel-heading trade-head">
-                      <div>
-                        <span className="eyebrow">
-                          {shownTrade.kind === 'direct'
-                            ? 'TWO PARTICIPANTS'
-                            : 'THREE PARTICIPANTS · RING'}
-                        </span>
-                        <h2>{shownTrade.kind === 'direct' ? 'Direct swap' : 'Ring swap'}</h2>
-                        <details className="technical-details">
-                          <summary>Transaction details</summary>
-                          <p>Plan {shownTrade.id}</p>
-                          {shownTrade.txid && (
-                            <p className="reason">
-                              Bitcoin transaction: {shownTrade.txid}
-                              <br />
-                              Bitcoin {shownTrade.chainConfirmed ? 'confirmed' : 'unconfirmed'} ·
-                              RGB {shownTrade.rgbAccepted ? 'accepted' : 'not accepted'}
-                            </p>
-                          )}
-                        </details>
-                      </div>
-                      <StatusBadge className={`status-pill ${trade ? 'open' : 'sample'}`}>
-                        {trade ? statusLabel(shownTrade.status) : shownTrade.status}
-                      </StatusBadge>
-                    </div>
-                    <div className="flow-caption">TRADE PARTICIPANTS</div>
-                    <div className="trade-flow" data-trade-kind={shownTrade.kind}>
-                      {shownTrade.participants.map((participant, index) => (
-                        <div
-                          className={`participant-card ${participant.mine ? 'mine' : ''}`}
-                          key={`${participant.name}-${index}`}
-                        >
-                          <div className="participant-avatar">
-                            {String.fromCharCode(65 + index)}
-                          </div>
-                          <div>
-                            <strong>{participant.name}</strong>
-                            <span>Gives {participant.give}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="leg-list">
-                      {shownTrade.legs.map((leg, index) => (
-                        <div key={`${leg.from}-${leg.to}-${index}`}>
-                          <strong>{leg.from}</strong>
-                          <Icon name="arrow" size={15} />
-                          <strong>{leg.to}</strong>
-                          <span>{leg.amount}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="trade-legend">
-                      {shownTrade.kind === 'ring'
-                        ? 'All three transfers must be in one atomic package. Sequential transfers are not an atomic swap.'
-                        : 'Both wallets must validate the final package before signing.'}
-                    </div>
-                    <div className="trade-summary">
-                      <div>
-                        <span>I give</span>
-                        <strong>{shownTrade.participants.find((p) => p.mine)?.give ?? '—'}</strong>
-                      </div>
-                      <div>
-                        <span>I receive</span>
-                        <strong>
-                          {shownTrade.participants.find((p) => p.mine)?.receive ?? '—'}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>My fee</span>
-                        <strong>{shownTrade.feeSats} sats</strong>
-                      </div>
-                    </div>
-                    {shownTrade.reason && <div className="reason">{shownTrade.reason}</div>}
-                  </Panel>
-                  <aside className="market-side">
-                    <Panel className="panel approval-panel">
-                      <span className="eyebrow">YOUR DECISION</span>
-                      <h3>
-                        {trade?.status === 'CONFIRMED'
-                          ? 'All done'
-                          : trade?.signingAuthorized
-                            ? 'You’ve approved'
-                            : 'Review your swap'}
-                      </h3>
-                      {trade?.validatedPreview ? (
-                        <>
-                          <p>The local wallet validated the final package. Review exact changes:</p>
-                          <dl>
-                            <div>
-                              <dt>Give</dt>
-                              <dd>{trade.validatedPreview.give}</dd>
-                            </div>
-                            <div>
-                              <dt>Receive</dt>
-                              <dd>{trade.validatedPreview.receive}</dd>
-                            </div>
-                            <div>
-                              <dt>Fee</dt>
-                              <dd>{trade.validatedPreview.feeSats} sats</dd>
-                            </div>
-                            <div>
-                              <dt>BTC change</dt>
-                              <dd>{trade.validatedPreview.btcDeltaSats} sats</dd>
-                            </div>
-                          </dl>
-                        </>
-                      ) : (
-                        <>
-                          <p>
-                            {trade
-                              ? tradeProgress(trade, busy === 'approve').detail
-                              : 'This is a sample plan. Connect your wallet to start a real swap.'}
-                          </p>
-                          {(isMock || !trade || trade.status === 'UNSUPPORTED') && (
-                            <Button className="primary-button full" disabled>
-                              Signing unavailable
-                            </Button>
-                          )}
-                        </>
-                      )}
-                      {(trade?.validatedPreview || busy === 'approve') && (
-                        <Button
-                          className="primary-button full"
-                          onClick={() => void approve()}
-                          disabled={
-                            busy !== null ||
-                            workflowRunning ||
-                            Boolean(syncError) ||
-                            !trade?.validatedPreview ||
-                            !client?.supportsTrade(trade)
-                          }
-                          loading={busy === 'approve'}
-                          loadingText="Signing transaction…"
-                        >
-                          Review & sign <Icon name="arrow" size={16} />
-                        </Button>
-                      )}
-                      {trade &&
-                        !trade.recoveryRequired &&
-                        ['RESERVED', 'PREPARING', 'AWAITING_APPROVAL'].includes(trade.status) && (
-                          <Button
-                            className="text-button danger reject-button"
-                            type="button"
-                            onClick={() => void reject()}
-                            loading={busy === 'reject'}
-                            loadingText="Cancelling swap…"
-                            disabled={busy !== null || workflowRunning}
-                          >
-                            Cancel swap
-                          </Button>
-                        )}
-                      <div className="approval-foot">
-                        Your wallet checks the exact amounts again before signing.
-                      </div>
-                    </Panel>
-                  </aside>
-                </div>
-              )}
-            </>
-          )}
+          <div hidden={view !== 'trade' || initialLoading}>
+            <div className="trade-page-heading">
+              <span className="eyebrow">YOUR ACTIVITY</span>
+              <h1>Trades</h1>
+              <p>Follow your current order or open a past swap.</p>
+            </div>
+            {!connected && samplePreview && (
+              <div className="sample-switch" role="group" aria-label="Sample trade type">
+                <span>Sample plan:</span>
+                <Button
+                  className={sampleTradeKind === 'direct' ? 'selected' : ''}
+                  type="button"
+                  onClick={() => setSampleTradeKind('direct')}
+                >
+                  Direct swap
+                </Button>
+                <Button
+                  className={sampleTradeKind === 'ring' ? 'selected' : ''}
+                  type="button"
+                  onClick={() => setSampleTradeKind('ring')}
+                >
+                  Three-party ring
+                </Button>
+              </div>
+            )}
+            {connected && status ? (
+              <OrderHistory
+                key={status.ownerId}
+                loadPage={loadHistory}
+                liveTrade={trade}
+                request={tradeRequest}
+                liveContent={liveTradeContent}
+              />
+            ) : (
+              liveTradeContent
+            )}
+          </div>
         </main>
         <footer className="footer">
           <span aria-label="pálka">

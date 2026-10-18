@@ -165,3 +165,48 @@ test('history refresh and older pages retain past orders while updating an exist
   assert.equal(restored.myOrders[0].id, order.id);
   assert.equal(restored.trades[0].status, 'REJECTED');
 });
+
+test('trade archive opens active orders and only opens completed orders on request', () => {
+  const history: MarketHistory = {
+    myOrders: [order, { ...order, id: 'active-order', status: 'OPEN' }],
+    trades: [failedTrade],
+    nextCursor: null,
+  };
+  const html = renderToStaticMarkup(createElement(OrderHistoryRows, { history }));
+  assert.equal((html.match(/<details[^>]* open=""/g) ?? []).length, 1);
+  assert.ok(html.indexOf('active-order') < html.indexOf('order-failed'));
+  const selected = renderToStaticMarkup(
+    createElement(OrderHistoryRows, {
+      history,
+      request: { tradeId: failedTrade.plan.tradeId, version: 1 },
+    }),
+  );
+  assert.equal((selected.match(/<details[^>]* open=""/g) ?? []).length, 2);
+  const completedAfterSelection = renderToStaticMarkup(
+    createElement(OrderHistoryRows, {
+      history,
+      request: { tradeId: failedTrade.plan.tradeId, finished: false, version: 1 },
+    }),
+  );
+  assert.equal((completedAfterSelection.match(/<details[^>]* open=""/g) ?? []).length, 1);
+});
+
+test('the current trade embeds the live signing view once and keeps past fills in the archive', () => {
+  const html = renderToStaticMarkup(
+    createElement(OrderHistoryRows, {
+      history: { myOrders: [order], trades: [failedTrade], nextCursor: null },
+      liveTrade: {
+        id: failedTrade.plan.tradeId,
+        kind: 'direct',
+        status: 'REJECTED',
+        participants: [],
+        legs: [],
+        feeSats: '500',
+      },
+      liveContent: createElement('div', null, 'Live validated trade'),
+    }),
+  );
+  assert.equal((html.match(/Live validated trade/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /wallet-history-outcome/);
+  assert.doesNotMatch(html, /<details[^>]* open=""/);
+});

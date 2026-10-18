@@ -82,7 +82,7 @@ const built = await packager({
   prune: false,
   electronVersion: '44.9.0',
   appBundleId: 'com.palka.desktop',
-  protocols: [{ name: 'palka. offer', schemes: ['palka'] }],
+  protocols: [{ name: 'pálka offer', schemes: ['palka'] }],
   quiet: true,
 });
 if (!built.length) throw new Error('No desktop application was produced');

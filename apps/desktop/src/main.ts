@@ -112,11 +112,11 @@ async function startSharedWallet(): Promise<void> {
       networkUnavailable = true;
   });
   const deadline = Date.now() + 180_000;
-  console.log('palka. Connecting to the shared wallet and checking the indexer…');
+  console.log('pálka · Connecting to the shared wallet and checking the indexer…');
   while (Date.now() < deadline) {
     if (runtimeLocked) {
       console.error(
-        'palka. RGB runtime lock remains from a previous run. Stop wallet processes and recover the stale lock; do not delete wallet data.',
+        'pálka · RGB runtime lock remains from a previous run. Stop wallet processes and recover the stale lock; do not delete wallet data.',
       );
       throw new Error('RGB runtime is locked');
     }
@@ -130,7 +130,7 @@ async function startSharedWallet(): Promise<void> {
       config = loadDesktopConfig(app.getPath('userData'));
       if (!config.walletRpcToken) throw new Error('Local wallet credentials were not saved');
       // Pairing performs the authenticated capability/index check once, through LocalService.
-      console.log('palka. Wallet service listening. Connecting the desktop…');
+      console.log('pálka · Wallet service listening. Connecting the desktop…');
       return;
     }
     await delay(100);
@@ -383,7 +383,7 @@ else {
       markBackendReady();
     })
     .catch((error: unknown) => {
-      console.error(`palka. startup failed while ${startupStage}`);
+      console.error(`pálka · startup failed while ${startupStage}`);
       const reason =
         error instanceof Error &&
         (error.message ===
@@ -392,7 +392,7 @@ else {
           ? ` ${error.message}`
           : '';
       dialog.showErrorBox(
-        'palka. startup failed',
+        'pálka · startup failed',
         `Could not complete ${startupStage}.${reason || ' Check the installed app and private desktop configuration.'}`,
       );
       app.quit();
