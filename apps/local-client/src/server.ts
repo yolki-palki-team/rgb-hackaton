@@ -189,12 +189,16 @@ export function createLocalServer(service: LocalService, options: ServerOptions)
             return service.market.request(`/orders/${cancel[1]}/cancel`, 'POST', payload);
           }
           const trade =
-            /^\/api\/trades\/([a-zA-Z0-9:._-]+)\/(prepare|preview|approve|sync|reject)$/.exec(path);
+            /^\/api\/trades\/([a-zA-Z0-9:._-]+)\/(prepare|preview|approve|sync|reject|cancel-preview|cancel)$/.exec(
+              path,
+            );
           if (trade) {
             const [, id, action] = trade;
             if (action === 'prepare') return service.prepare(id);
             if (action === 'preview') return service.preview(id);
             if (action === 'approve') return service.approve(id, input);
+            if (action === 'cancel-preview') return service.previewCancellation(id);
+            if (action === 'cancel') return service.cancel(id, input);
             if (action === 'sync') return service.sync(id);
             if (action === 'reject')
               return service.reject(

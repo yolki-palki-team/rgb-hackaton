@@ -8,6 +8,7 @@ export type WorkflowClient = {
 };
 export type WorkflowAction = 'prepare' | 'preview' | 'sync';
 export function nextTradeAction(trade: Trade): WorkflowAction | null {
+  if (trade.status === 'CANCELLING') return 'sync';
   if (
     ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'FAILED', 'UNSUPPORTED'].includes(
       trade.status,
@@ -81,6 +82,22 @@ export function tradeProgress(
   detail: string;
   waiting: boolean;
 } {
+  if (trade.status === 'CANCELLING')
+    return {
+      step: 2,
+      title: 'Cancellation awaiting confirmation',
+      detail:
+        'Funds stay reserved until your wallet verifies the cancellation on Bitcoin. The original swap can still confirm first.',
+      waiting: true,
+    };
+  if (trade.status === 'CANCELLED' && trade.cancellationTxid)
+    return {
+      step: 4,
+      title: 'Swap cancelled on Bitcoin',
+      detail:
+        'Your wallet verified the conflicting transaction. Swap reservations are released; the cancelling wallet paid a BTC fee.',
+      waiting: false,
+    };
   if (trade.status === 'CONFIRMED')
     return {
       step: 4,

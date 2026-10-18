@@ -8,6 +8,7 @@ import {
   PrepareResultSchema,
   SignatureResultSchema,
   ReceiptSchema,
+  CancellationPreviewSchema,
   type WalletAdapter,
   type WalletState,
   type TradePlan,
@@ -126,8 +127,16 @@ export class HttpWalletAdapter implements WalletAdapter {
   ) {
     return ReceiptSchema.parse(await this.call('finalize', { package: pkg, signatures }));
   }
-  async sync(tradeId: string) {
-    return ReceiptSchema.parse(await this.call('sync', { tradeId }));
+  async previewCancellation(tradeId: string) {
+    return CancellationPreviewSchema.parse(await this.call('previewCancellation', { tradeId }));
+  }
+  async cancel(tradeId: string, approvalDigest: string, confirmed: true) {
+    return ReceiptSchema.parse(await this.call('cancel', { tradeId, approvalDigest, confirmed }));
+  }
+  async sync(tradeId: string, cancellationTxid?: string) {
+    return ReceiptSchema.parse(
+      await this.call('sync', { tradeId, ...(cancellationTxid ? { cancellationTxid } : {}) }),
+    );
   }
 }
 export class MockWalletAdapter implements WalletAdapter {

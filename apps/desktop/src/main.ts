@@ -478,6 +478,19 @@ else {
     pendingOffer = null;
     return id;
   });
+  ipcMain.handle('wallet:cancel', async (event, tradeId: unknown, approvalDigest: unknown) => {
+    validatedSender(event);
+    if (
+      !validateTradeId(tradeId) ||
+      typeof approvalDigest !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(approvalDigest)
+    )
+      throw new Error('Invalid cancellation approval');
+    return requestLocal('POST', `/api/trades/${tradeId}/cancel`, {
+      approvalDigest,
+      confirmed: true,
+    });
+  });
   ipcMain.handle('funding:approve', async (event, operationId: unknown) => {
     validatedSender(event);
     if (!validateTradeId(operationId)) throw new Error('Invalid funding operation.');

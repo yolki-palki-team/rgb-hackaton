@@ -46,7 +46,7 @@ export function validateWalletRequest(method: unknown, path: unknown): boolean {
     return true;
   const cancel = /^\/api\/orders\/([^/]+)\/cancel$/.exec(path);
   if (cancel) return orderId.test(cancel[1]);
-  const trade = /^\/api\/trades\/([^/]+)\/(prepare|preview|sync|reject)$/.exec(path);
+  const trade = /^\/api\/trades\/([^/]+)\/(prepare|preview|sync|reject|cancel-preview)$/.exec(path);
   return Boolean(trade && tradeId.test(trade[1]));
 }
 

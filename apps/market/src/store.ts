@@ -353,6 +353,29 @@ export class MarketStore {
       const receipt = ReceiptSchema.parse(message.payload);
       if (receipt.tradeId !== trade.plan.tradeId || receipt.network !== trade.plan.network)
         throw new MarketError('INVALID_RECEIPT', 400);
+      if (['cancelling', 'cancelled'].includes(receipt.state)) {
+        if (
+          !trade.settlementPackage ||
+          receipt.txid !== trade.settlementPackage.packageId ||
+          !['SIGNING', 'READY_TO_BROADCAST', 'BROADCAST', 'RECONCILING'].includes(status)
+        )
+          throw new MarketError('INVALID_CANCELLATION_RECEIPT', 400);
+        // Each wallet independently verifies the conflict before releasing its inputs.
+        if (receipt.state === 'cancelled') {
+          this.cancelTradeOrders(trade);
+          return {
+            ...trade,
+            status: 'CANCELLED',
+            reason:
+              'A participant verified an on-chain cancellation. Verify locally before releasing inputs.',
+          };
+        }
+        return {
+          ...trade,
+          status: 'RECONCILING',
+          reason: 'A participant requested on-chain cancellation; confirmation is pending.',
+        };
+      }
       if (
         receipt.state === 'confirmed' &&
         (receipt.mode !== 'real' ||

@@ -6,6 +6,7 @@ import {
   PrivatePolicySchema,
   PublicOrderSchema,
   ReceiptSchema,
+  CancellationPreviewSchema,
   WalletPreviewSchema,
   WalletStateSchema,
   assetKey,
@@ -50,6 +51,7 @@ export type DesktopBridge = {
   request(method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown>;
   approveTrade(tradeId: string, approvalToken: string): Promise<unknown>;
   approveFunding?(operationId: string): Promise<unknown>;
+  approveCancellation?(tradeId: string, approvalDigest: string): Promise<unknown>;
   getPendingOffer(): Promise<string | null>;
   onOfferSelected(callback: (orderId: string) => void): () => void;
   openPublicMarket(): Promise<void>;
@@ -292,6 +294,7 @@ export class LocalClient {
           tradeId: z.string(),
           signingAuthorized: z.boolean(),
           recoveryRequired: z.boolean(),
+          cancellationRequested: z.boolean().optional(),
           receipt: ReceiptSchema.nullable(),
         })
         .parse(await this.request('GET', `/api/trades/${encodeURIComponent(trade.id)}/progress`));
@@ -313,6 +316,8 @@ export class LocalClient {
           ),
         );
       }
+      if (progress.cancellationRequested && !['CONFIRMED', 'CANCELLED'].includes(trade.status))
+        trade.status = 'CANCELLING';
     }
     const activeOrder = market.myOrders.find(
       (order) => order.status === 'OPEN' || order.status === 'RESERVED',
@@ -413,6 +418,27 @@ export class LocalClient {
       reason: 'User rejected the trade',
     });
     this.approval = null;
+  }
+  async previewCancellation(tradeId: string) {
+    return CancellationPreviewSchema.parse(
+      await this.request('POST', `/api/trades/${encodeURIComponent(tradeId)}/cancel-preview`, {}),
+    );
+  }
+  async cancel(tradeId: string, approvalDigest: string) {
+    if (this.bridge && !this.bridge.approveCancellation)
+      throw new Error('Update the desktop app to approve cancellation.');
+    const receipt = ReceiptSchema.parse(
+      this.bridge
+        ? await this.bridge.approveCancellation!(tradeId, approvalDigest)
+        : await this.request('POST', `/api/trades/${encodeURIComponent(tradeId)}/cancel`, {
+            approvalDigest,
+            confirmed: true,
+          }),
+    );
+    this.checkReceipt(tradeId, receipt);
+    this.receipts.set(tradeId, receipt);
+    this.approval = null;
+    return receipt;
   }
 
   async sync(
@@ -555,7 +581,7 @@ export class LocalClient {
         ? 360_000
         : path === '/api/state' ||
             path.startsWith('/api/funding') ||
-            /\/(prepare|preview|sync|approve)$/.test(path)
+            /\/(prepare|preview|sync|approve|cancel-preview|cancel)$/.test(path)
           ? 90_000
           : 15_000;
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -658,6 +684,11 @@ function mapTrade(
 ): Trade {
   const plan = snapshot.plan;
   const needsLocalConfirmation = snapshot.status === 'CONFIRMED' && receipt?.state !== 'confirmed';
+  const cancellationReported = snapshot.messages.some(
+    (item) =>
+      item.message.type === 'receipt' &&
+      ['cancelling', 'cancelled'].includes(ReceiptSchema.parse(item.message.payload).state),
+  );
   const participants = plan.participants.map((id, index) => {
     const outgoing = plan.legs.find((leg) => leg.fromOwnerId === id)!;
     const incoming = plan.legs.find((leg) => leg.toOwnerId === id)!;
@@ -672,10 +703,20 @@ function mapTrade(
   return {
     id: plan.tradeId,
     txid: receipt?.txid,
+    cancellationTxid: receipt?.cancellationTxid,
     chainConfirmed: receipt?.chainConfirmed,
     rgbAccepted: receipt?.rgbAccepted,
     kind: participants.length === 3 ? 'ring' : 'direct',
-    status: needsLocalConfirmation ? 'RECONCILING' : snapshot.status,
+    status:
+      receipt?.state === 'cancelled'
+        ? 'CANCELLED'
+        : receipt?.state === 'confirmed'
+          ? 'CONFIRMED'
+          : receipt?.state === 'cancelling' || cancellationReported
+            ? 'CANCELLING'
+            : needsLocalConfirmation
+              ? 'RECONCILING'
+              : snapshot.status,
     participants,
     legs: plan.legs.map((leg) => ({
       from: String.fromCharCode(65 + plan.participants.indexOf(leg.fromOwnerId)),

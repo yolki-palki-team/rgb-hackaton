@@ -286,6 +286,115 @@ async function saveCommittedIntent(service: LocalService, store: LocalStore) {
   store.set('operation:trade-1', { state: 'SIGNED' });
 }
 
+test('cancellation approval survives an uncertain response and never resumes original signing', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const base = new FakeWallet();
+    let attempts = 0;
+    const cancellation = {
+      tradeId: 'trade-1',
+      walletId: 'wallet-a',
+      ownerId: 'a',
+      network: 'regtest' as const,
+      originalTxid: 'a'.repeat(64),
+      cancellationTxid: 'b'.repeat(64),
+      input: `${'c'.repeat(64)}:0`,
+      address: `bcrt1q${'a'.repeat(38)}`,
+      returnSats: '98000',
+      feeSats: '2000',
+      approvalDigest: 'd'.repeat(64),
+    };
+    const receipt: Receipt = {
+      mode: 'real',
+      network: 'regtest',
+      tradeId: 'trade-1',
+      txid: cancellation.originalTxid,
+      cancellationTxid: cancellation.cancellationTxid,
+      state: 'cancelling',
+      chainConfirmed: false,
+      rgbAccepted: false,
+    };
+    const wallet = Object.assign(base, {
+      async previewCancellation() {
+        return cancellation;
+      },
+      async cancel(id: string, approvalDigest: string, confirmed: true) {
+        assert.equal(id, 'trade-1');
+        assert.equal(approvalDigest, cancellation.approvalDigest);
+        assert.equal(confirmed, true);
+        if (++attempts === 1) throw new Error('response lost after signing cancellation');
+        return receipt;
+      },
+      async sync() {
+        return receipt;
+      },
+    });
+    const { service, market } = await fixture(store, wallet);
+    market.trade!.settlementPackage!.packageId = cancellation.originalTxid;
+    await assert.rejects(service.previewCancellation('trade-1'), /unresolved signed swap/);
+    await saveCommittedIntent(service, store);
+    market.trade!.status = 'SIGNING';
+    await service.previewCancellation('trade-1');
+    await assert.rejects(
+      service.cancel('trade-1', { approvalDigest: 'e'.repeat(64), confirmed: true }),
+      /stale/,
+    );
+    await assert.rejects(
+      service.cancel('trade-1', { approvalDigest: cancellation.approvalDigest, confirmed: false }),
+    );
+    assert.equal(attempts, 0);
+    await assert.rejects(
+      service.cancel('trade-1', { approvalDigest: cancellation.approvalDigest, confirmed: true }),
+      /response lost/,
+    );
+    assert.equal((await service.progress('trade-1')).cancellationRequested, true);
+    const restarted = new LocalService('a', wallet, market as unknown as MarketClient, store, qvac);
+    assert.equal(await restarted.recoverCommitted(), true);
+    assert.equal(attempts, 2);
+    await restarted.sync('trade-1');
+    assert.equal(wallet.signCount, 0);
+    assert.equal(wallet.finalizeCount, 0);
+    assert.equal(wallet.releaseCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('a market cancellation report cannot release signed wallet inputs without local verification', async () => {
+  const store = new LocalStore(':memory:');
+  try {
+    const { service, market, wallet } = await fixture(store);
+    market.trade!.settlementPackage!.packageId = 'a'.repeat(64);
+    await saveCommittedIntent(service, store);
+    market.trade!.status = 'CANCELLED';
+    market.trade!.messages.push({
+      ownerId: 'b',
+      message: {
+        messageId: 'untrusted-cancel',
+        revision: 0,
+        type: 'receipt',
+        payload: {
+          mode: 'real',
+          network: 'regtest',
+          tradeId: 'trade-1',
+          txid: 'a'.repeat(64),
+          cancellationTxid: 'b'.repeat(64),
+          state: 'cancelled',
+          chainConfirmed: false,
+          rgbAccepted: false,
+        },
+      },
+    });
+    const result = await service.sync('trade-1');
+    assert.equal(result.state, 'reconciling');
+    assert.equal(wallet.releaseCount, 0);
+    assert.equal(wallet.signCount, 0);
+    assert.equal(wallet.finalizeCount, 0);
+  } finally {
+    store.close();
+  }
+});
+
 test('local record enumeration binds literal prefixes without SQL or wildcard interpretation', () => {
   const store = new LocalStore(':memory:');
   try {
@@ -537,6 +646,7 @@ test('local progress exposes only durable recovery state and validates participa
       tradeId: 'trade-1',
       signingAuthorized: false,
       recoveryRequired: false,
+      cancellationRequested: false,
       receipt: null,
     });
     await service.preview('trade-1');

@@ -21,6 +21,18 @@ const checked = {
   digest: 'digest',
 };
 
+test('cancellation polls proof without preparing or signing and stops after local confirmation', () => {
+  const pending = trade('CANCELLING', { recoveryRequired: true, signingAuthorized: true });
+  assert.equal(nextTradeAction(pending), 'sync');
+  assert.equal(tradeProgress(pending).title, 'Cancellation awaiting confirmation');
+  const cancelled = trade('CANCELLED', {
+    cancellationTxid: 'b'.repeat(64),
+    recoveryRequired: true,
+  });
+  assert.equal(nextTradeAction(cancelled), null);
+  assert.equal(tradeProgress(cancelled).title, 'Swap cancelled on Bitcoin');
+});
+
 test('approval progress never falls back to preparation when the preview is cleared', () => {
   const pending = tradeProgress(trade('AWAITING_APPROVAL'), true);
   assert.equal(pending.step, 1);

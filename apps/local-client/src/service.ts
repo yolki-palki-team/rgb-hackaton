@@ -14,6 +14,7 @@ import {
   ApprovalSchema,
   SettlementPackageSchema,
   ReceiptSchema,
+  CancellationPreviewSchema,
   assertPolicy,
   isOrderFillValid,
   orderFillFeeSats,
@@ -264,6 +265,7 @@ export class LocalService {
         this.store.get(`signing:${id}`) || this.store.get(`signature:${id}`),
       ),
       recoveryRequired: this.signatureMayExist(id),
+      cancellationRequested: Boolean(this.store.get(`cancellation:${id}`)),
       receipt: this.store.get(`receipt:${id}`) ?? null,
     };
   }
@@ -373,8 +375,16 @@ export class LocalService {
     const id = trade.plan.tradeId;
     if (!cancelledStates.includes(trade.status)) return false;
     this.ownPublication(trade);
-    if (this.signatureMayExist(id) || trade.messages.some((m) => m.message.type === 'signature'))
+    if (this.signatureMayExist(id) || trade.messages.some((m) => m.message.type === 'signature')) {
+      if (
+        trade.messages.some(
+          (m) =>
+            m.message.type === 'receipt' && ReceiptSchema.parse(m.message.payload).cancellationTxid,
+        )
+      )
+        return false;
       throw new LocalError('A signature may exist: automatic release is prohibited', 409);
+    }
     if (this.store.get<Operation>(`operation:${id}`)?.state === 'PREPARING')
       await this.wallet.release(id);
     this.store.set(`operation:${id}`, { state: 'CANCELLED' });
@@ -606,6 +616,7 @@ export class LocalService {
   }
   private async relaySignature(trade: TradeSnapshot) {
     const id = trade.plan.tradeId;
+    if (this.store.get(`cancellation:${id}`)) return;
     const saved = this.store.get<SigningIntent>(`signing:${id}`);
     let cached = this.store.get<unknown>(`signature:${id}`);
     this.ownPublication(trade);
@@ -655,6 +666,7 @@ export class LocalService {
     await this.message(trade, 'signature', { ...binding, signature });
   }
   private async finalizeReady(trade: TradeSnapshot) {
+    if (this.store.get(`cancellation:${trade.plan.tradeId}`)) return;
     const pkg = trade.settlementPackage;
     if (
       !pkg ||
@@ -724,6 +736,7 @@ export class LocalService {
       if (!unsafeStates.includes(value.state) || value.state === 'CONFIRMED') continue;
       const id = key.slice('operation:'.length);
       try {
+        if (this.store.get(`cancellation:${id}`)) await this.resumeCancellation(id);
         const trade = await this.trade(id);
         this.ownPublication(trade);
         const pkg = trade.settlementPackage;
@@ -747,8 +760,9 @@ export class LocalService {
         if (prior) knownReceipts.push(ReceiptSchema.parse(prior));
         for (const known of knownReceipts) this.checkReceipt(id, known);
         // Capability and balance checks can fail on our spent inputs until sync repairs the wallet.
-        // This path only observes an existing transaction; it never resumes signing or finalization.
-        const receipt = ReceiptSchema.parse(await this.wallet.sync(id));
+        // Original swap recovery only observes; previously approved cancellation
+        // signing/submission is resumed separately above.
+        const receipt = await this.syncWallet(trade);
         this.checkReceipt(id, receipt);
         if (
           receipt.mode !== 'real' ||
@@ -756,9 +770,12 @@ export class LocalService {
         )
           throw new LocalError('Recovery receipt does not match the existing transaction', 409);
         this.store.set(`receipt:${id}`, receipt);
-        if (trade.status !== 'CONFIRMED') await this.message(trade, 'receipt', receipt);
+        if (!['CONFIRMED', 'CANCELLED'].includes(trade.status))
+          await this.message(trade, 'receipt', receipt);
         if (receipt.state === 'confirmed')
           this.store.set(`operation:${id}`, { state: 'CONFIRMED' });
+        else if (receipt.state === 'cancelled')
+          this.store.set(`operation:${id}`, { state: 'CANCELLED' });
         else hasPending = true;
       } catch (error) {
         errors.push(error);
@@ -768,6 +785,7 @@ export class LocalService {
     return hasPending;
   }
   async sync(id: string): Promise<ReturnType<typeof ReceiptSchema.parse>> {
+    if (this.store.get(`cancellation:${id}`)) await this.resumeCancellation(id);
     let trade = await this.trade(id);
     if (await this.releaseCancelled(trade))
       return {
@@ -779,14 +797,20 @@ export class LocalService {
         rgbAccepted: false,
         reason: 'Trade cancelled before signing; local reservations released.',
       };
-    let receipt = ReceiptSchema.parse(await this.wallet.sync(id));
+    let receipt = await this.syncWallet(trade);
     this.checkReceipt(id, receipt);
     if (
       receipt.mode === 'real' &&
       (receipt.state === 'reconciling' || (receipt.state === 'pending' && !receipt.txid)) &&
       !receipt.chainConfirmed &&
       trade.status !== 'CONFIRMED' &&
-      this.signatureMayExist(id)
+      this.signatureMayExist(id) &&
+      !this.store.get(`cancellation:${id}`) &&
+      !trade.messages.some(
+        (m) =>
+          m.message.type === 'receipt' &&
+          ['cancelling', 'cancelled'].includes(ReceiptSchema.parse(m.message.payload).state),
+      )
     ) {
       try {
         if (['AWAITING_APPROVAL', 'SIGNING', 'RECONCILING'].includes(trade.status))
@@ -800,8 +824,95 @@ export class LocalService {
     }
     this.store.set(`receipt:${id}`, receipt);
     if (receipt.mode === 'real') {
-      if (trade.status !== 'CONFIRMED') await this.message(trade, 'receipt', receipt);
+      if (!['CONFIRMED', 'CANCELLED'].includes(trade.status))
+        await this.message(trade, 'receipt', receipt);
       if (receipt.state === 'confirmed') this.store.set(`operation:${id}`, { state: 'CONFIRMED' });
+      if (receipt.state === 'cancelled') this.store.set(`operation:${id}`, { state: 'CANCELLED' });
+    }
+    return receipt;
+  }
+  private async syncWallet(trade: TradeSnapshot) {
+    const hints = [
+      ...new Set(
+        trade.messages
+          .filter((m) => m.message.type === 'receipt')
+          .map((m) => ReceiptSchema.parse(m.message.payload).cancellationTxid)
+          .filter((id) => id !== undefined),
+      ),
+    ];
+    for (const hint of hints) {
+      try {
+        const receipt = ReceiptSchema.parse(await this.wallet.sync(trade.plan.tradeId, hint));
+        this.checkReceipt(trade.plan.tradeId, receipt);
+        if (receipt.state === 'cancelled' || receipt.state === 'confirmed') return receipt;
+      } catch {
+        // A peer can supply an unrelated confirmed transaction. Do not let that
+        // prevent inspecting another participant's valid conflict or our own state.
+      }
+    }
+    return ReceiptSchema.parse(await this.wallet.sync(trade.plan.tradeId));
+  }
+  async previewCancellation(id: string) {
+    if (!this.wallet.previewCancellation || !this.signatureMayExist(id))
+      throw new LocalError(
+        'On-chain cancellation requires a supported wallet and an unresolved signed swap',
+        409,
+      );
+    const preview = CancellationPreviewSchema.parse(await this.wallet.previewCancellation(id));
+    const bound =
+      this.store.get<SigningIntent>(`signing:${id}`)?.package ??
+      this.store.get<SettlementPackage>(`recovered-package:${id}`);
+    if (
+      preview.tradeId !== id ||
+      preview.ownerId !== this.ownerId ||
+      preview.originalTxid !== bound?.packageId
+    )
+      throw new LocalError('Cancellation does not match the locally approved swap', 409);
+    this.store.set(`cancellation-preview:${id}`, preview);
+    return preview;
+  }
+  private async resumeCancellation(id: string) {
+    const saved = CancellationPreviewSchema.parse(this.store.get(`cancellation:${id}`));
+    if (!this.wallet.cancel) throw new LocalError('Wallet cancellation unavailable', 409);
+    const receipt = ReceiptSchema.parse(await this.wallet.cancel(id, saved.approvalDigest, true));
+    this.checkReceipt(id, receipt);
+    if (
+      receipt.txid !== saved.originalTxid ||
+      (receipt.state === 'cancelling' && receipt.cancellationTxid !== saved.cancellationTxid)
+    )
+      throw new LocalError('Cancellation receipt does not match the approved transaction', 409);
+    this.store.set(`receipt:${id}`, receipt);
+    this.store.set(`operation:${id}`, {
+      state:
+        receipt.state === 'cancelled'
+          ? 'CANCELLED'
+          : receipt.state === 'confirmed'
+            ? 'CONFIRMED'
+            : 'RECONCILING',
+    });
+    return receipt;
+  }
+  async cancel(id: string, body: unknown) {
+    const input = z
+      .object({ approvalDigest: z.string().regex(/^[a-f0-9]{64}$/), confirmed: z.literal(true) })
+      .strict()
+      .parse(body);
+    const saved = CancellationPreviewSchema.parse(this.store.get(`cancellation-preview:${id}`));
+    if (
+      saved.approvalDigest !== input.approvalDigest ||
+      saved.tradeId !== id ||
+      saved.ownerId !== this.ownerId
+    )
+      throw new LocalError('Cancellation approval is stale', 409);
+    this.store.set(`cancellation:${id}`, saved);
+    this.store.set(`operation:${id}`, { state: 'RECONCILING' });
+    const receipt = await this.resumeCancellation(id);
+    try {
+      const trade = await this.trade(id);
+      if (!['CONFIRMED', 'CANCELLED'].includes(trade.status))
+        await this.message(trade, 'receipt', receipt);
+    } catch {
+      // Cancellation does not depend on coordinator availability; sync retries notice delivery.
     }
     return receipt;
   }

@@ -674,7 +674,8 @@ evidence file; review that diff deliberately.
 ## Recovery and private state
 
 Reservations are transactional and unique by outpoint. Release is allowed only
-before signing. SIGNING/SIGNED/ambiguous-broadcast states never expire by order
+before signing, or after independently verifying a confirmed conflicting
+[on-chain cancellation](cancellation.md). SIGNING/SIGNED/ambiguous-broadcast states never expire by order
 TTL. A signature-start marker without a returned signature stays pinned for
 same-intent recovery. Unknown broadcast results trigger txid lookup, not release.
 Bitcoin confirmation and RGB acceptance are separate; CONFIRMED requires both.

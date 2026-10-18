@@ -27,6 +27,7 @@ export type Order = {
 export type Trade = {
   id: string;
   txid?: string;
+  cancellationTxid?: string;
   signingAuthorized?: boolean;
   recoveryRequired?: boolean;
   chainConfirmed?: boolean;

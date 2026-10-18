@@ -184,6 +184,7 @@ class ProtocolTests(unittest.TestCase):
                 journal = Journal(backend.root / "journal.sqlite")
                 journal.reserve_plan(plan["tradeId"], plan, ["synthetic:0"])
                 final = {
+                    "psbt": "synthetic-psbt",
                     "candidateTxid": "unsigned",
                     "unsignedTxHex": "00",
                     "commitmentScripts": [],
@@ -278,11 +279,16 @@ class ProtocolTests(unittest.TestCase):
                     "utxo": {
                         "outpoint": {"txid": "btc-funding", "vout": 0},
                         "btc_amount": "105000",
+                        "colorable": False,
                     },
                     "rgb_allocations": [],
                 },
                 {
-                    "utxo": {"outpoint": {"txid": "rgb-funding", "vout": 1}, "btc_amount": "5000"},
+                    "utxo": {
+                        "outpoint": {"txid": "rgb-funding", "vout": 1},
+                        "btc_amount": "5000",
+                        "colorable": True,
+                    },
                     "rgb_allocations": [
                         {"asset_id": contract, "settled": True, "assignment": {"Fungible": "150"}}
                     ],
@@ -327,6 +333,11 @@ class ProtocolTests(unittest.TestCase):
                         call("gettxout", "btc-funding", 0),
                         call("gettxout", "rgb-funding", 1),
                         call("getrawtransaction", txid, False),
+                        *(
+                            [call("getrawtransaction", "btc-funding", False)]
+                            if owner == "b"
+                            else []
+                        ),
                     ],
                 )
                 funding = read(backend.folder("unit") / "funding.json")
@@ -339,7 +350,22 @@ class ProtocolTests(unittest.TestCase):
                             "amountSats": amount,
                             "scriptPubKey": "synthetic-script",
                             "rawTx": "synthetic-raw-tx",
-                        }
+                            "replaceable": True,
+                        },
+                        *(
+                            [
+                                {
+                                    "txid": "btc-funding",
+                                    "vout": 0,
+                                    "amountSats": "105000",
+                                    "scriptPubKey": "synthetic-script",
+                                    "rawTx": "synthetic-raw-tx",
+                                    "replaceable": True,
+                                }
+                            ]
+                            if owner == "b"
+                            else []
+                        ),
                     ],
                 )
                 self.assertEqual(
@@ -351,7 +377,10 @@ class ProtocolTests(unittest.TestCase):
                     self.assertEqual(journal.snapshot("unit")["state"], "PREPARING")
                     self.assertEqual(
                         journal.db.execute("SELECT outpoint,trade_id FROM reservations").fetchall(),
-                        [(f"{txid}:{vout}", "unit")],
+                        [
+                            (f"{txid}:{vout}", "unit"),
+                            *([("btc-funding:0", "unit")] if owner == "b" else []),
+                        ],
                     )
                 finally:
                     journal.db.close()

@@ -47,6 +47,8 @@ The graph idea is inspired by [Cycles' introduction to MTCS](https://cycles.mone
 
 Missing signatures prevent completion. Sequential independent transfers are never presented as an atomic ring. Optional **partial direct fills** use separate atomic two-party transactions, each with its own approval. The entire parent order is not atomic; its fee limit is a total budget allocated across fills.
 
+**Stalled after signing?** The local wallet can review and submit an [on-chain cancellation](docs/cancellation.md) using its own BTC input without spending RGB. Reservations are released only after the conflicting transaction is confirmed. The original swap can still confirm first; cancellation has a separate BTC fee. Verified on regtest for direct and three-party swaps, including restart and subsequent spending.
+
 ## What is proven
 
 These are recorded real regtest results, separate from mock UI data and unit tests. Linked reports retain their original dates and scope.

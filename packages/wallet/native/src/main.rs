@@ -12,6 +12,7 @@ use std::{
     path::PathBuf,
 };
 
+mod cancellation;
 mod cooperative;
 mod smoke;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -148,7 +149,7 @@ fn run() -> Result<()> {
             "sdkCommit":"1eaf0024c591e41843eb80cc8834082292668871",
             "directAtomic":false,"ringAtomic":false,"sign":false,
             "cooperativePrepare":true,"validateConsignment":true,"experimentalSigner":"explicit CLI approval only",
-            "localSdkExtension":true,
+            "localSdkExtension":true,"unilateralCancellation":true,
             "reason":"Low-level bridge is not a network signing API; use authenticated protocol-v1 HTTP sidecar for supported regtest settlement"})
         );
         return Ok(());
@@ -196,6 +197,9 @@ fn run() -> Result<()> {
         "color" => cooperative::color(&mut wallet, &req)?,
         "sign" | "preflight-sign" => cooperative::sign(&mut wallet, &trade_root, profile, &req)?,
         "sync-confirmed" => cooperative::sync_confirmed(&mut wallet, &trade_root, &req)?,
+        "cancel-preview" => cancellation::preview(&mut wallet, &trade_root)?,
+        "cancel-sign" => cancellation::sign(&mut wallet, &trade_root, profile, &req)?,
+        "cancel-sync" => cancellation::sync(&mut wallet, &trade_root, &req)?,
         "check-index" => {
             let _on = online(&mut wallet)?;
             wallet.cooperative_check_index()?;
