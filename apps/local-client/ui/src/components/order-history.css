@@ -42,9 +42,6 @@
   overflow: hidden;
   background: #141414;
 }
-.wallet-history-row[data-active='true'] {
-  border-color: #3a6049;
-}
 .wallet-history-summary .history-active {
   padding: 5px 10px;
   border: 1px solid #4c855f;
